@@ -1,0 +1,5 @@
+cassandra-driver
+progressbar2
+statistics
+testing.cassandra
+whisper

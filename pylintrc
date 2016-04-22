@@ -1,0 +1,19 @@
+[MASTER]
+# Required for cassandra
+unsafe-load-any-extension=no
+
+[MESSAGES CONTROL]
+disable=I,missing-docstring,too-few-public-methods,global-statement
+
+[BASIC]
+good-names=e,f,_
+
+[REPORTS]
+# Tells whether to display a full report or only the messages
+reports=no
+
+[DESIGN]
+# Maximum number of attributes for a class (see R0902).
+max-attributes=25
+# Maximum number of locals for function / method body
+max-locals=20
