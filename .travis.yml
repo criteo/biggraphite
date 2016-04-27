@@ -1,7 +1,8 @@
 language: python
 env:
+  - TOXENV=pypy-coverage
   - TOXENV=py27-coverage
-  - TOXENV=py27-pylama
+  - TOXENV=pylama
 install:
   - pip install tox
 script:
