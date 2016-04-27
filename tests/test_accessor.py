@@ -52,13 +52,16 @@ class TestWithCassandra(unittest.TestCase):
         self.addCleanup(self.accessor.shutdown)
 
     def test_fetch_empty(self):
-        points = self.accessor.fetch_points(
-            "no.such.metric", _POINTS_START, _POINTS_END, step=1)
-        self.assertFalse(points)
+        self.accessor.insert_points(_METRIC, _POINTS)
+        self.accessor.drop_all_metrics()
+        self.assertFalse(
+            self.accessor.fetch_points("no.such.metric", _POINTS_START, _POINTS_END, step=1))
+        self.assertFalse(
+            self.accessor.fetch_points(_METRIC, _POINTS_START, _POINTS_END, step=1))
 
     def test_insert_fetch(self):
         self.accessor.insert_points(_METRIC, _POINTS)
-        self.addCleanup(self.accessor.clear_all_points)
+        self.addCleanup(self.accessor.drop_all_metrics)
 
         fetched = self.accessor.fetch_points(_METRIC, _QUERY_START, _QUERY_END, step=1)
         self.assertEqual(_QUERY_RANGE, len(fetched))
@@ -66,7 +69,7 @@ class TestWithCassandra(unittest.TestCase):
 
     def test_fetch_lower_res(self):
         self.accessor.insert_points(_METRIC, _POINTS)
-        self.addCleanup(self.accessor.clear_all_points)
+        self.addCleanup(self.accessor.drop_all_metrics)
 
         fetched_tenth = self.accessor.fetch_points(
             _METRIC, _QUERY_START, _QUERY_END, step=_QUERY_RANGE / 10)

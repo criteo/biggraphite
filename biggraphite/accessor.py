@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Abstracts querying Cassandra to manipulate timeseries."""
 from __future__ import print_function
 
 import cassandra
@@ -21,6 +22,7 @@ class RetryableCassandraError(Error):
 
 class InvalidArgumentError(Error):
     """Callee did not follow requirements on the arguments."""
+
 
 _SETUP_CQL = [
     "CREATE TABLE raw ("
@@ -50,21 +52,31 @@ class Accessor(object):
     _ROW_SIZE_MS = 3600 * 1000
     _MAX_QUERY_RANGE_MS = 365 * 24 * _ROW_SIZE_MS
 
-    def __init__(self, keyspace, contact_points, port=9042, connections_per_process=4):
+    def __init__(self, keyspace, contact_points, port=9042, executor_threads=4):
+        """Record parameters needed to connect.
+
+        Args:
+          keyspace: Name of Cassandra keyspace dedicated to BigGraphite.
+          contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
+          port: The port to connect to, as an int.
+          executor_threads: How many worker threads to use.
+        """
         self.keyspace = keyspace
         self.contact_points = contact_points
         self.port = port
-        self.connections_per_process = connections_per_process
+        self.executor_threads = executor_threads
         self.cluster = None  # setup by connect()
         self.insert_statement = None  # setup by connect()
         self.select_statement = None  # setup by connect()
         self.session = None  # setup by connect()
 
     def __enter__(self):
+        """Call connect()."""
         self.connect()
         return self
 
     def __exit__(self, _type, _value, _traceback):
+        """Call shutdown()."""
         self.shutdown()
         return False
 
@@ -77,6 +89,10 @@ class Accessor(object):
                 self.session.execute(cql)
 
     def connect(self):
+        """Establish a connection to Cassandra.
+
+        This must be called AFTER creating subprocess with the multiprocessing module.
+        """
         if self.cluster:
             return
         try:
@@ -89,6 +105,7 @@ class Accessor(object):
             raise CassandraError(exc)
 
     def shutdown(self):
+        """Close the connection to Cassandra."""
         if self.cluster:
             try:
                 self.cluster.shutdown()
@@ -98,7 +115,7 @@ class Accessor(object):
 
     def _connect(self, skip_schema_upgrade=False):
         self.cluster = c_cluster.Cluster(
-            self.contact_points, self.port, executor_threads=self.connections_per_process)
+            self.contact_points, self.port, executor_threads=self.executor_threads)
         self.session = self.cluster.connect()
         self.session.set_keyspace(self.keyspace)
         if not skip_schema_upgrade:
@@ -121,16 +138,23 @@ class Accessor(object):
         return (self.insert_statement, (metric_name, time_start_ms, time_offset_ms, value))
 
     def insert_points(self, metric_name, timestamps_and_values):
-        assert self.cluster, "connect() wasn't called"
+        """Insert points for a given metric.
+
+        Args:
+          metric_name: A graphite-like metric name (like "my.own.metric")
+          timestamps_and_values: An iterable of (timestamp in seconds, values as double)
+        """
+        assert self.is_connected, "connect() wasn't called"
         statements_and_args = [
             self._make_insert(metric_name, t, v)
             for t, v in timestamps_and_values
         ]
         c_concurrent.execute_concurrent(
-            self.session, statements_and_args, concurrency=self.connections_per_process * 50)
+            self.session, statements_and_args, concurrency=self.executor_threads * 50)
 
-    def clear_all_points(self):
-        assert self.cluster, "connect() wasn't called"
+    def drop_all_metrics(self):
+        """Delete all metrics from the database."""
+        assert self.is_connected, "connect() wasn't called"
         self.session.execute("TRUNCATE raw;")
 
     @staticmethod
@@ -156,6 +180,7 @@ class Accessor(object):
         return res
 
     def get_aggregator(self, metric_name):
+        """Fetch the python function used aggregate points when downsampling."""
         # TODO: this is a shim that always give the median
         # should be avg, median, sum...
         # pylint: disable=no-self-use
@@ -181,7 +206,7 @@ class Accessor(object):
         Raises:
           InvalidArgumentError: if time_start, time_end or step are not as per above
         """
-        assert self.cluster, "connect() wasn't called"
+        assert self.is_connected, "connect() wasn't called"
         if step < 1:
             raise InvalidArgumentError("step (%d) is not positive" % step)
         if time_start % step or time_start < 0:
@@ -198,7 +223,7 @@ class Accessor(object):
         time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
         statements_and_args = self._make_all_selects(metric_name, time_start_ms, time_end_ms)
         query_results = c_concurrent.execute_concurrent(
-            self.session, statements_and_args, concurrency=self.connections_per_process * 50,
+            self.session, statements_and_args, concurrency=self.executor_threads * 50,
             results_generator=True,
         )
 

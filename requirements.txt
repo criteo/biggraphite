@@ -1,5 +1,5 @@
 cassandra-driver
 progressbar2
+six
 statistics
-testing.cassandra
 whisper

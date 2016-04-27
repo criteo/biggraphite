@@ -5,7 +5,7 @@ from cassandra import cluster as c_cluster
 
 
 def create_unreplicated_keyspace(contact_points, port, keyspace):
-    """Creates a keyspace, mostly used for tests."""
+    """Create a keyspace, mostly used for tests."""
     cluster = c_cluster.Cluster(contact_points, port)
     session = cluster.connect()
     session.execute(

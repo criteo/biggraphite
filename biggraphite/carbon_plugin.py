@@ -1,9 +1,20 @@
+#!/usr/bin/env python
+"""Adapter between BigGraphite and Carbon."""
+
 from carbon import database
 from carbon import exceptions
 from biggraphite import accessor
 
+# Ignore D102: Missing docstring in public method: Most of them come from upstream module.
+# pylama:ignore=D102
+
 
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
+    """Database plugin for Carbon.
+
+    The class definition registers the plugin thanks to TimeSeriesDatabase's metaclass.
+    """
+
     plugin_name = "biggraphite"
 
     def __init__(self, settings):

@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+"""A CLI to import whisper data into Cassandra."""
+
 from __future__ import print_function
 
 import argparse
@@ -24,7 +26,7 @@ class _Worker(object):
             keyspace=opts.keyspace,
             contact_points=opts.contact_points,
             port=opts.port,
-            connections_per_process=opts.connections_per_process,
+            executor_threads=opts.connections_per_process,
         )
         self._opts = opts
 
@@ -100,7 +102,7 @@ def _parse_opts():
 
 
 def main():
-
+    """Entry point for the module."""
     if '__pypy__' not in sys.builtin_module_names:
         print('Running without PyPy, this is about 20 times slower', file=sys.stderr)
         sys.stderr.flush()
