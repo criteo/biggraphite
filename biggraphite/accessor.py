@@ -162,11 +162,13 @@ class Accessor(object):
         self.keyspace = keyspace
         self.contact_points = contact_points
         self.port = port
-        self.executor_threads = executor_threads
-        self.cluster = None  # setup by connect()
-        self.insert_statement = None  # setup by connect()
-        self.select_statement = None  # setup by connect()
-        self.session = None  # setup by connect()
+        self.__executor_threads = executor_threads
+        self.__cluster = None  # setup by connect()
+        self.__insert_metrics_statement = None  # setup by connect()
+        self.__insert_statement = None  # setup by connect()
+        self.__select_metric_statement = None  # setup by connect()
+        self.__select_statement = None  # setup by connect()
+        self.__session = None  # setup by connect()
 
     def __enter__(self):
         """Call connect()."""
@@ -181,17 +183,17 @@ class Accessor(object):
     def _upgrade_schema(self):
         # Currently no change, so only upgrade operation is to setup
         try:
-            self.session.execute("SELECT metric FROM raw LIMIT 1;")
+            self.__session.execute("SELECT metric FROM raw LIMIT 1;")
         except cassandra.InvalidRequest:
             for cql in _SETUP_CQL:
-                self.session.execute(cql)
+                self.__session.execute(cql)
 
     def connect(self):
         """Establish a connection to Cassandra.
 
         This must be called AFTER creating subprocess with the multiprocessing module.
         """
-        if self.cluster:
+        if self.__cluster:
             return
         try:
             self._connect()
@@ -199,17 +201,17 @@ class Accessor(object):
             try:
                 self.shutdown()
             except Error:
-                self.cluster = None
+                self.__cluster = None
             raise CassandraError(exc)
 
     def shutdown(self):
         """Close the connection to Cassandra."""
-        if self.cluster:
+        if self.__cluster:
             try:
-                self.cluster.shutdown()
+                self.__cluster.shutdown()
             except Exception as exc:
                 raise CassandraError(exc)
-            self.cluster = None
+            self.__cluster = None
 
     @staticmethod
     def _components_from_name(metric_name):
@@ -218,28 +220,28 @@ class Accessor(object):
         return res
 
     def _connect(self, skip_schema_upgrade=False):
-        self.cluster = c_cluster.Cluster(
-            self.contact_points, self.port, executor_threads=self.executor_threads)
-        self.session = self.cluster.connect()
-        self.session.set_keyspace(self.keyspace)
+        self.__cluster = c_cluster.Cluster(
+            self.contact_points, self.port, executor_threads=self.__executor_threads)
+        self.__session = self.__cluster.connect()
+        self.__session.set_keyspace(self.keyspace)
         if not skip_schema_upgrade:
             self._upgrade_schema()
-        self.insert_statement = self.session.prepare(
+        self.__insert_statement = self.__session.prepare(
             "INSERT INTO raw (metric, time_start_ms, time_offset_ms, value)"
             " VALUES (?, ?, ?, ?);")
-        self.insert_statement.consistency_level = cassandra.ConsistencyLevel.ONE
-        self.select_statement = self.session.prepare(
+        self.__insert_statement.consistency_level = cassandra.ConsistencyLevel.ONE
+        self.__select_statement = self.__session.prepare(
             "SELECT time_start_ms, time_offset_ms, value FROM raw"
             " WHERE metric=? AND time_start_ms=? "
             " AND time_offset_ms >= ? AND time_offset_ms < ? "
             " ORDER BY time_offset_ms;")
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
-        self.insert_metrics_statement = self.session.prepare(
+        self.__insert_metrics_statement = self.__session.prepare(
             "INSERT INTO metrics (name, config, %s) VALUES (?, ?, %s);"
             % (components_names, components_marks)
         )
-        self.select_metric_statement = self.session.prepare(
+        self.__select_metric_statement = self.__session.prepare(
             "SELECT name, config FROM metrics WHERE name = ?;"
         )
 
@@ -248,7 +250,7 @@ class Accessor(object):
         timestamp_ms = int(timestamp) * 1000
         time_offset_ms = timestamp_ms % self._ROW_SIZE_MS
         time_start_ms = timestamp_ms - time_offset_ms
-        return (self.insert_statement, (metric_name, time_start_ms, time_offset_ms, value))
+        return (self.__insert_statement, (metric_name, time_start_ms, time_offset_ms, value))
 
     def insert_points(self, metric_name, timestamps_and_values):
         """Insert points for a given metric.
@@ -263,13 +265,13 @@ class Accessor(object):
             for t, v in timestamps_and_values
         ]
         c_concurrent.execute_concurrent(
-            self.session, statements_and_args, concurrency=self.executor_threads * 50)
+            self.__session, statements_and_args, concurrency=self.__executor_threads * 50)
 
     def drop_all_metrics(self):
         """Delete all metrics from the database."""
         assert self.is_connected, "connect() wasn't called"
-        self.session.execute("TRUNCATE metrics;")
-        self.session.execute("TRUNCATE raw;")
+        self.__session.execute("TRUNCATE metrics;")
+        self.__session.execute("TRUNCATE raw;")
 
     @staticmethod
     def _round_down(timestamp, precision):
@@ -288,7 +290,7 @@ class Accessor(object):
                 row_min_offset = time_start_ms - row_start_ms
             if row_start_ms == last_row:
                 row_max_offset = time_end_ms - row_start_ms
-            statement = (self.select_statement,
+            statement = (self.__select_statement,
                          (metric_name, row_start_ms, row_min_offset, row_max_offset))
             res.append(statement)
         return res
@@ -300,7 +302,7 @@ class Accessor(object):
         if empty_components > 0:
             components += [None] * empty_components
         statement_args = [metric_metadata.name, metric_metadata.as_string_dict()] + components
-        self.session.execute(self.insert_metrics_statement, statement_args)
+        self.__session.execute(self.__insert_metrics_statement, statement_args)
 
     @staticmethod
     def median_aggregator(coverage, points):
@@ -312,7 +314,7 @@ class Accessor(object):
 
     def get_metric(self, metric_name):
         """Return a MetricMetadata for this metric_name, None if no such metric."""
-        result = list(self.session.execute(self.select_metric_statement, (metric_name, )))
+        result = list(self.__session.execute(self.__select_metric_statement, (metric_name, )))
         if not result:
             return None
         name = result[0][0]
@@ -340,7 +342,7 @@ class Accessor(object):
             "LIMIT %d ALLOW FILTERING;" % (self.MAX_METRIC_PER_GLOB + 1),
         ])
         try:
-            metrics_names = [r.name for r in self.session.execute(query)]
+            metrics_names = [r.name for r in self.__session.execute(query)]
         except Exception as e:
             raise RetryableCassandraError(e)
         if len(metrics_names) > self.MAX_METRIC_PER_GLOB:
@@ -385,7 +387,7 @@ class Accessor(object):
         time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
         statements_and_args = self._make_all_points_selects(metric_name, time_start_ms, time_end_ms)
         query_results = c_concurrent.execute_concurrent(
-            self.session, statements_and_args, concurrency=self.executor_threads * 50,
+            self.__session, statements_and_args, concurrency=self.__executor_threads * 50,
             results_generator=True,
         )
 
@@ -427,7 +429,7 @@ class Accessor(object):
     @property
     def is_connected(self):
         """Return true if connect() has been called since last shutdown()."""
-        return bool(self.cluster)
+        return bool(self.__cluster)
 
     @staticmethod
     def _fetch_points_validate_args(metric_name, time_start, time_end, step, aggregator_func):
