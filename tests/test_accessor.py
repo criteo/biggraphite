@@ -37,7 +37,7 @@ class TestWithCassandra(unittest.TestCase):
         # extract the IPs and native port for use with the native driver.
         cls.contact_points = [s.split(":")[0]
                               for s in cls.cassandra.server_list()]
-        cls.port = cls.cassandra.cassandra_yaml['native_transport_port']
+        cls.port = cls.cassandra.cassandra_yaml["native_transport_port"]
         bg_test_utils.create_unreplicated_keyspace(
             cls.contact_points, cls.port, _KEYSPACE)
 
@@ -64,7 +64,11 @@ class TestWithCassandra(unittest.TestCase):
         self.addCleanup(self.accessor.drop_all_metrics)
 
         fetched = self.accessor.fetch_points(_METRIC, _QUERY_START, _QUERY_END, step=1)
+        # assertEqual is very slow when the diff is huge, so we give it a chance of
+        # failing early to avoid imprecise test timeouts.
         self.assertEqual(_QUERY_RANGE, len(fetched))
+        self.assertEqual(_USEFUL_POINTS[:10], fetched[:10])
+        self.assertEqual(_USEFUL_POINTS[-10:], fetched[-10:])
         self.assertEqual(_USEFUL_POINTS, fetched)
 
     def test_fetch_lower_res(self):
@@ -81,6 +85,30 @@ class TestWithCassandra(unittest.TestCase):
         median = statistics.median(v for t, v in _USEFUL_POINTS)
         self.assertEqual(median, fetched_median[0][1])
 
+    def test_glob(self):
+        self.assertFalse(self.accessor.glob_metric_names(_METRIC + ".*"))
+        for name in "a", "a.a", "a.b", "a.a.a":
+            meta = bg_accessor.MetricMetadata(name, {})
+            self.accessor.update_metric(meta)
+        self.assertEqual(["a"], self.accessor.glob_metric_names("*"))
+        self.assertEqual(["a.a", "a.b"], self.accessor.glob_metric_names("*.*"))
+        self.assertEqual(["a.a.a"], self.accessor.glob_metric_names("*.*.*"))
+        self.accessor.drop_all_metrics()
+        self.assertFalse(self.accessor.glob_metric_names("*"))
 
-if __name__ == '__main__':
+    def test_update_metrics(self):
+        metric_data = {
+            "name": "a.b.c.d.e.f",
+            "carbon_aggregation": "last",
+            "carbon_retentions": [[1, 60], [60, 3600]],
+            "carbon_xfilesfactor": 0.3,
+        }
+        metric = bg_accessor.MetricMetadata(**metric_data)
+        self.accessor.update_metric(metric)
+        metric_again = self.accessor.get_metric(metric.name)
+        for k, v in metric_data.iteritems():
+            self.assertEqual(v, getattr(metric_again, k))
+
+
+if __name__ == "__main__":
     unittest.main()
