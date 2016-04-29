@@ -61,7 +61,6 @@ class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(median, fetched_median[0][1])
 
     def test_glob(self):
-        self.assertFalse(self.accessor.glob_metric_names(_METRIC + ".*"))
         for name in "a", "a.a", "a.b", "a.a.a":
             meta = bg_accessor.MetricMetadata(name)
             self.accessor.update_metric(meta)
