@@ -116,17 +116,17 @@ class MetricMetadata(object):
 
         Args:
           coverage: the proportion of time for which we have values, as a float
-          points: values to aggregate as float
+          points: values to aggregate as float from most recent to oldest
 
         Returns:
-          A float, or None to reject the points.01
+          A float, or None to reject the points.
         """
         if not points:
             return points
         if coverage < self.carbon_xfilesfactor:
             return None
         if self.carbon_aggregation == "average":
-            return sum(points) / len(points)
+            return float(sum(points)) / len(points)
         if self.carbon_aggregation == "last":
             # Points are stored in descending order, the "last" is actually the first
             return points[0]
@@ -136,6 +136,7 @@ class MetricMetadata(object):
             return max(points)
         if self.carbon_aggregation == "sum":
             return sum(points)
+        raise InvalidArgumentError("Unknown aggregation method: %s" % self.carbon_aggregation)
 
 
 class Accessor(object):
