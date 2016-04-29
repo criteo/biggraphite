@@ -44,7 +44,7 @@ _SETUP_CQL_METRICS_COMPONENTS = "\n".join(
 )
 
 _SETUP_CQL_METRICS_INDEXES = [
-    "CREATE CUSTOM INDEX ON metrics (component_%d)"
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON metrics (component_%d)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
@@ -53,7 +53,7 @@ _SETUP_CQL_METRICS_INDEXES = [
 ]
 
 _SETUP_CQL = [
-    "CREATE TABLE raw ("
+    "CREATE TABLE IF NOT EXISTS raw ("
     "  metric text,"
     "  time_start_ms bigint,"
     "  time_offset_ms int,"
@@ -68,7 +68,7 @@ _SETUP_CQL = [
     "    'base_time_seconds': '900',"
     "    'class': 'DateTieredCompactionStrategy'"
     "  };",
-    "CREATE TABLE metrics ("
+    "CREATE TABLE IF NOT EXISTS metrics ("
     "  name text,"
     "  config map<text, text>,"
     "" + _SETUP_CQL_METRICS_COMPONENTS + ""
@@ -182,13 +182,10 @@ class Accessor(object):
 
     def _upgrade_schema(self):
         # Currently no change, so only upgrade operation is to setup
-        try:
-            self.__session.execute("SELECT metric FROM raw LIMIT 1;")
-        except cassandra.InvalidRequest:
-            for cql in _SETUP_CQL:
-                self.__session.execute(cql)
+        for cql in _SETUP_CQL:
+            self.__session.execute(cql)
 
-    def connect(self):
+    def connect(self, skip_schema_upgrade=False):
         """Establish a connection to Cassandra.
 
         This must be called AFTER creating subprocess with the multiprocessing module.
@@ -196,7 +193,7 @@ class Accessor(object):
         if self.__cluster:
             return
         try:
-            self._connect()
+            self._connect(skip_schema_upgrade=skip_schema_upgrade)
         except Exception as exc:
             try:
                 self.shutdown()
