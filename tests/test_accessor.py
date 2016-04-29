@@ -88,9 +88,11 @@ class TestWithCassandra(unittest.TestCase):
     def test_glob(self):
         self.assertFalse(self.accessor.glob_metric_names(_METRIC + ".*"))
         for name in "a", "a.a", "a.b", "a.a.a":
-            meta = bg_accessor.MetricMetadata(name, {})
+            meta = bg_accessor.MetricMetadata(name)
             self.accessor.update_metric(meta)
         self.assertEqual(["a"], self.accessor.glob_metric_names("*"))
+        self.assertEqual(["a"], self.accessor.glob_metric_names("a"))
+        self.assertEqual([], self.accessor.glob_metric_names("A"))
         self.assertEqual(["a.a", "a.b"], self.accessor.glob_metric_names("*.*"))
         self.assertEqual(["a.a.a"], self.accessor.glob_metric_names("*.*.*"))
         self.accessor.drop_all_metrics()
