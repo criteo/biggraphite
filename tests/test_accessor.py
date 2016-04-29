@@ -4,12 +4,10 @@ from __future__ import print_function
 import unittest
 
 import statistics
-from testing import cassandra as testing_cassandra
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 
-_KEYSPACE = "test_keyspace"
 _METRIC = "test.metric"
 
 # Points test query.
@@ -26,30 +24,7 @@ _USEFUL_POINTS = _POINTS[_EXTRA_POINTS:-_EXTRA_POINTS]
 assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 
-class TestWithCassandra(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.cassandra = testing_cassandra.Cassandra()
-        cls.cassandra.start()
-
-        # testing.cassandra is meant to be used with the Thrift API, so we need to
-        # extract the IPs and native port for use with the native driver.
-        cls.contact_points = [s.split(":")[0]
-                              for s in cls.cassandra.server_list()]
-        cls.port = cls.cassandra.cassandra_yaml["native_transport_port"]
-        bg_test_utils.create_unreplicated_keyspace(
-            cls.contact_points, cls.port, _KEYSPACE)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.cassandra.stop()
-
-    def setUp(self):
-        self.accessor = bg_accessor.Accessor(
-            _KEYSPACE, self.contact_points, self.port)
-        self.accessor.connect()
-        self.addCleanup(self.accessor.shutdown)
+class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
     def test_fetch_empty(self):
         self.accessor.insert_points(_METRIC, _POINTS)
