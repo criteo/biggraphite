@@ -1,0 +1,21 @@
+language: python
+
+# As of 2016-04 Travis provides Java 7 with precise so we use trusty
+sudo: required
+dist: trusty
+
+env:
+  global:
+    # As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
+    - CASSANDRA_VERSION=3.5
+    - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/apache-cassandra-${CASSANDRA_VERSION}/"
+
+install:
+  - pip install tox
+script:
+  - tox
+
+# As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
+before_install:
+   - wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+   - tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"

@@ -1,0 +1,3 @@
+coverage
+testing.cassandra
+unittest2
