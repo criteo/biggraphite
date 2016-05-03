@@ -24,6 +24,7 @@ from biggraphite import accessor
 
 _DEFAULT_PORT = 9042
 
+
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """Database plugin for Carbon.
 
