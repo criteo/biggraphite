@@ -14,8 +14,8 @@
 # limitations under the License.
 """Utilities factoring code across tests.
 
-The dependancies for this module are not included in requirements.txt or in the package
-dependancies, instead one needs the elements of tests-requirements.txt .
+The dependencies for this module are not included in requirements.txt or in the package
+dependencies, instead one needs the elements of tests-requirements.txt .
 """
 
 from __future__ import print_function

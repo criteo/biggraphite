@@ -96,13 +96,14 @@ _SETUP_CQL_METRICS = str(
 # Its usage in the context of timeserie databases is described at:
 # http://www.datastax.com/dev/blog/datetieredcompactionstrategy
 #
-# Another trick we use is grouping related timestamps (Accessor._ROW_SIZE_MS)
+# Another trick we use is grouping related timestamps (_ROW_SIZE_MS)
 # in the same row described by time_start_ms and using time_offset_ms to describe
 # a delta from it. This saves space in two ways:
 #  - No need to repeat metric names on each row.
 #  - The relative time offset is 4 bytes only when a timestamp would be 8.
-_SETUP_CQL_RAW = str(
-    "CREATE TABLE IF NOT EXISTS raw ("
+_ROW_SIZE_MS = 3600 * 1000
+_SETUP_CQL_DATAPOINTS = str(
+    "CREATE TABLE IF NOT EXISTS datapoints ("
     "  metric text,"
     "  time_start_ms bigint,"
     "  time_offset_ms int,"
@@ -119,7 +120,7 @@ _SETUP_CQL_RAW = str(
     "  };"
 )
 _SETUP_CQL = [
-    _SETUP_CQL_RAW,
+    _SETUP_CQL_DATAPOINTS,
     _SETUP_CQL_METRICS,
 ] + _SETUP_CQL_METRICS_INDEXES
 
@@ -129,6 +130,7 @@ class MetricMetadata(object):
 
     _DEFAULT_AGGREGATION = "average"
     _DEFAULT_RETENTIONS = [[1, 24*3600]]  # One second for one day
+    _DEFAULT_XFILESFACTOR = 0.5
 
     def __init__(self, name,
                  carbon_aggregation=None, carbon_retentions=None, carbon_xfilesfactor=None):
@@ -138,7 +140,7 @@ class MetricMetadata(object):
         self.carbon_retentions = carbon_retentions or self._DEFAULT_RETENTIONS
         self.carbon_xfilesfactor = carbon_xfilesfactor
         if self.carbon_xfilesfactor is None:
-            self.carbon_xfilesfactor = 0.5
+            self.carbon_xfilesfactor = self._DEFAULT_XFILESFACTOR
 
     def as_string_dict(self):
         """Turn an instance into a dict of string to string."""
@@ -193,24 +195,28 @@ class Accessor(object):
     It is not safe to share a given accessor across threads.
     """
 
-    _ROW_SIZE_MS = 3600 * 1000
     _MAX_QUERY_RANGE_MS = 365 * 24 * _ROW_SIZE_MS
 
     MAX_METRIC_PER_GLOB = 1000
+    # This is taken from the default Cassandra binding that runs 0 concurrent inserts
+    # with 2 threads.
+    _REQUESTS_PER_THREAD = 50.0
 
-    def __init__(self, keyspace, contact_points, port=9042, executor_threads=4):
+    _DEFAULT_CASSANDRA_PORT = 9042
+
+    def __init__(self, keyspace, contact_points, port=None, concurrency=4):
         """Record parameters needed to connect.
 
         Args:
           keyspace: Name of Cassandra keyspace dedicated to BigGraphite.
           contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
           port: The port to connect to, as an int.
-          executor_threads: How many worker threads to use.
+          concurrency: How many worker threads to use.
         """
         self.keyspace = keyspace
         self.contact_points = contact_points
-        self.port = port
-        self.__executor_threads = executor_threads
+        self.port = port or self._DEFAULT_CASSANDRA_PORT
+        self.__concurrency = concurrency
         self.__cluster = None  # setup by connect()
         self.__insert_metrics_statement = None  # setup by connect()
         self.__insert_statement = None  # setup by connect()
@@ -265,18 +271,20 @@ class Accessor(object):
         return res
 
     def _connect(self, skip_schema_upgrade=False):
+        executor_threads = self._round_up(
+            self.__concurrency, self._REQUESTS_PER_THREAD) / self._REQUESTS_PER_THREAD
         self.__cluster = c_cluster.Cluster(
-            self.contact_points, self.port, executor_threads=self.__executor_threads)
+            self.contact_points, self.port, executor_threads=executor_threads)
         self.__session = self.__cluster.connect()
         self.__session.set_keyspace(self.keyspace)
         if not skip_schema_upgrade:
             self._upgrade_schema()
         self.__insert_statement = self.__session.prepare(
-            "INSERT INTO raw (metric, time_start_ms, time_offset_ms, value)"
+            "INSERT INTO datapoints (metric, time_start_ms, time_offset_ms, value)"
             " VALUES (?, ?, ?, ?);")
         self.__insert_statement.consistency_level = cassandra.ConsistencyLevel.ONE
         self.__select_statement = self.__session.prepare(
-            "SELECT time_start_ms, time_offset_ms, value FROM raw"
+            "SELECT time_start_ms, time_offset_ms, value FROM datapoints"
             " WHERE metric=? AND time_start_ms=? "
             " AND time_offset_ms >= ? AND time_offset_ms < ? "
             " ORDER BY time_offset_ms;")
@@ -293,7 +301,7 @@ class Accessor(object):
     def _make_insert_points(self, metric_name, timestamp, value):
         # We store only one point per second, though the on-disk structure allow for more.
         timestamp_ms = int(timestamp) * 1000
-        time_offset_ms = timestamp_ms % self._ROW_SIZE_MS
+        time_offset_ms = timestamp_ms % _ROW_SIZE_MS
         time_start_ms = timestamp_ms - time_offset_ms
         return (self.__insert_statement, (metric_name, time_start_ms, time_offset_ms, value))
 
@@ -310,27 +318,32 @@ class Accessor(object):
             for t, v in timestamps_and_values
         ]
         c_concurrent.execute_concurrent(
-            self.__session, statements_and_args, concurrency=self.__executor_threads * 50)
+            self.__session, statements_and_args, concurrency=self.__concurrency,
+        )
 
     def drop_all_metrics(self):
         """Delete all metrics from the database."""
         assert self.is_connected, "connect() wasn't called"
         self.__session.execute("TRUNCATE metrics;")
-        self.__session.execute("TRUNCATE raw;")
+        self.__session.execute("TRUNCATE datapoints;")
 
     @staticmethod
-    def _round_down(timestamp, precision):
-        return int(timestamp) // precision * precision
+    def _round_down(rounded, devider):
+        return int(rounded) // devider * devider
+
+    @staticmethod
+    def _round_up(rounded, devider):
+        return int(rounded + devider - 1) // devider * devider
 
     def _make_all_points_selects(self, metric_name, time_start_ms, time_end_ms):
         # We fetch with ms precision, even though we only store with second precision.
-        first_row = self._round_down(time_start_ms, self._ROW_SIZE_MS)
-        last_row = self._round_down(time_end_ms, self._ROW_SIZE_MS)
+        first_row = self._round_down(time_start_ms, _ROW_SIZE_MS)
+        last_row = self._round_down(time_end_ms, _ROW_SIZE_MS)
         res = []
-        # xrange(a,b) does not contain be, so we use last_row+1
-        for row_start_ms in xrange(first_row, last_row + 1, self._ROW_SIZE_MS):
+        # xrange(a,b) does not contain b, so we use last_row+1
+        for row_start_ms in xrange(first_row, last_row + 1, _ROW_SIZE_MS):
             row_min_offset = -1  # Selects all
-            row_max_offset = self._ROW_SIZE_MS + 1   # Selects all
+            row_max_offset = _ROW_SIZE_MS + 1   # Selects all
             if row_start_ms == first_row:
                 row_min_offset = time_start_ms - row_start_ms
             if row_start_ms == last_row:
@@ -369,6 +382,7 @@ class Accessor(object):
 
     # TODO: handle ranges and the like
     # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
+    # TODO: Handled subdirectories for the graphite-web API
     def glob_metric_names(self, metric_glob):
         """Return a sorted list of metric names matching this glob."""
         components = self._components_from_name(metric_glob)
@@ -432,7 +446,7 @@ class Accessor(object):
         time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
         statements_and_args = self._make_all_points_selects(metric_name, time_start_ms, time_end_ms)
         query_results = c_concurrent.execute_concurrent(
-            self.__session, statements_and_args, concurrency=self.__executor_threads * 50,
+            self.__session, statements_and_args, concurrency=self.__concurrency,
             results_generator=True,
         )
 

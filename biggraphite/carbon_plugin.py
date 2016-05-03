@@ -22,6 +22,8 @@ from biggraphite import accessor
 # pylama:ignore=D102
 
 
+_DEFAULT_PORT = 9042
+
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """Database plugin for Carbon.
 
@@ -42,7 +44,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                 "contact_points are mandatory")
 
         contact_points = [s.strip() for s in contact_points_str.split(",")]
-        port = settings.get("port", 9042)
+        port = settings.get("port")
 
         self._accessor = accessor.Accessor(keyspace, contact_points, port)
         self._accessor.connect()
@@ -69,9 +71,11 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         if key != "aggregationMethod":
             raise ValueError("Unsupported metadata key \"%s\"" % key)
 
+        # TODO: Use the accessor to determine the return value.
         return "average"
 
     def setMetadata(self, metric, key, value):
+        # TODO: Check name and use the accessor to set the value.
         return "average"
 
     def getFilesystemPath(self, metric):
