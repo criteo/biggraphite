@@ -49,14 +49,29 @@ class TooManyMetrics(InvalidArgumentError):
     """A name glob yielded more than Accessor.MAX_METRIC_PER_GLOB metrics."""
 
 
-_LAST_COMPONENT = '__END__'
-
 _COMPONENTS_MAX_LEN = 64
-
-_SETUP_CQL_METRICS_COMPONENTS = "\n".join(
-    "  component_%d text," % n for n in range(_COMPONENTS_MAX_LEN)
-)
-
+_LAST_COMPONENT = "__END__"
+# THE "METRICS" TABLE
+# To resolve globs, we store metrics in a table that among other
+# things contain 64 columns, one for each path component.
+# The metric "a.b.c" is therefore indexed as:
+#   name="a.b.c", config=...,
+#   component_0="a", component_1="b", component_2="c", component_3="__END__",
+#   component_4=NULL, component_5=NULL, ..., component_63=NULL
+# A SASI Index is declared on each of the component columns. We use SASI
+# because it knows to process multi-column queries without filtering.
+#
+# The way it works is by indexing tokens in a B+Tree for each column of
+# each sstable.
+# After finding the right places in the B+Trees, SASI picks the column with
+# the least results, and merge the result together. It uses multiple lookups
+# if one column is 100 times bigger than the other, otherwise it uses a merge join.
+#
+# SASI support for LIKE queries is limited to finding substrings.
+# So when resolving a query like a.x*z.c we query for a.*.c and then do
+# client-side filtering.
+#
+# For more details on SASI: https://github.com/apache/cassandra/blob/trunk/doc/SASI.md
 _SETUP_CQL_METRICS_INDEXES = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON metrics (component_%d)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
@@ -65,8 +80,28 @@ _SETUP_CQL_METRICS_INDEXES = [
     "    'case_sensitive': 'true'"
     "  };" % n for n in range(_COMPONENTS_MAX_LEN)
 ]
-
-_SETUP_CQL = [
+_SETUP_CQL_METRICS_COMPONENTS = "".join(
+    "  component_%d text," % n for n in range(_COMPONENTS_MAX_LEN)
+)
+_SETUP_CQL_METRICS = str(
+    "CREATE TABLE IF NOT EXISTS metrics ("
+    "  name text,"
+    "  config map<text, text>,"
+    "" + _SETUP_CQL_METRICS_COMPONENTS + ""
+    "  PRIMARY KEY (name)"
+    ");"
+)
+# THE "RAW" TABLE
+# To allow for efficient compaction, we use the DateTieredCompactionStrategy, "DTCS".
+# Its usage in the context of timeserie databases is described at:
+# http://www.datastax.com/dev/blog/datetieredcompactionstrategy
+#
+# Another trick we use is grouping related timestamps (Accessor._ROW_SIZE_MS)
+# in the same row described by time_start_ms and using time_offset_ms to describe
+# a delta from it. This saves space in two ways:
+#  - No need to repeat metric names on each row.
+#  - The relative time offset is 4 bytes only when a timestamp would be 8.
+_SETUP_CQL_RAW = str(
     "CREATE TABLE IF NOT EXISTS raw ("
     "  metric text,"
     "  time_start_ms bigint,"
@@ -81,13 +116,11 @@ _SETUP_CQL = [
     "    'max_sstable_age_days': '1',"
     "    'base_time_seconds': '900',"
     "    'class': 'DateTieredCompactionStrategy'"
-    "  };",
-    "CREATE TABLE IF NOT EXISTS metrics ("
-    "  name text,"
-    "  config map<text, text>,"
-    "" + _SETUP_CQL_METRICS_COMPONENTS + ""
-    "  PRIMARY KEY (name)"
-    ");",
+    "  };"
+)
+_SETUP_CQL = [
+    _SETUP_CQL_RAW,
+    _SETUP_CQL_METRICS,
 ] + _SETUP_CQL_METRICS_INDEXES
 
 
