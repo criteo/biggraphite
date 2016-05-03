@@ -72,22 +72,31 @@ _LAST_COMPONENT = "__END__"
 # client-side filtering.
 #
 # For more details on SASI: https://github.com/apache/cassandra/blob/trunk/doc/SASI.md
-_SETUP_CQL_METRICS_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON metrics (component_%d)"
+_SETUP_CQL_PATH_INDEXES = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON %s (component_%d)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
-    "  };" % n for n in range(_COMPONENTS_MAX_LEN)
+    "  };" % (t, n)
+    for t in 'metrics', 'directories'
+    for n in range(_COMPONENTS_MAX_LEN)
 ]
-_SETUP_CQL_METRICS_COMPONENTS = "".join(
+_SETUP_CQL_PATH_COMPONENTS = "".join(
     "  component_%d text," % n for n in range(_COMPONENTS_MAX_LEN)
 )
 _SETUP_CQL_METRICS = str(
     "CREATE TABLE IF NOT EXISTS metrics ("
     "  name text,"
     "  config map<text, text>,"
-    "" + _SETUP_CQL_METRICS_COMPONENTS + ""
+    "" + _SETUP_CQL_PATH_COMPONENTS + ""
+    "  PRIMARY KEY (name)"
+    ");"
+)
+_SETUP_CQL_DIRECTORIES = str(
+    "CREATE TABLE IF NOT EXISTS directories ("
+    "  name text,"
+    "" + _SETUP_CQL_PATH_COMPONENTS + ""
     "  PRIMARY KEY (name)"
     ");"
 )
@@ -121,8 +130,9 @@ _SETUP_CQL_DATAPOINTS = str(
 )
 _SETUP_CQL = [
     _SETUP_CQL_DATAPOINTS,
+    _SETUP_CQL_DIRECTORIES,
     _SETUP_CQL_METRICS,
-] + _SETUP_CQL_METRICS_INDEXES
+] + _SETUP_CQL_PATH_INDEXES
 
 
 class MetricMetadata(object):
@@ -383,9 +393,15 @@ class Accessor(object):
     # TODO: handle ranges and the like
     # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
     # TODO: Handled subdirectories for the graphite-web API
-    def glob_metric_names(self, metric_glob):
+    def glob_metric_names(self, glob):
         """Return a sorted list of metric names matching this glob."""
-        components = self._components_from_name(metric_glob)
+        return self.__glob_names("directories", glob)
+
+    def glob_directory_names(self, glob):
+        pass
+
+    def __glob_names(self, table, glob):
+        components = self._components_from_name(glob)
         if len(components) > _COMPONENTS_MAX_LEN:
             msg = "Metric globs can have a maximum of %d dots" % _COMPONENTS_MAX_LEN - 2
             raise InvalidGlobError(msg)
@@ -396,7 +412,7 @@ class Accessor(object):
             if s != "*"
         ]
         query = " ".join([
-            "SELECT name FROM metrics WHERE",
+            "SELECT name FROM %s WHERE" % table,
             " AND ".join(where),
             "LIMIT %d ALLOW FILTERING;" % (self.MAX_METRIC_PER_GLOB + 1),
         ])
@@ -409,6 +425,7 @@ class Accessor(object):
             raise TooManyMetrics(msg)
         metrics_names.sort()
         return metrics_names
+
 
     # TODO: Remove aggregator_func and perform aggregation server-side.
     def fetch_points(self, metric_name, time_start, time_end, step, aggregator_func=None):
