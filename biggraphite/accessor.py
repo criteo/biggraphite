@@ -145,6 +145,8 @@ _SETUP_CQL = [
 class MetricMetadata(object):
     """Represents all information about a metric."""
 
+    __slots__ = ("carbon_aggregation", "carbon_retentions", "carbon_xfilesfactor", "name", )
+
     _DEFAULT_AGGREGATION = "average"
     _DEFAULT_RETENTIONS = [[1, 24*3600]]  # One second for one day
     _DEFAULT_XFILESFACTOR = 0.5
