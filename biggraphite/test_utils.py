@@ -17,9 +17,10 @@
 The dependencies for this module are not included in requirements.txt or in the package
 dependencies, instead one needs the elements of tests-requirements.txt .
 """
-
+from __future__ import absolute_import
 from __future__ import print_function
 
+import os
 import sys
 import unittest
 
@@ -47,6 +48,23 @@ def create_unreplicated_keyspace(contact_points, port, keyspace):
     cluster.shutdown()
 
 
+def prepare_graphite_imports():
+    """Add to graphite libs to sys.path."""
+    try:
+        import carbon  # noqa
+    except ImportError:
+        to_add = "/opt/graphite/lib"
+        if os.environ.get("VIRTUAL_ENV"):
+            # Running in a virtual environment
+            for package_path in sys.path:
+                if package_path.endswith("site-packages"):
+                    graphite_path = package_path + "/opt/graphite/lib"
+                    if os.path.isdir(graphite_path):
+                        to_add = graphite_path
+        if to_add not in sys.path:
+            sys.path.insert(0, to_add)
+
+
 class TestCaseWithAccessor(unittest.TestCase):
     """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
 
@@ -70,10 +88,10 @@ class TestCaseWithAccessor(unittest.TestCase):
 
         # testing.cassandra is meant to be used with the Thrift API, so we need to
         # extract the IPs and native port for use with the native driver.
-        cls.__contact_points = [s.split(":")[0]
-                                for s in cls.cassandra.server_list()]
-        cls.__port = cls.cassandra.cassandra_yaml["native_transport_port"]
-        create_unreplicated_keyspace(cls.__contact_points, cls.__port, cls.KEYSPACE)
+        cls.contact_points = [s.split(":")[0]
+                              for s in cls.cassandra.server_list()]
+        cls.port = cls.cassandra.cassandra_yaml["native_transport_port"]
+        create_unreplicated_keyspace(cls.contact_points, cls.port, cls.KEYSPACE)
 
     @classmethod
     def tearDownClass(cls):
@@ -85,7 +103,7 @@ class TestCaseWithAccessor(unittest.TestCase):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithAccessor, self).setUp()
         self.accessor = bg_accessor.Accessor(
-            self.KEYSPACE, self.__contact_points, self.__port)
+            self.KEYSPACE, self.contact_points, self.port)
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
         self.addCleanup(self.accessor.drop_all_metrics)
