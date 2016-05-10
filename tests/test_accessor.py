@@ -109,7 +109,7 @@ class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
     def test_glob_metrics(self):
         for name in "a", "a.a", "a.b", "a.a.a", "x.y.z":
             meta = bg_accessor.MetricMetadata(name)
-            self.accessor.update_metric(meta)
+            self.accessor.create_metric(meta)
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
@@ -129,7 +129,7 @@ class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
     def test_glob_directories(self):
         for name in "a", "a.b", "x.y.z":
             meta = bg_accessor.MetricMetadata(name)
-            self.accessor.update_metric(meta)
+            self.accessor.create_metric(meta)
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
@@ -146,7 +146,7 @@ class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.drop_all_metrics()
         assert_find("*", [])
 
-    def test_update_metrics(self):
+    def test_create_metrics(self):
         metric_data = {
             "name": "a.b.c.d.e.f",
             "carbon_aggregation": "last",
@@ -154,7 +154,7 @@ class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
             "carbon_xfilesfactor": 0.3,
         }
         metric = bg_accessor.MetricMetadata(**metric_data)
-        self.accessor.update_metric(metric)
+        self.accessor.create_metric(metric)
         metric_again = self.accessor.get_metric(metric_data['name'])
         for k, v in metric_data.iteritems():
             self.assertEqual(v, getattr(metric_again, k))

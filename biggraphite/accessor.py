@@ -85,7 +85,11 @@ _SETUP_CQL_METRICS = str(
 )
 # THE "DIRECTORIES" TABLE
 # Similar to the metrics table, we create for parents of all metrics an entry in a
-# directory table. It is used to implement autocompletion in graphite-web.
+# directory table. It is used to implement the 'metric' API in graphite.
+#
+# Directories are implicitely created before metrics by the Accessor.create_metric()
+# function. Because of this, it is possible to end up with an empty directory (if the
+# program crashes). A cleaner job will be needed if they accumulate for too long.
 _SETUP_CQL_DIRECTORIES = str(
     "CREATE TABLE IF NOT EXISTS directories ("
     "  name text,"
@@ -210,7 +214,11 @@ class Accessor(object):
 
     _MAX_QUERY_RANGE_MS = 365 * 24 * _ROW_SIZE_MS
 
-    MAX_METRIC_PER_GLOB = 1000
+    # Current value is based on page settings, so that everything fits in a single Cassandra
+    # reply with default settings.
+    # TODO: Mesure actual number of metrics for existing queries and estimate a more
+    # reasonable limit.
+    MAX_METRIC_PER_GLOB = 5000
     # This is taken from the default Cassandra binding that runs 0 concurrent inserts
     # with 2 threads.
     _REQUESTS_PER_THREAD = 50.0
@@ -371,8 +379,8 @@ class Accessor(object):
             res.append(statement)
         return res
 
-    def update_metric(self, metric_metadata):
-        """Update a metric definition from a MetricMetadata.
+    def create_metric(self, metric_metadata):
+        """Create a metric definition from a MetricMetadata.
 
         Parent directory are implicitly created.
         As this requires O(10) sequential inserts, it is worthwile to first check
