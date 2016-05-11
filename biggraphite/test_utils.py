@@ -88,3 +88,4 @@ class TestCaseWithAccessor(unittest.TestCase):
             self.KEYSPACE, self.__contact_points, self.__port)
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
+        self.addCleanup(self.accessor.drop_all_metrics)

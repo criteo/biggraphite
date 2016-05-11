@@ -72,25 +72,57 @@ _LAST_COMPONENT = "__END__"
 # client-side filtering.
 #
 # For more details on SASI: https://github.com/apache/cassandra/blob/trunk/doc/SASI.md
-_SETUP_CQL_METRICS_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON metrics (component_%d)"
-    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
-    "  WITH OPTIONS = {"
-    "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
-    "    'case_sensitive': 'true'"
-    "  };" % n for n in range(_COMPONENTS_MAX_LEN)
-]
-_SETUP_CQL_METRICS_COMPONENTS = "".join(
-    "  component_%d text," % n for n in range(_COMPONENTS_MAX_LEN)
+_SETUP_CQL_PATH_COMPONENTS = ", ".join(
+    "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
 _SETUP_CQL_METRICS = str(
     "CREATE TABLE IF NOT EXISTS metrics ("
     "  name text,"
     "  config map<text, text>,"
-    "" + _SETUP_CQL_METRICS_COMPONENTS + ""
+    "  " + _SETUP_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
 )
+# THE "DIRECTORIES" TABLE
+# Similar to the metrics table, we create for parents of all metrics an entry in a
+# directory table. It is used to implement the 'metric' API in graphite.
+#
+# Directories are implicitely created before metrics by the Accessor.create_metric()
+# function. Because of this, it is possible to end up with an empty directory (if the
+# program crashes). A cleaner job will be needed if they accumulate for too long.
+#
+# WHY TWO DIFFERENT TABLES?
+# Pros of 2 tables:
+#  - We expect them to end up with increasingly different metadata (quotas on directories and
+#    whisper-header-like on metrics) and the semantic of a merged entry will become complex
+#  - We suspect that implementing quota or cleaning of empty directories will be easier if
+#    we can iterate on directories without filtering all metrics
+# Pros of 1 table:
+#  - We get batch transactions to update metadata at the same time as parent entries
+#  - We could not need an additional parameter for functions that use fields presents in
+#    both metrics and directories (but I expect they will diverge later to make the return
+#    type not depend on the argument)
+#  - We could still build a materialized view of directories only to get performance
+#    benefits above
+# None of the points above is a strong decision factor, but merging things later is generally
+# easier than untangling them so we keept them separate for now.
+_SETUP_CQL_DIRECTORIES = str(
+    "CREATE TABLE IF NOT EXISTS directories ("
+    "  name text,"
+    "  " + _SETUP_CQL_PATH_COMPONENTS + ","
+    "  PRIMARY KEY (name)"
+    ");"
+)
+_SETUP_CQL_PATH_INDEXES = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON %s (component_%d)"
+    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
+    "  WITH OPTIONS = {"
+    "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
+    "    'case_sensitive': 'true'"
+    "  };" % (t, n)
+    for t in 'metrics', 'directories'
+    for n in range(_COMPONENTS_MAX_LEN)
+]
 # THE "RAW" TABLE
 # To allow for efficient compaction, we use the DateTieredCompactionStrategy, "DTCS".
 # Its usage in the context of timeserie databases is described at:
@@ -122,7 +154,8 @@ _SETUP_CQL_DATAPOINTS = str(
 _SETUP_CQL = [
     _SETUP_CQL_DATAPOINTS,
     _SETUP_CQL_METRICS,
-] + _SETUP_CQL_METRICS_INDEXES
+    _SETUP_CQL_DIRECTORIES,
+] + _SETUP_CQL_PATH_INDEXES
 
 
 class MetricMetadata(object):
@@ -197,7 +230,11 @@ class Accessor(object):
 
     _MAX_QUERY_RANGE_MS = 365 * 24 * _ROW_SIZE_MS
 
-    MAX_METRIC_PER_GLOB = 1000
+    # Current value is based on page settings, so that everything fits in a single Cassandra
+    # reply with default settings.
+    # TODO: Mesure actual number of metrics for existing queries and estimate a more
+    # reasonable limit.
+    MAX_METRIC_PER_GLOB = 5000
     # This is taken from the default Cassandra binding that runs 0 concurrent inserts
     # with 2 threads.
     _REQUESTS_PER_THREAD = 50.0
@@ -294,6 +331,10 @@ class Accessor(object):
             "INSERT INTO metrics (name, config, %s) VALUES (?, ?, %s);"
             % (components_names, components_marks)
         )
+        self.__insert_directories_statement = self.__session.prepare(
+            "INSERT INTO directories (name, %s) VALUES (?, %s) IF NOT EXISTS;"
+            % (components_names, components_marks)
+        )
         self.__select_metric_statement = self.__session.prepare(
             "SELECT name, config FROM metrics WHERE name = ?;"
         )
@@ -324,8 +365,9 @@ class Accessor(object):
     def drop_all_metrics(self):
         """Delete all metrics from the database."""
         assert self.is_connected, "connect() wasn't called"
-        self.__session.execute("TRUNCATE metrics;")
         self.__session.execute("TRUNCATE datapoints;")
+        self.__session.execute("TRUNCATE directories;")
+        self.__session.execute("TRUNCATE metrics;")
 
     @staticmethod
     def _round_down(rounded, devider):
@@ -353,14 +395,45 @@ class Accessor(object):
             res.append(statement)
         return res
 
-    def update_metric(self, metric_metadata):
-        """Update a metric definition from a MetricMetadata."""
-        components = self._components_from_name(metric_metadata.name)
-        empty_components = _COMPONENTS_MAX_LEN - len(components)
-        if empty_components > 0:
-            components += [None] * empty_components
-        statement_args = [metric_metadata.name, metric_metadata.as_string_dict()] + components
-        self.__session.execute(self.__insert_metrics_statement, statement_args)
+    def create_metric(self, metric_metadata):
+        """Create a metric definition from a MetricMetadata.
+
+        Parent directory are implicitly created.
+        As this requires O(10) sequential inserts, it is worthwile to first check
+        if the metric exists and not recreate it if it does.
+
+        Args:
+          metric_metadata: The metric definition.
+        """
+        metric_name = metric_metadata.name
+        components = self._components_from_name(metric_name)
+        queries = []
+
+        directory_path = []
+        # Create parent directories
+        for component in components[:-2]:  # -1 for _LAST_COMPONENT, -1 for metric
+            directory_path.append(component)
+            directory_name = ".".join(directory_path)
+            directory_components = directory_path + [_LAST_COMPONENT]
+            directory_padding = [None] * (_COMPONENTS_MAX_LEN - len(directory_components))
+            queries.append((
+                self.__insert_directories_statement,
+                [directory_name] + directory_components + directory_padding,
+            ))
+        padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
+        # Finally, create the metric
+        queries.append((
+            self.__insert_metrics_statement,
+            [metric_name, metric_metadata.as_string_dict()] + components + padding,
+        ))
+
+        # We have to run queries in sequence as:
+        #  - we want them to have IF NOT EXISTS ease the hotspot on root directories
+        #  - we do not want directories or metrics without parents (not handled by callee)
+        #  - batch queries cannot contain IF NOT EXISTS and involve multiple primary keys
+        # We can still end up with empty directories, which will need a reaper job to clean them.
+        for statement, args in queries:
+            self.__session.execute(statement, args)
 
     @staticmethod
     def median_aggregator(coverage, points):
@@ -383,9 +456,16 @@ class Accessor(object):
     # TODO: handle ranges and the like
     # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
     # TODO: Handled subdirectories for the graphite-web API
-    def glob_metric_names(self, metric_glob):
+    def glob_metric_names(self, glob):
         """Return a sorted list of metric names matching this glob."""
-        components = self._components_from_name(metric_glob)
+        return self.__glob_names("metrics", glob)
+
+    def glob_directory_names(self, glob):
+        """Return a sorted list of metric directories matching this glob."""
+        return self.__glob_names("directories", glob)
+
+    def __glob_names(self, table, glob):
+        components = self._components_from_name(glob)
         if len(components) > _COMPONENTS_MAX_LEN:
             msg = "Metric globs can have a maximum of %d dots" % _COMPONENTS_MAX_LEN - 2
             raise InvalidGlobError(msg)
@@ -396,7 +476,7 @@ class Accessor(object):
             if s != "*"
         ]
         query = " ".join([
-            "SELECT name FROM metrics WHERE",
+            "SELECT name FROM %s WHERE" % table,
             " AND ".join(where),
             "LIMIT %d ALLOW FILTERING;" % (self.MAX_METRIC_PER_GLOB + 1),
         ])
@@ -405,7 +485,7 @@ class Accessor(object):
         except Exception as e:
             raise RetryableCassandraError(e)
         if len(metrics_names) > self.MAX_METRIC_PER_GLOB:
-            msg = "%s yields more than %d metrics" % (metric_glob, self.MAX_METRIC_PER_GLOB)
+            msg = "%s yields more than %d results" % (glob, self.MAX_METRIC_PER_GLOB)
             raise TooManyMetrics(msg)
         metrics_names.sort()
         return metrics_names

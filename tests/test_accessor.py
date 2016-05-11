@@ -100,19 +100,53 @@ class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
         median = statistics.median(v for t, v in _USEFUL_POINTS)
         self.assertEqual(median, fetched_median[0][1])
 
-    def test_glob(self):
-        for name in "a", "a.a", "a.b", "a.a.a":
-            meta = bg_accessor.MetricMetadata(name)
-            self.accessor.update_metric(meta)
-        self.assertEqual(["a"], self.accessor.glob_metric_names("*"))
-        self.assertEqual(["a"], self.accessor.glob_metric_names("a"))
-        self.assertEqual([], self.accessor.glob_metric_names("A"))
-        self.assertEqual(["a.a", "a.b"], self.accessor.glob_metric_names("*.*"))
-        self.assertEqual(["a.a.a"], self.accessor.glob_metric_names("*.*.*"))
-        self.accessor.drop_all_metrics()
-        self.assertFalse(self.accessor.glob_metric_names("*"))
+    @staticmethod
+    def _remove_after_dot(string):
+        if "." not in string:
+            return string
+        return string[:string.rindex(".")]
 
-    def test_update_metrics(self):
+    def test_glob_metrics(self):
+        for name in "a", "a.a", "a.b", "a.a.a", "x.y.z":
+            meta = bg_accessor.MetricMetadata(name)
+            self.accessor.create_metric(meta)
+
+        def assert_find(glob, expected_matches):
+            # Check we can find the matches of a glob
+            self.assertEqual(expected_matches, self.accessor.glob_metric_names(glob))
+
+        assert_find("a.a", ["a.a"])  # Test exact match
+        assert_find("A", [])  # Test case mismatch
+
+        # Test various lengths
+        assert_find("*", ["a"])
+        assert_find("*.*", ["a.a", "a.b"])
+        assert_find("*.*.*", ["a.a.a", "x.y.z"])
+
+        self.accessor.drop_all_metrics()
+        assert_find("*", [])
+
+    def test_glob_directories(self):
+        for name in "a", "a.b", "x.y.z":
+            meta = bg_accessor.MetricMetadata(name)
+            self.accessor.create_metric(meta)
+
+        def assert_find(glob, expected_matches):
+            # Check we can find the matches of a glob
+            self.assertEqual(expected_matches, self.accessor.glob_directory_names(glob))
+
+        assert_find("x.y", ["x.y"])  # Test exact match
+        assert_find("A", [])  # Test case mismatch
+
+        # Test various depths
+        assert_find("*", ["a", "x"])
+        assert_find("*.*", ["x.y"])
+        assert_find("*.*.*", [])
+
+        self.accessor.drop_all_metrics()
+        assert_find("*", [])
+
+    def test_create_metrics(self):
         metric_data = {
             "name": "a.b.c.d.e.f",
             "carbon_aggregation": "last",
@@ -120,7 +154,7 @@ class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
             "carbon_xfilesfactor": 0.3,
         }
         metric = bg_accessor.MetricMetadata(**metric_data)
-        self.accessor.update_metric(metric)
+        self.accessor.create_metric(metric)
         metric_again = self.accessor.get_metric(metric_data['name'])
         for k, v in metric_data.iteritems():
             self.assertEqual(v, getattr(metric_again, k))
