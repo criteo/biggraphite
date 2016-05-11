@@ -90,6 +90,22 @@ _SETUP_CQL_METRICS = str(
 # Directories are implicitely created before metrics by the Accessor.create_metric()
 # function. Because of this, it is possible to end up with an empty directory (if the
 # program crashes). A cleaner job will be needed if they accumulate for too long.
+#
+# WHY TWO DIFFERENT TABLES?
+# Pros of 2 tables:
+#  - We expect them to end up with increasingly different metadata (quotas on directories and
+#    whisper-header-like on metrics) and the semantic of a merged entry will become complex
+#  - We suspect that implementing quota or cleaning of empty directories will be easier if
+#    we can iterate on directories without filtering all metrics
+# Pros of 1 table:
+#  - We get batch transactions to update metadata at the same time as parent entries
+#  - We could not need an additional parameter for functions that use fields presents in
+#    both metrics and directories (but I expect they will diverge later to make the return
+#    type not depend on the argument)
+#  - We could still build a materialized view of directories only to get performance
+#    benefits above
+# None of the points above is a strong decision factor, but merging things later is generally
+# easier than untangling them so we keept them separate for now.
 _SETUP_CQL_DIRECTORIES = str(
     "CREATE TABLE IF NOT EXISTS directories ("
     "  name text,"
