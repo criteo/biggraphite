@@ -1,2 +1,5 @@
+carbon
 testing.cassandra
+twisted
 unittest2
+zope.interface
