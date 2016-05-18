@@ -39,8 +39,18 @@ assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 class TestMetricMetadata(unittest.TestCase):
 
+    _PRECISION = 60  # Period of the most precise retention policy.
+    _RETENTIONS = [(_PRECISION, 24*3600/_PRECISION)]
+
+    def _make_metric_metadata(self, **kwargs):
+        """Like bg_accessor.MetricMetadata but with different default values."""
+        kwargs.setdefault("carbon_retentions", self._RETENTIONS)
+        kwargs.setdefault("name", _METRIC)
+        return bg_accessor.MetricMetadata(**kwargs)
+
     def test_carbon_aggregations(self):
         points = [0, 1, 2, 3]
+        points_duration = len(points) * self._PRECISION
         expectations = (
             ('average', 1.5),
             ('last', 0),  # Points from most recent to oldest
@@ -49,22 +59,26 @@ class TestMetricMetadata(unittest.TestCase):
             ('sum', 6),
         )
         for aggregation, value in expectations:
-            m = bg_accessor.MetricMetadata(_METRIC, carbon_aggregation=aggregation)
-            self.assertEqual(value, m.carbon_aggregate_points(coverage=1.0, points=points))
+            m = self._make_metric_metadata(carbon_aggregation=aggregation)
+            aggregate = m.carbon_aggregate_points(time_span=points_duration, points=points)
+            self.assertEqual(value, aggregate)
 
-        m = bg_accessor.MetricMetadata(_METRIC, carbon_aggregation="does not exist")
+        m = self._make_metric_metadata(carbon_aggregation="does not exist")
         self.assertRaises(bg_accessor.InvalidArgumentError,
-                          m.carbon_aggregate_points, coverage=1.0, points=points)
+                          m.carbon_aggregate_points, time_span=points_duration, points=points)
 
     def test_carbon_aggregations_no_points(self):
-        m = bg_accessor.MetricMetadata(_METRIC)
-        self.assertIsNone(m.carbon_aggregate_points(coverage=0.0, points=[]))
+        m = self._make_metric_metadata()
+        self.assertIsNone(m.carbon_aggregate_points(time_span=1.0, points=[]))
 
     def test_carbon_xfilesfactor(self):
-        points = [0, 1, 2, 3]
-        m_explicit = bg_accessor.MetricMetadata(_METRIC, carbon_xfilesfactor=0.3)
-        self.assertFalse(m_explicit.carbon_aggregate_points(coverage=0.2, points=points))
-        self.assertTrue(m_explicit.carbon_aggregate_points(coverage=0.3, points=points))
+        points = range(10)
+        points_duration = len(points) * self._PRECISION
+
+        m_explicit = self._make_metric_metadata(carbon_xfilesfactor=0.3)
+        self.assertFalse(m_explicit.carbon_aggregate_points(points_duration, points=points[:2]))
+        self.assertTrue(m_explicit.carbon_aggregate_points(points_duration, points=points[:3]))
+
         m_default = bg_accessor.MetricMetadata(_METRIC)
         self.assertEqual(0.5, m_default.carbon_xfilesfactor)
 
