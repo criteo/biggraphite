@@ -27,7 +27,12 @@ def _read(relpath):
 def _read_reqs(relpath):
     fullpath = os.path.join(os.path.dirname(__file__), relpath)
     with open(fullpath) as f:
-        return [s for s in f.readlines() if s]
+        return [s.strip() for s in f.readlines() if s.strip()]
+
+
+_REQUIREMENTS_TXT = _read_reqs("requirements.txt")
+_DEPENDENCY_LINKS = [l for l in _REQUIREMENTS_TXT if "://" in l]
+_INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
 
 
 setuptools.setup(
@@ -42,7 +47,8 @@ setuptools.setup(
     include_package_data=True,
     py_modules=["biggraphite"],
     long_description=_read("README.md"),
-    install_requires=_read_reqs("requirements.txt"),
+    install_requires=_INSTALL_REQUIRES,
+    dependency_links=_DEPENDENCY_LINKS,
     test_requires=_read_reqs("tests-requirements.txt"),
     test_suite="tests",
     entry_points={
