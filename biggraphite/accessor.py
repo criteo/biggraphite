@@ -275,6 +275,11 @@ class Accessor(object):
 
     def _upgrade_schema(self):
         # Currently no change, so only upgrade operation is to setup
+        try:
+            self.__session.execute("SELECT name FROM directories LIMIT 1;")
+            return  # Already up to date.
+        except Exception:
+            pass
         for cql in _SETUP_CQL:
             self.__session.execute(cql)
 
@@ -313,7 +318,8 @@ class Accessor(object):
         executor_threads = self._round_up(
             self.__concurrency, self._REQUESTS_PER_THREAD) / self._REQUESTS_PER_THREAD
         self.__cluster = c_cluster.Cluster(
-            self.contact_points, self.port, executor_threads=executor_threads)
+            self.contact_points, self.port, executor_threads=executor_threads,
+        )
         self.__session = self.__cluster.connect()
         self.__session.set_keyspace(self.keyspace)
         if not skip_schema_upgrade:
