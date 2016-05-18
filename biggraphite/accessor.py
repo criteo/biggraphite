@@ -161,7 +161,10 @@ _SETUP_CQL = [
 class MetricMetadata(object):
     """Represents all information about a metric."""
 
-    __slots__ = ("carbon_aggregation", "carbon_retentions", "carbon_xfilesfactor", "name", )
+    __slots__ = (
+        "carbon_aggregation", "carbon_highest_precision",
+        "carbon_retentions", "carbon_xfilesfactor", "name",
+    )
 
     _DEFAULT_AGGREGATION = "average"
     _DEFAULT_RETENTIONS = [[1, 24*3600]]  # One second for one day
@@ -176,6 +179,7 @@ class MetricMetadata(object):
         self.carbon_xfilesfactor = carbon_xfilesfactor
         if self.carbon_xfilesfactor is None:
             self.carbon_xfilesfactor = self._DEFAULT_XFILESFACTOR
+        self.carbon_highest_precision = self.carbon_retentions[0][0]
 
     def as_string_dict(self):
         """Turn an instance into a dict of string to string."""
@@ -195,19 +199,21 @@ class MetricMetadata(object):
             carbon_xfilesfactor=float(d.get("carbon_xfilesfactor")),
         )
 
-    def carbon_aggregate_points(self, coverage, points):
+    def carbon_aggregate_points(self, time_span, points):
         """"An aggregator function suitable for Accessor.fetch().
 
         Args:
-          coverage: the proportion of time for which we have values, as a float
+          time_span: the duration for which we are aggregating, in seconds.
+            For example, if points are meant to represent an hour, the value is 3600.
           points: values to aggregate as float from most recent to oldest
 
         Returns:
           A float, or None to reject the points.
         """
-        if not points:
-            return None
-        if coverage < self.carbon_xfilesfactor:
+        # TODO: Handle precomputation of aggregates.
+        assert time_span
+        coverage = len(points) * self.carbon_highest_precision / float(time_span)
+        if not points or coverage < self.carbon_xfilesfactor:
             return None
         if self.carbon_aggregation == "average":
             return float(sum(points)) / len(points)
@@ -444,7 +450,7 @@ class Accessor(object):
             self.__session.execute(statement, args)
 
     @staticmethod
-    def median_aggregator(coverage, points):
+    def median_aggregator(time_span, points):
         """The default aggregator for fetch(), returns the median of points."""
         if points:
             return statistics.median(points)
@@ -510,10 +516,10 @@ class Accessor(object):
           time_end: timestamp in second from the Epoch as an int, exclusive,
             must be a multiple of step
           step: time delta in seconds as an int, must be > 0
-          aggregator_func: (coverage, values...)->value called to aggregate
+          aggregator_func: (time_span, values...)->value called to aggregate
             values regarding a single step. defaults to self.median_aggregator().
             Args:
-              coverage: the proportion of steps for which we have values, as a float
+              time_span: the duration for which we are aggregating in seconds
               values: a list of float
             Returns:
               either a float or None to reject the step
@@ -544,7 +550,9 @@ class Accessor(object):
         res = []
 
         def add_current_points_to_res():
-            aggregate = aggregator_func(len(current_points)/step, current_points)
+            if current_timestamp_ms is None:
+                return
+            aggregate = aggregator_func(step, current_points)
             if aggregate is not None:
                 res.append((current_timestamp_ms / 1000.0, aggregate))
 
@@ -569,8 +577,7 @@ class Accessor(object):
         if first_exc:
             raise RetryableCassandraError(first_exc)
 
-        if current_timestamp_ms is not None:
-            add_current_points_to_res()
+        add_current_points_to_res()
         return res
 
     @property
