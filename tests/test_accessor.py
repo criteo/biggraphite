@@ -51,9 +51,14 @@ class TestMetricMetadata(unittest.TestCase):
         for aggregation, value in expectations:
             m = bg_accessor.MetricMetadata(_METRIC, carbon_aggregation=aggregation)
             self.assertEqual(value, m.carbon_aggregate_points(coverage=1.0, points=points))
+
         m = bg_accessor.MetricMetadata(_METRIC, carbon_aggregation="does not exist")
         self.assertRaises(bg_accessor.InvalidArgumentError,
                           m.carbon_aggregate_points, coverage=1.0, points=points)
+
+    def test_carbon_aggregations_no_points(self):
+        m = bg_accessor.MetricMetadata(_METRIC)
+        self.assertIsNone(m.carbon_aggregate_points(coverage=0.0, points=[]))
 
     def test_carbon_xfilesfactor(self):
         points = [0, 1, 2, 3]
