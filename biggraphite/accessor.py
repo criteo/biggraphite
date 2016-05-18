@@ -206,7 +206,7 @@ class MetricMetadata(object):
           A float, or None to reject the points.
         """
         if not points:
-            return points
+            return None
         if coverage < self.carbon_xfilesfactor:
             return None
         if self.carbon_aggregation == "average":
