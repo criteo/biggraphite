@@ -53,7 +53,7 @@ class Reader(object):
         self._metric = metric
         self._metadata = None
 
-    def __get_time_info(self, start_time, end_time):
+    def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
         # TODO: We do not support downsampling yet.
         if self._metadata and self._metadata.carbon_retentions:
@@ -61,11 +61,13 @@ class Reader(object):
         else:
             step, retention = 1, 60
 
-        oldest_timestamp = time.time() - retention * step
+        now = _round_up(now, step)
+
+        oldest_timestamp = now - retention * step
         start_time = max(start_time, oldest_timestamp)
         start_time = _round_down(start_time, step)
 
-        end_time = min(time.time(), end_time)
+        end_time = min(now, end_time)
         end_time = _round_up(end_time, step)
 
         if end_time < start_time:
@@ -76,20 +78,24 @@ class Reader(object):
         if self._metadata is None:
             self._metadata = self._accessor.get_metric(self._metric)
 
-    def fetch(self, start_time, end_time):
+    def fetch(self, start_time, end_time, now=None):
         """Fetch point for a given interval as per the Graphite API.
 
         Args:
           start_time: Timestamp to fetch points from, will constrained by retention policy.
           end_time: Timestamp to fetch points until, will constrained by retention policy.
+          now: Current timestamp as a float, defaults to time.time(), for tests.
 
         Returns:
           A tuple made of (rounded start time, rounded end time, step as per retention), points
           Points is a list for which missing points are set to None.
         """
         self.__refresh_metadata()
+        if now is None:
+            now = time.time()
+
         # TODO: We do not support downsampling yet.
-        start_time, end_time, step = self.__get_time_info(start_time, end_time)
+        start_time, end_time, step = self.__get_time_info(start_time, end_time, now)
         ts_and_points = self._accessor.fetch_points(self._metric, start_time, end_time, step,
                                                     self._metadata.carbon_aggregate_points)
         points_num = (end_time - start_time) // step
@@ -100,17 +106,22 @@ class Reader(object):
             points[index] = point
         return (start_time, end_time, step), points
 
-    def get_intervals(self):
+    def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.
+
+        Args:
+          now: Current timestamp as a float, defaults to time.time(), for tests.
 
         Returns:
           A list of interval.Intervals for which we have data.
         """
         self.__refresh_metadata()
+        if now is None:
+            now = time.time()
         # Call __get_time_info with the widest conceivable range will make it be
         # shortened to the widest range available according to retention policy.
         # TODO: Update when we support multiple retention policies.
-        start, end, unused_step = self.__get_time_info(0, time.time())
+        start, end, unused_step = self.__get_time_info(0, now, now)
         return intervals.IntervalSet([intervals.Interval(start, end)])
 
 

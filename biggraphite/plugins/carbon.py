@@ -15,18 +15,12 @@
 """Adapter between BigGraphite and Carbon."""
 from __future__ import absolute_import  # Otherwise carbon is this module.
 
-try:
-    # Version 0.9.15 (the one from PIP) does not have the "database" module.
-    # Since the TimeSeriesDatabase class there has no behaviour appart from
-    # registering instances, we can use "object" in this case.
-    # To make use of the plugin with carbon, you will need a version that has
-    # upstream commit 3d260b0f663b5577bc3a0fc3f0741802109a28c4 or apply this
-    # patch: https://goo.gl/1gAcz1
-    # TODO: Add this to requirements.txt and README.
-    from carbon import database
-    BG_DATABASE_PARENT_CLASS = database.TimeSeriesDatabase
-except:
-    BG_DATABASE_PARENT_CLASS = object
+# Version 0.9.15 (the one from PIP) does not have the "database" module.
+# To make use of the plugin with carbon, you will need a version that has
+# upstream commit 3d260b0f663b5577bc3a0fc3f0741802109a28c4 or apply this
+# patch: https://goo.gl/1gAcz1 .
+# test-requirements.txt as a URL pinned at the correct version.
+from carbon import database
 
 from carbon import exceptions
 from biggraphite import accessor
@@ -41,7 +35,7 @@ _DEFAULT_PORT = 9042
 # TODO: Add a cache for metadata. lmdb is a reasonable candidate so that the
 # cache is shared by all processes and is backed by mmap'd memory.
 
-class BigGraphiteDatabase(BG_DATABASE_PARENT_CLASS):
+class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """Database plugin for Carbon.
 
     The class definition registers the plugin thanks to TimeSeriesDatabase's metaclass.

@@ -3,3 +3,6 @@ progressbar2
 six
 statistics
 whisper
+
+git+https://github.com/graphite-project/carbon.git@198baadcc0c79130c61a61718eb1d555d1a70241#egg=carbon
+git+https://github.com/graphite-project/graphite-web.git@c4ff0b27c4ff2fa5000b028d2b1424dc3461637a#egg=graphite-web
