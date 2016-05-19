@@ -550,8 +550,6 @@ class Accessor(object):
         res = []
 
         def add_current_points_to_res():
-            if current_timestamp_ms is None:
-                return
             aggregate = aggregator_func(step, current_points)
             if aggregate is not None:
                 res.append((current_timestamp_ms / 1000.0, aggregate))
@@ -568,7 +566,10 @@ class Accessor(object):
                 timestamp_ms = self._round_down(timestamp_ms, step_ms)
 
                 if current_timestamp_ms != timestamp_ms:
-                    add_current_points_to_res()
+                    if current_timestamp_ms is not None:
+                        # This is the first point we encounter, do not emit it on its own,
+                        # rather wait until we have found points fitting in the next period.
+                        add_current_points_to_res()
                     current_timestamp_ms = timestamp_ms
                     del current_points[:]
 
@@ -577,7 +578,9 @@ class Accessor(object):
         if first_exc:
             raise RetryableCassandraError(first_exc)
 
-        add_current_points_to_res()
+        if current_timestamp_ms is not None:
+            # We haven't encountered any point.
+            add_current_points_to_res()
         return res
 
     @property
