@@ -20,11 +20,14 @@ dependencies, instead one needs the elements of tests-requirements.txt .
 from __future__ import absolute_import
 from __future__ import print_function
 
+import collections
+import inspect
 import os
 import sys
 import unittest
 
 from cassandra import cluster as c_cluster
+import sortedcontainers
 from testing import cassandra as testing_cassandra
 
 from biggraphite import accessor as bg_accessor
@@ -63,6 +66,101 @@ def prepare_graphite_imports():
                         to_add = graphite_path
         if to_add not in sys.path:
             sys.path.insert(0, to_add)
+
+
+class FakeAccessor(object):
+    """A fake acessor that never connects."""
+
+    def __init__(self, *args, **kwargs):
+        """Validate arguments like accessor.Accessor would."""
+        self._real_accessor = bg_accessor.Accessor(*args, **kwargs)
+        self._is_connected = False
+        self._metric_to_points = collections.defaultdict(sortedcontainers.SortedDict)
+        self._metric_to_metadata = {}
+
+    def __check_args(self, method_name, *args, **kwargs):
+        """Validate arguments of a method on the real Accessor."""
+        method = getattr(self._real_accessor, method_name)
+        # Will raise a TypeError if arguments don't match.
+        inspect.getcallargs(method, *args, **kwargs)
+
+    @property
+    def is_connected(self):
+        """See the real Accessor for a description."""
+        return self._is_connected
+
+    def connect(self, *args, **kwargs):
+        """See the real Accessor for a description."""
+        try:
+            self.__check_args("connect", *args, **kwargs)
+        except bg_accessor.CassandraError:
+            pass
+        self._is_connected = True
+
+    def shutdown(self, *args, **kwargs):
+        """See the real Accessor for a description."""
+        self.__check_args("shutdown", *args, **kwargs)
+        self._is_connected = False
+
+    def insert_points(self, metric_name, timestamps_and_values):
+        """See the real Accessor for a description."""
+        self.__check_args("insert_points", metric_name, timestamps_and_values)
+        assert metric_name in self._metric_to_metadata
+        points = self._metric_to_points[metric_name]
+        for t, v in timestamps_and_values:
+            points[t] = v
+
+    def drop_all_metrics(self, *args, **kwargs):
+        """See the real Accessor for a description."""
+        self.__check_args("drop_all_metrics", *args, **kwargs)
+        self._metric_to_points.clear()
+        self._metric_to_metadata.clear()
+
+    def create_metric(self, metric_metadata):
+        """See the real Accessor for a description."""
+        self.__check_args("create_metric", metric_metadata)
+        self._metric_to_metadata[metric_metadata.name] = metric_metadata
+
+    def glob_metric_names(self, glob):
+        """See the real Accessor for a description."""
+        self.__check_args("glob_metric_names", glob)
+        raise NotImplementedError("FakeAccessor does not implement globs.")
+
+    def glob_directory_names(self, glob):
+        """See the real Accessor for a description."""
+        self.__check_args("glob_directory_names", glob)
+        raise NotImplementedError("FakeAccessor does not implement globs.")
+
+    def get_metric(self, metric_name):
+        """See the real Accessor for a description."""
+        self.__check_args("get_metric", metric_name)
+        return self._metric_to_metadata.get(metric_name)
+
+    def fetch_points(self, metric_name, time_start, time_end, step,
+                     aggregator_func=None, _fake_query_results=None):
+        """See the real Accessor for a description."""
+        if not _fake_query_results:
+            points = self._metric_to_points[metric_name]
+            rows = []
+            for ts in points.irange(time_start, time_end, reverse=True):
+                # A row is time_base_ms, time_offset_ms, value
+                row = (ts * 1000.0, 0, points[ts])
+                rows.append(row)
+            _fake_query_results = [(True, rows)]
+        return self._real_accessor.fetch_points(
+            metric_name, time_start, time_end, step, aggregator_func, _fake_query_results,
+        )
+
+
+class TestCaseWithFakeAccessor(unittest.TestCase):
+    """"A TestCase with a FakeAccessor."""
+
+    def setUp(self):
+        """Create a new Accessor in self.acessor."""
+        super(TestCaseWithFakeAccessor, self).setUp()
+        self.accessor = FakeAccessor("fake keyspace", contact_points=[])
+        self.accessor.connect()
+        self.addCleanup(self.accessor.shutdown)
 
 
 class TestCaseWithAccessor(unittest.TestCase):
