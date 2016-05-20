@@ -95,5 +95,39 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(now_rounded, res.intervals[0].end)
 
 
+class FakeFindQuery(object):
+    """"Fake Query object for testing puposes.
+    We don't use the Graphite Query because it imports too many things from Django."""
+    def __init__(self, pattern):
+        self.pattern = pattern
+
+class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
+
+    def setUp(self):
+        super(TestFinder, self).setUp()
+        for metric in "a", "a.a", "a.b.c", "x.y":
+            meta = bg_accessor.MetricMetadata(metric)
+            self.accessor.create_metric(meta)
+        self.finder = bg_graphite.Finder(accessor=self.accessor)
+
+
+    def find_nodes(self, pattern):
+        return self.finder.find_nodes(FakeFindQuery(pattern))
+
+    def assertMatch(self, glob, branches, leaves):
+        found = list(self.find_nodes(glob))
+        found_branches = [node.path for node in found if not node.is_leaf]
+        found_leaves = [node.path for node in found if node.is_leaf]
+        self.assertEquals(sorted(found_branches), sorted(branches))
+        self.assertEquals(sorted(found_leaves), sorted(leaves))
+
+    def test_find_nodes(self):
+        self.assertMatch("a", ["a"], ["a"])
+        self.assertMatch("a.*", ["a.b"], ["a.a"])
+        self.assertMatch("*.{a,b,c,y,z}", ["a.b"], ["a.a", "x.y"])
+        self.assertMatch("?.[a-c]", ["a.b"], ["a.a"])
+        self.assertMatch("?.[a-z]", ["a.b"], ["a.a", "x.y"])
+
+
 if __name__ == "__main__":
     unittest.main()

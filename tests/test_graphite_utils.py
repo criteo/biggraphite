@@ -60,11 +60,11 @@ class TestGraphiteUtils(bg_test_utils.TestCaseWithFakeAccessor):
         for name in "a", "a.b.c", "a.b.d", "x.y.c", "a.a.a":
             meta = bg_accessor.MetricMetadata(name)
             self.accessor.create_metric(meta)
-        self.assertEqual(["a"], bg_gu.glob_metrics(self.accessor, "*"))
-        self.assertEqual(["a.b.c", "x.y.c"], bg_gu.glob_metrics(self.accessor, "*.*.c"))
-        self.assertEqual(["a.a.a", "a.b.c", "a.b.d"], bg_gu.glob_metrics(self.accessor, "a.*.*"))
-        self.assertEqual(["a.a.a", "a.b.c", "a.b.d", "x.y.c"], bg_gu.glob_metrics(self.accessor, "*.*.*"))
-        self.assertEqual(["a.b.c", "a.b.d"], bg_gu.glob_metrics(self.accessor, "*.{b,c,d,5}.?"))
+        self.assertEqual((["a"], ["a", "x"]), bg_gu.glob(self.accessor, "*"))
+        self.assertEqual((["a.b.c", "x.y.c"], []), bg_gu.glob(self.accessor, "*.*.c"))
+        self.assertEqual((["a.a.a", "a.b.c", "a.b.d"], []), bg_gu.glob(self.accessor, "a.*.*"))
+        self.assertEqual((["a.a.a", "a.b.c", "a.b.d", "x.y.c"], []), bg_gu.glob(self.accessor, "*.*.*"))
+        self.assertEqual((["a.b.c", "a.b.d"], []), bg_gu.glob(self.accessor, "*.{b,c,d,5}.?"))
 
 
 if __name__ == "__main__":

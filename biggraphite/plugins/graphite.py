@@ -22,16 +22,13 @@ from graphite import node
 
 
 from biggraphite import accessor
+from biggraphite import graphite_utils
 
 _CONFIG_NAME = "biggraphite"
 
 
 class Error(Exception):
     """Base class for all exceptions from this module."""
-
-
-class ConfigError(Error):
-    """Configuration problems."""
 
 
 def _round_down(rounded, divider):
@@ -126,38 +123,31 @@ class Reader(object):
 
 
 class Finder(object):
-    """Fake to test the Reader."""
+    """Finder plugin for BigGraphite."""
 
-    def __init__(self, directories=None, django_like_settings=None):
+    def __init__(self, directories=None, accessor=None):
         """Build a new finder.
 
         Args:
           directories: Ignored (here only for compatibility)
-          django_like_settings: An object to use instead of django.conf.settings
-            to inject configuration variables in unit tests.
+          accessor: Accessor for injection (e.g. for testing, not used by Graphite)
         """
-        if not django_like_settings:
-            # TODO: Support graphite-API like config
+
+        if accessor:
+            self._accessor = accessor
+        else: 
             from django.conf import settings as django_settings
-            django_like_settings = django_settings
+            self._accessor = graphite_utils.accessor_from_settings(django_settings)
 
-        keyspace = getattr(django_like_settings, "BG_KEYSPACE", None)
-        contact_points = getattr(django_like_settings, "BG_CONTACT_POINTS", None)
-        port = getattr(django_like_settings, "BG_PORT", None)
-
-        if not keyspace:
-            raise ConfigError("BG_KEYSPACE is mandatory")
-        if not contact_points:
-            raise ConfigError("BG_CONTACT_POINTS are mandatory")
-        # port is optional
-
-        self._accessor = accessor.Accessor(keyspace, contact_points, port)
         self._accessor.connect()
 
     def find_nodes(self, query):
-        """Fake to allow testing the reader."""
-        pattern = query.pattern
-        metric_path = "test_metric"
-        if pattern == "*" or pattern == metric_path:
-            reader = Reader(self._accessor, metric_path)
-            yield node.LeafNode(metric_path, reader)
+        """Find nodes matching a query."""
+        # TODO: handle directories constructor argument/property
+        metrics, directories = graphite_utils.glob(self._accessor, query.pattern)
+        for metric in metrics:
+            reader = Reader(self._accessor, metric)
+            yield node.LeafNode(metric, reader)
+
+        for directory in directories:
+            yield node.BranchNode(directory)
