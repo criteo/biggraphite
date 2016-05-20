@@ -24,6 +24,31 @@ from biggraphite import graphite_utils as bg_gu
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
 
+    def _check_settings_exception(self, settings):
+        self.assertRaises(bg_gu.ConfigException, bg_gu.accessor_from_settings, settings)
+
+    def test_carbon_settings(self):
+        from carbon import conf as carbon_conf
+        lacks_contact_points = carbon_conf.Settings()
+        lacks_contact_points["BG_KEYSPACE"] = "keyspace"
+
+        lacks_keyspace = carbon_conf.Settings()
+        lacks_keyspace["BG_CONTACT_POINTS"] = "localhost"
+
+        for s in lacks_contact_points, lacks_keyspace:
+            self._check_settings_exception(s)
+
+    def test_django_settings(self):
+        import types
+        lacks_contact_points = types.ModuleType("lacks_contact_points")
+        lacks_contact_points.BG_KEYSPACE = "keyspace"
+
+        lacks_keyspace = types.ModuleType("lacks_keyspace")
+        lacks_keyspace.BG_CONTACT_POINTS = "localhost"
+
+        for s in lacks_contact_points, lacks_keyspace:
+            self._check_settings_exception(s)
+
     def test_is_graphite_glob(self):
         self.assertTrue(bg_gu._is_graphite_glob("a*"))
         self.assertTrue(bg_gu._is_graphite_glob("a.b*"))
@@ -60,11 +85,11 @@ class TestGraphiteUtils(bg_test_utils.TestCaseWithFakeAccessor):
         for name in "a", "a.b.c", "a.b.d", "x.y.c", "a.a.a":
             meta = bg_accessor.MetricMetadata(name)
             self.accessor.create_metric(meta)
-        self.assertEqual(["a"], bg_gu.glob_metrics(self.accessor, "*"))
-        self.assertEqual(["a.b.c", "x.y.c"], bg_gu.glob_metrics(self.accessor, "*.*.c"))
-        self.assertEqual(["a.a.a", "a.b.c", "a.b.d"], bg_gu.glob_metrics(self.accessor, "a.*.*"))
-        self.assertEqual(["a.a.a", "a.b.c", "a.b.d", "x.y.c"], bg_gu.glob_metrics(self.accessor, "*.*.*"))
-        self.assertEqual(["a.b.c", "a.b.d"], bg_gu.glob_metrics(self.accessor, "*.{b,c,d,5}.?"))
+        self.assertEqual((["a"], ["a", "x"]), bg_gu.glob(self.accessor, "*"))
+        self.assertEqual((["a.b.c", "x.y.c"], []), bg_gu.glob(self.accessor, "*.*.c"))
+        self.assertEqual((["a.a.a", "a.b.c", "a.b.d"], []), bg_gu.glob(self.accessor, "a.*.*"))
+        self.assertEqual((["a.a.a", "a.b.c", "a.b.d", "x.y.c"], []), bg_gu.glob(self.accessor, "*.*.*"))
+        self.assertEqual((["a.b.c", "a.b.d"], []), bg_gu.glob(self.accessor, "*.{b,c,d,5}.?"))
 
 
 if __name__ == "__main__":

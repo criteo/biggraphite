@@ -42,18 +42,9 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithAccessor):
             aggregation_method="sum",
         )
 
-    def test_missing_settings(self):
-        lacks_contact_points = carbon_conf.Settings()
-        lacks_contact_points["BG_KEYSPACE"] = self.KEYSPACE
-
-        lacks_keyspace = carbon_conf.Settings()
-        lacks_keyspace["BG_CONTACT_POINTS"] = ",".join(self.contact_points)
-
-        # BG_PORT is optional
-
-        for s in lacks_contact_points, lacks_keyspace:
-            self.assertRaises(carbon_exceptions.CarbonConfigException,
-                              bg_carbon.BigGraphiteDatabase, s)
+    def test_empty_settings(self):
+        self.assertRaises(carbon_exceptions.CarbonConfigException,
+                          bg_carbon.BigGraphiteDatabase, carbon_conf.Settings())
 
     def test_get_fs_path(self):
         path = self._plugin.getFilesystemPath(_TEST_METRIC)
