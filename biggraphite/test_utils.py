@@ -21,8 +21,10 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import collections
+import fnmatch
 import inspect
 import os
+import re
 import sys
 import unittest
 
@@ -77,6 +79,11 @@ class FakeAccessor(object):
         self._is_connected = False
         self._metric_to_points = collections.defaultdict(sortedcontainers.SortedDict)
         self._metric_to_metadata = {}
+        self._directory_names = sortedcontainers.SortedSet()
+
+    @property
+    def _metric_names(self):
+        return self._metric_to_metadata.keys()
 
     def __check_args(self, method_name, *args, **kwargs):
         """Validate arguments of a method on the real Accessor."""
@@ -115,21 +122,38 @@ class FakeAccessor(object):
         self.__check_args("drop_all_metrics", *args, **kwargs)
         self._metric_to_points.clear()
         self._metric_to_metadata.clear()
+        self._directory_names.clear()
 
     def create_metric(self, metric_metadata):
         """See the real Accessor for a description."""
         self.__check_args("create_metric", metric_metadata)
         self._metric_to_metadata[metric_metadata.name] = metric_metadata
+        parts = metric_metadata.name.split(".")[:-1]
+        path = []
+        for part in parts:
+            path.append(part)
+            self._directory_names.add(".".join(path))
+
+    @staticmethod
+    def __glob_names(names, glob):
+        res = []
+        dots_count = glob.count(".")
+        glob_re = re.compile(fnmatch.translate(glob))
+        for name in names:
+            # "*" can match dots for fnmatch
+            if name.count(".") == dots_count and glob_re.match(name):
+                res.append(name)
+        return res
 
     def glob_metric_names(self, glob):
         """See the real Accessor for a description."""
         self.__check_args("glob_metric_names", glob)
-        raise NotImplementedError("FakeAccessor does not implement globs.")
+        return self.__glob_names(self._metric_names, glob)
 
     def glob_directory_names(self, glob):
         """See the real Accessor for a description."""
         self.__check_args("glob_directory_names", glob)
-        raise NotImplementedError("FakeAccessor does not implement globs.")
+        return self.__glob_names(self._directory_names, glob)
 
     def get_metric(self, metric_name):
         """See the real Accessor for a description."""
