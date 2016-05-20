@@ -26,7 +26,7 @@ from biggraphite.plugins import graphite as bg_graphite
 _METRIC_NAME = "test_metric"
 
 
-# TODO: Make this part of a fake accessor that doesn't require Cassandra.
+# TODO: Move this to test_utils.
 def _make_easily_queryable_points(start, end, period):
     """Return points that aggregats easily.
 
@@ -49,8 +49,7 @@ def _make_easily_queryable_points(start, end, period):
     return res
 
 
-# TODO: A fake accessor that doesn't require Cassandra.
-class TestReader(bg_test_utils.TestCaseWithAccessor):
+class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3600

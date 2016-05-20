@@ -33,6 +33,10 @@ class CassandraError(Error):
     """Fatal errors accessing Cassandra."""
 
 
+class NotConnectedError(CassandraError):
+    """Fatal errors accessing Cassandra because the accessor is not connected."""
+
+
 class RetryableCassandraError(Error):
     """Errors accessing Cassandra that could succeed if retried."""
 
@@ -234,6 +238,8 @@ class Accessor(object):
 
     It is safe to fork() or start new process until connect() has been called.
     It is not safe to share a given accessor across threads.
+    Calling a method that requires a connection without being connected() will result
+    in NotConnectedError being raised.
     """
 
     _MAX_QUERY_RANGE_MS = 365 * 24 * _ROW_SIZE_MS
@@ -294,7 +300,7 @@ class Accessor(object):
 
         This must be called AFTER creating subprocess with the multiprocessing module.
         """
-        if self.__cluster:
+        if self.is_connected:
             return
         try:
             self._connect(skip_schema_upgrade=skip_schema_upgrade)
@@ -307,7 +313,7 @@ class Accessor(object):
 
     def shutdown(self):
         """Close the connection to Cassandra."""
-        if self.__cluster:
+        if self.is_connected:
             try:
                 self.__cluster.shutdown()
             except Exception as exc:
@@ -367,7 +373,7 @@ class Accessor(object):
           metric_name: A graphite-like metric name (like "my.own.metric")
           timestamps_and_values: An iterable of (timestamp in seconds, values as double)
         """
-        assert self.is_connected, "connect() wasn't called"
+        self._check_connected()
         statements_and_args = [
             self._make_insert_points(metric_name, t, v)
             for t, v in timestamps_and_values
@@ -378,7 +384,7 @@ class Accessor(object):
 
     def drop_all_metrics(self):
         """Delete all metrics from the database."""
-        assert self.is_connected, "connect() wasn't called"
+        self._check_connected()
         self.__session.execute("TRUNCATE datapoints;")
         self.__session.execute("TRUNCATE directories;")
         self.__session.execute("TRUNCATE metrics;")
@@ -419,6 +425,7 @@ class Accessor(object):
         Args:
           metric_metadata: The metric definition.
         """
+        self._check_connected()
         metric_name = metric_metadata.name
         components = self._components_from_name(metric_name)
         queries = []
@@ -459,6 +466,7 @@ class Accessor(object):
 
     def get_metric(self, metric_name):
         """Return a MetricMetadata for this metric_name, None if no such metric."""
+        self._check_connected()
         result = list(self.__session.execute(self.__select_metric_statement, (metric_name, )))
         if not result:
             return None
@@ -472,10 +480,12 @@ class Accessor(object):
     # TODO: Handled subdirectories for the graphite-web API
     def glob_metric_names(self, glob):
         """Return a sorted list of metric names matching this glob."""
+        self._check_connected()
         return self.__glob_names("metrics", glob)
 
     def glob_directory_names(self, glob):
         """Return a sorted list of metric directories matching this glob."""
+        self._check_connected()
         return self.__glob_names("directories", glob)
 
     def __glob_names(self, table, glob):
@@ -505,7 +515,8 @@ class Accessor(object):
         return metrics_names
 
     # TODO: Remove aggregator_func and perform aggregation server-side.
-    def fetch_points(self, metric_name, time_start, time_end, step, aggregator_func=None):
+    def fetch_points(self, metric_name, time_start, time_end, step,
+                     aggregator_func=None, _fake_query_results=None):
         """Fetch points from time_start included to time_end excluded with a duration of step.
 
         connect() must have previously been called.
@@ -523,6 +534,8 @@ class Accessor(object):
               values: a list of float
             Returns:
               either a float or None to reject the step
+          _fake_query_results: Only meant for test_utils.FakeAccessor, considered to be
+            an implementation detail and may go away at any time.
 
         Returns:
           a list of (timestamp, value) where timestamp indicates the value is about the
@@ -531,7 +544,6 @@ class Accessor(object):
         Raises:
           InvalidArgumentError: if time_start, time_end or step are not as per above
         """
-        assert self.is_connected, "connect() wasn't called"
         self._fetch_points_validate_args(metric_name, time_start, time_end, step, aggregator_func)
         aggregator_func = aggregator_func or self.median_aggregator
         step_ms = int(step) * 1000
@@ -539,10 +551,14 @@ class Accessor(object):
         time_end_ms = int(time_end) * 1000
         time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
         statements_and_args = self._make_all_points_selects(metric_name, time_start_ms, time_end_ms)
-        query_results = c_concurrent.execute_concurrent(
-            self.__session, statements_and_args, concurrency=self.__concurrency,
-            results_generator=True,
-        )
+        if _fake_query_results:
+            query_results = _fake_query_results
+        else:
+            self._check_connected()
+            query_results = c_concurrent.execute_concurrent(
+                self.__session, statements_and_args, concurrency=self.__concurrency,
+                results_generator=True,
+            )
 
         first_exc = None
         current_points = []
@@ -587,6 +603,10 @@ class Accessor(object):
     def is_connected(self):
         """Return true if connect() has been called since last shutdown()."""
         return bool(self.__cluster)
+
+    def _check_connected(self):
+        if not self.is_connected:
+            raise NotConnectedError("Accessor's connect() wasn't called")
 
     @staticmethod
     def _fetch_points_validate_args(metric_name, time_start, time_end, step, aggregator_func):

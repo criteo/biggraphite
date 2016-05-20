@@ -53,7 +53,7 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         self.assertEqual(['a.b.c', 'a.x.y'], bg_gu._filter_metrics(['a.b', 'a.b.c', 'a.x.y'], 'a.*.*'))
 
 
-class TestGraphiteUtilsWithAccessor(bg_test_utils.TestCaseWithAccessor):
+class TestGraphiteUtils(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_glob(self):
         self.addCleanup(self.accessor.drop_all_metrics)

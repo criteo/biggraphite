@@ -1,6 +1,6 @@
 cassandra-driver
 progressbar2
-six
+sortedcontainers
 statistics
 whisper
 
