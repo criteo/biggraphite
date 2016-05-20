@@ -22,6 +22,7 @@ from graphite import node
 
 
 from biggraphite import accessor
+from biggraphite import graphite_utils
 
 _CONFIG_NAME = "biggraphite"
 
@@ -128,18 +129,26 @@ class Reader(object):
 class Finder(object):
     """Fake to test the Reader."""
 
-    def __init__(self, directories=None, django_like_settings=None):
+    def __init__(self, directories=None, accessor=None):
         """Build a new finder.
 
         Args:
           directories: Ignored (here only for compatibility)
-          django_like_settings: An object to use instead of django.conf.settings
-            to inject configuration variables in unit tests.
+          accessor: Accessor for injection (e.g. for testing, not used by Graphite)
         """
-        if not django_like_settings:
-            # TODO: Support graphite-API like config
-            from django.conf import settings as django_settings
-            django_like_settings = django_settings
+
+        if accessor is None:
+            self._getattr_from_django()
+        else: 
+            self._accessor = accessor
+
+        self._accessor.connect()
+
+    def _get_accessor_from_django(self):
+        """Get attributes from configuration."""
+        # TODO: Support graphite-API like config
+        from django.conf import settings as django_settings
+        django_like_settings = django_settings
 
         keyspace = getattr(django_like_settings, "BG_KEYSPACE", None)
         contact_points = getattr(django_like_settings, "BG_CONTACT_POINTS", None)
@@ -152,12 +161,14 @@ class Finder(object):
         # port is optional
 
         self._accessor = accessor.Accessor(keyspace, contact_points, port)
-        self._accessor.connect()
 
     def find_nodes(self, query):
-        """Fake to allow testing the reader."""
-        pattern = query.pattern
-        metric_path = "test_metric"
-        if pattern == "*" or pattern == metric_path:
-            reader = Reader(self._accessor, metric_path)
-            yield node.LeafNode(metric_path, reader)
+        """Find nodes matching a query."""
+        # TODO: handle directories constructor argument/property
+        (metrics, directories) = graphite_utils.glob_metrics_directories(self._accessor, query.pattern)
+        for metric in metrics:
+            reader = Reader(self._accessor, metric)
+            yield node.LeafNode(metric, reader)
+
+        for directory in directories:
+            yield node.BranchNode(directory)

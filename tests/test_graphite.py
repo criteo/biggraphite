@@ -18,6 +18,8 @@ from __future__ import print_function
 
 import unittest
 
+#from graphite import storage
+
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 from biggraphite.plugins import graphite as bg_graphite
@@ -93,6 +95,56 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(self._RETENTION_DURATION, res.size)
         self.assertEqual(1, len(res.intervals))
         self.assertEqual(now_rounded, res.intervals[0].end)
+
+
+class FakeFindQuery(object):
+    def __init__(self, pattern):
+        self.pattern = pattern
+
+class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
+
+    def setUp(self):
+        super(TestFinder, self).setUp()
+        for metric in "a", "a.a", "a.b.c", "x.y":
+            meta = bg_accessor.MetricMetadata(metric)
+            self.accessor.create_metric(meta)
+        self.finder = bg_graphite.Finder(accessor=self.accessor)
+
+
+    def find_nodes(self, pattern):
+        return self.finder.find_nodes(FakeFindQuery(pattern))
+
+    def test_find_nodes_a(self):
+        nodes = list(self.find_nodes("a"))
+        self.assertEquals(len(nodes), 2)
+        self.assertEquals(sum(n.is_leaf and n.path == "a" for n in nodes), 1)
+        self.assertEquals(sum(not n.is_leaf and n.path == "a" for n in nodes), 1)
+
+    def test_find_nodes_a_star(self):
+        nodes = list(self.find_nodes("a.*"))
+        self.assertEquals(len(nodes), 2)
+        self.assertEquals(sum(n.is_leaf and n.path == "a.a" for n in nodes), 1)
+        self.assertEquals(sum(not n.is_leaf and n.path == "a.b" for n in nodes), 1)
+
+    def test_find_nodes_a_braces(self):
+        nodes = list(self.find_nodes("*.{a,b,c,y,z}"))
+        self.assertEquals(len(nodes), 3)
+        self.assertEquals(sum(n.is_leaf and n.path == "a.a" for n in nodes), 1)
+        self.assertEquals(sum(n.is_leaf and n.path == "x.y" for n in nodes), 1)
+        self.assertEquals(sum(not n.is_leaf and n.path == "a.b" for n in nodes), 1)
+
+    def test_find_nodes_a_range_0(self):
+        nodes = list(self.find_nodes("?.[a-c]"))
+        self.assertEquals(len(nodes), 2)
+        self.assertEquals(sum(n.is_leaf and n.path == "a.a" for n in nodes), 1)
+        self.assertEquals(sum(not n.is_leaf and n.path == "a.b" for n in nodes), 1)
+
+    def test_find_nodes_a_range_1(self):
+        nodes = list(self.find_nodes("?.[a-z]"))
+        self.assertEquals(len(nodes), 3)
+        self.assertEquals(sum(n.is_leaf and n.path == "a.a" for n in nodes), 1)
+        self.assertEquals(sum(n.is_leaf and n.path == "x.y" for n in nodes), 1)
+        self.assertEquals(sum(not n.is_leaf and n.path == "a.b" for n in nodes), 1)
 
 
 if __name__ == "__main__":
