@@ -22,7 +22,8 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
 
-from carbon import exceptions
+from carbon import exceptions as carbon_exceptions
+from biggraphite import graphite_utils
 from biggraphite import accessor
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
@@ -44,20 +45,11 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     plugin_name = "biggraphite"
 
     def __init__(self, settings):
-        keyspace = settings.get("BG_KEYSPACE")
-        contact_points_str = settings.get("BG_CONTACT_POINTS")
-        port = settings.get("BG_PORT")
-
-        if not keyspace:
-            raise exceptions.CarbonConfigException("BG_KEYSPACE is mandatory")
-        if not contact_points_str:
-            raise exceptions.CarbonConfigException("BG_CONTACT_POINTS are mandatory")
-        # BG_PORT is optional
-
-        contact_points = [s.strip() for s in contact_points_str.split(",")]
-
-        self._accessor = accessor.Accessor(keyspace, contact_points, port)
-        self._accessor.connect()
+        try:
+            self._accessor = graphite_utils.accessor_from_settings(settings)
+            self._accessor.connect()
+        except graphite_utils.ConfigException as e:
+            raise carbon_exceptions.CarbonConfigException(e)
 
         # TODO: we may want to use/implement these
         # settings.WHISPER_AUTOFLUSH:
