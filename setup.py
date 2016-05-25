@@ -40,12 +40,12 @@ setuptools.setup(
     version="0.1",
     maintainer="Criteo Graphite team",
     maintainer_email="github@criteo.com",
-    description=("Tools for tools for storing carbon data in Cassandra."),
+    description = "Tools for tools for storing carbon data in Cassandra.",
     license="Apache Software License",
     keywords="graphite carbon cassandra biggraphite",
     url="https://github.com/criteo/biggraphite",
     include_package_data=True,
-    py_modules=["biggraphite"],
+    packages = ["biggraphite"],
     long_description=_read("README.md"),
     install_requires=_INSTALL_REQUIRES,
     dependency_links=_DEPENDENCY_LINKS,
@@ -54,5 +54,5 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
         ]
-    }
+    },
 )
