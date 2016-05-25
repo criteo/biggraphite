@@ -45,7 +45,7 @@ setuptools.setup(
     keywords="graphite carbon cassandra biggraphite",
     url="https://github.com/criteo/biggraphite",
     include_package_data=True,
-    packages = ["biggraphite"],
+    packages = ["biggraphite", "biggraphite.plugins"],
     long_description=_read("README.md"),
     install_requires=_INSTALL_REQUIRES,
     dependency_links=_DEPENDENCY_LINKS,
