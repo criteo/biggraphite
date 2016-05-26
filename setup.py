@@ -45,7 +45,7 @@ setuptools.setup(
     keywords="graphite carbon cassandra biggraphite",
     url="https://github.com/criteo/biggraphite",
     include_package_data=True,
-    packages = ["biggraphite", "biggraphite.plugins"],
+    packages = ["biggraphite", "biggraphite.plugins", "biggraphite.cli"],
     long_description=_read("README.md"),
     install_requires=_INSTALL_REQUIRES,
     dependency_links=_DEPENDENCY_LINKS,
@@ -53,6 +53,7 @@ setuptools.setup(
     test_suite="tests",
     entry_points={
         "console_scripts": [
+            'bg-carbon-cache = biggraphite.cli.bg_carbon_cache:main',
         ]
     },
 )
