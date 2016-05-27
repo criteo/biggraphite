@@ -30,10 +30,12 @@ _TEST_METRIC = "mytestmetric"
 class TestCarbonDatabase(bg_test_utils.TestCaseWithAccessor):
 
     def setUp(self):
+        super(TestCarbonDatabase, self).setUp()
         settings = carbon_conf.Settings()
         settings["BG_CONTACT_POINTS"] = ",".join(self.contact_points)
         settings["BG_KEYSPACE"] = self.KEYSPACE
         settings["BG_PORT"] = self.port
+        settings["STORAGE_DIR"] = self.tempdir
         self._plugin = bg_carbon.BigGraphiteDatabase(settings)
         self._plugin.create(
             _TEST_METRIC,
