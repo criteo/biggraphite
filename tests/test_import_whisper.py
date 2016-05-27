@@ -20,7 +20,6 @@ import shutil
 import time
 import unittest
 
-import mock
 import whisper
 
 from biggraphite.cli import import_whisper
@@ -34,6 +33,7 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
         super(TestMain, self).setUp()
+        self.patch_accessor()
         self.tempdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tempdir)
 
@@ -62,15 +62,14 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(points, points_again)
 
     def _call_main(self):
-        with mock.patch('biggraphite.accessor.Accessor', return_value=self.accessor):
-            import_whisper.main([
-                "--quiet",
-                "--keyspace", "keyspace",
-                "--port", "42",
-                "--process", "1",
-                self.tempdir,
-                "testhost1", "testhost2",
-            ])
+        import_whisper.main([
+            "--quiet",
+            "--keyspace", "keyspace",
+            "--port", "42",
+            "--process", "1",
+            self.tempdir,
+            "testhost1", "testhost2",
+        ])
 
 
 if __name__ == "__main__":

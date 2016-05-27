@@ -83,7 +83,19 @@ class TestMetricMetadata(unittest.TestCase):
         self.assertEqual(0.5, m_default.carbon_xfilesfactor)
 
 
-class TestWithCassandra(bg_test_utils.TestCaseWithAccessor):
+class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
+
+    def setUp(self):
+        """Create a new Accessor in self.acessor."""
+        super(TestAccessorWithCassandra, self).setUp()
+        self.accessor.connect()
+
+    def test_context_manager(self):
+        self.accessor.shutdown()
+        self.assertFalse(self.accessor.is_connected)
+        with self.accessor:
+            self.assertTrue(self.accessor.is_connected)
+        self.assertFalse(self.accessor.is_connected)
 
     def test_fetch_empty(self):
         self.accessor.insert_points(_METRIC, _POINTS)
