@@ -29,6 +29,7 @@ import sys
 import unittest
 
 from cassandra import cluster as c_cluster
+import mock
 import sortedcontainers
 from testing import cassandra as testing_cassandra
 
@@ -76,6 +77,7 @@ class FakeAccessor(object):
     def __init__(self, *args, **kwargs):
         """Validate arguments like accessor.Accessor would."""
         self._real_accessor = bg_accessor.Accessor(*args, **kwargs)
+        self.keyspace = self._real_accessor.keyspace
         self._is_connected = False
         self._metric_to_points = collections.defaultdict(sortedcontainers.SortedDict)
         self._metric_to_metadata = {}
@@ -179,14 +181,24 @@ class FakeAccessor(object):
 class TestCaseWithFakeAccessor(unittest.TestCase):
     """"A TestCase with a FakeAccessor."""
 
+    KEYSPACE = "fake_keyspace"
+
     def setUp(self):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithFakeAccessor, self).setUp()
-        self.accessor = FakeAccessor("fake keyspace", contact_points=[])
-        self.accessor.connect()
+        self.accessor = FakeAccessor(self.KEYSPACE, contact_points=[])
         self.addCleanup(self.accessor.shutdown)
 
+    def patch_accessor(self):
+        """Hijack Accessor() to return self.accessor."""
+        patcher = mock.patch('biggraphite.accessor.Accessor', return_value=self.accessor)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
+
+@unittest.skipUnless(
+    os.getenv("CASSANDRA_HOME"), "CASSANDRA_HOME must be set to a 3.5 install",
+)
 class TestCaseWithAccessor(unittest.TestCase):
     """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
 
@@ -226,6 +238,9 @@ class TestCaseWithAccessor(unittest.TestCase):
         super(TestCaseWithAccessor, self).setUp()
         self.accessor = bg_accessor.Accessor(
             self.KEYSPACE, self.contact_points, self.port)
-        self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
-        self.addCleanup(self.accessor.drop_all_metrics)
+        self.addCleanup(self.__drop_all_metrics)
+
+    def __drop_all_metrics(self):
+        self.accessor.connect()
+        self.accessor.drop_all_metrics()

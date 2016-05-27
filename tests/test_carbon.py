@@ -18,6 +18,7 @@ from biggraphite import test_utils as bg_test_utils   # noqa
 bg_test_utils.prepare_graphite_imports()  # noqa
 
 import unittest
+
 from carbon import conf as carbon_conf
 from carbon import exceptions as carbon_exceptions
 
@@ -27,13 +28,14 @@ from biggraphite.plugins import carbon as bg_carbon
 _TEST_METRIC = "mytestmetric"
 
 
-class TestCarbonDatabase(bg_test_utils.TestCaseWithAccessor):
+class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
+        super(TestCarbonDatabase, self).setUp()
+        self.patch_accessor()
         settings = carbon_conf.Settings()
-        settings["BG_CONTACT_POINTS"] = ",".join(self.contact_points)
+        settings["BG_CONTACT_POINTS"] = "host1,host2"
         settings["BG_KEYSPACE"] = self.KEYSPACE
-        settings["BG_PORT"] = self.port
         self._plugin = bg_carbon.BigGraphiteDatabase(settings)
         self._plugin.create(
             _TEST_METRIC,
