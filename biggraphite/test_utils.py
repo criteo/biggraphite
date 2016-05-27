@@ -166,9 +166,9 @@ class FakeAccessor(object):
         if not _fake_query_results:
             points = self._metric_to_points[metric_name]
             rows = []
-            for ts in points.irange(time_start, time_end, reverse=True):
+            for ts in points.irange(time_start, time_end):
                 # A row is time_base_ms, time_offset_ms, value
-                row = (ts * 1000.0, 0, points[ts])
+                row = (ts * 1000.0, 0, float(points[ts]))
                 rows.append(row)
             _fake_query_results = [(True, rows)]
         return self._real_accessor.fetch_points(

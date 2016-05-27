@@ -40,12 +40,12 @@ setuptools.setup(
     version="0.1",
     maintainer="Criteo Graphite team",
     maintainer_email="github@criteo.com",
-    description = "Tools for tools for storing carbon data in Cassandra.",
+    description="Tools for tools for storing carbon data in Cassandra.",
     license="Apache Software License",
     keywords="graphite carbon cassandra biggraphite",
     url="https://github.com/criteo/biggraphite",
     include_package_data=True,
-    packages = ["biggraphite", "biggraphite.plugins", "biggraphite.cli"],
+    packages=["biggraphite", "biggraphite.plugins", "biggraphite.cli"],
     long_description=_read("README.md"),
     install_requires=_INSTALL_REQUIRES,
     dependency_links=_DEPENDENCY_LINKS,
@@ -54,6 +54,7 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             'bg-carbon-cache = biggraphite.cli.bg_carbon_cache:main',
+            'bg-import-whisper = biggraphite.cli.import_whisper:main',
         ]
     },
 )
