@@ -45,7 +45,7 @@ def main(_executable=sys.argv[0], _sys_path=sys.path):
     # Importing the plugin registers it.
     from biggraphite.plugins import carbon as unused_carbon  # noqa
     try:
-        carbon_util.run_twistd_plugin(_executable)
+        carbon_util.run_twistd_plugin("carbon-cache")
     except carbon_exceptions.CarbonConfigException as exc:
         # This is what carbon cache does, we preserve that behaviour.
         raise SystemExit(str(exc))
