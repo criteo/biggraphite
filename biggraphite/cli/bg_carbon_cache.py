@@ -12,23 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Simulates carbon-cache after loading the carbon plugin."""
+from __future__ import absolute_import
 from __future__ import print_function
 
+import os
 import sys
 
-from carbon import util as carbon_util
-from carbon import exceptions as carbon_exceptions
 
-try:
-    from biggraphite.plugins import carbon  # noqa
-except ImportError as e:
-    print("Failed importing the biggraphite plugin:\n%s" % e, file=sys.stderr)
+def _manipulate_paths_like_upstream(_executable, sys_path):
+    """Replicate the sys.path magic from carbon-cache."""
+    bin_dir = os.path.dirname(os.path.abspath(_executable))
+    root_dir = os.path.dirname(bin_dir)
+    lib_dir = os.path.join(root_dir, "lib")
+    sys_path.insert(0, lib_dir)
 
 
-def main():
+def main(_executable=sys.argv[0], _sys_path=sys.path):
     """The entry point of this module."""
+    _manipulate_paths_like_upstream(_executable, _sys_path)
+    from carbon import util as carbon_util
+    from carbon import exceptions as carbon_exceptions
+    # Importing the plugin registers it.
+    from biggraphite.plugins import carbon as unused_carbon  # noqa
     try:
-        carbon_util.run_twistd_plugin(__file__)
+        carbon_util.run_twistd_plugin(_executable)
     except carbon_exceptions.CarbonConfigException as exc:
         # This is what carbon cache does, we preserve that behaviour.
         raise SystemExit(str(exc))
