@@ -16,6 +16,7 @@ from __future__ import print_function
 from biggraphite import test_utils as bg_test_utils   # noqa
 bg_test_utils.prepare_graphite_imports()  # noqa
 
+import os
 import unittest
 
 from carbon import exceptions as carbon_exceptions
@@ -28,10 +29,14 @@ from biggraphite.cli import bg_carbon_cache
 class TestMain(unittest.TestCase):
 
     def test_runs(self):
+        sys_path=[]
         with mock.patch.object(carbon_util, 'run_twistd_plugin',
                                return_value=None) as run_twisted:
-            bg_carbon_cache.main()
+            bg_carbon_cache.main(sys_path)
         run_twisted.assert_called_once()
+        self.assertEqual(1, len(sys_path))
+        self.assertTrue(sys_path[0].endswith("lib"))
+        self.assertTrue(os.path.isabs(sys_path[0]))
 
     def test_carbon_fails(self):
         with mock.patch.object(carbon_util, 'run_twistd_plugin',
