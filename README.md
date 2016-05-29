@@ -5,6 +5,22 @@
 Big Graphite
 ============
 
-We are experimenting with storing Graphite metric in Cassandra. This repository contains related code.
+We are experimenting with storing Graphite metrics in Cassandra. This repository contains related code.
 
 *None of it is ready for its premiere yet.*
+
+
+Tests
+=====
+
+To run tests you can either use `tox`:
+
+    pip install tox
+    tox
+
+Or `nose2`
+
+    pip install nose2
+    pip install -r requirements.txt
+    pip install -r tests-requirements.txt
+    nose2
