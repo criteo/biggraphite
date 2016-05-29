@@ -70,7 +70,7 @@ def prepare_graphite_imports():
                 if package_path.endswith("site-packages"):
                     for path in list(to_add):
                         venv_path = package_path + path
-                        if os.path.isdir(graphite_path):
+                        if os.path.isdir(venv_path):
                             # Replace the path in the list.
                             to_add.remove(path)
                             to_add.append(venv_path)
