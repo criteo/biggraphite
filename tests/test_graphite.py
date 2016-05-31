@@ -68,7 +68,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         )
         self.accessor.create_metric(meta)
         self.accessor.insert_points(_METRIC_NAME, self._POINTS)
-        self.reader = bg_graphite.Reader(self.accessor, _METRIC_NAME)
+        self.reader = bg_graphite.Reader(self.accessor, self.metadata_cache, _METRIC_NAME)
 
     def test_fresh_read(self):
         (start, end, step), points = self.reader.fetch(
@@ -112,7 +112,10 @@ class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
         for metric in "a", "a.a", "a.b.c", "x.y":
             meta = bg_accessor.MetricMetadata(metric)
             self.accessor.create_metric(meta)
-        self.finder = bg_graphite.Finder(accessor=self.accessor)
+        self.finder = bg_graphite.Finder(
+            accessor=self.accessor,
+            metadata_cache=self.metadata_cache,
+        )
 
     def find_nodes(self, pattern):
         return self.finder.find_nodes(FakeFindQuery(pattern))

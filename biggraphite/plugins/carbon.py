@@ -25,6 +25,7 @@ from carbon import database
 from carbon import exceptions as carbon_exceptions
 from biggraphite import graphite_utils
 from biggraphite import accessor
+from biggraphite import metadata_cache
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102
@@ -50,6 +51,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             self._accessor.connect()
         except graphite_utils.ConfigException as e:
             raise carbon_exceptions.CarbonConfigException(e)
+        storage_path = graphite_utils.storage_path_from_settings(settings)
+        self._cache = metadata_cache.DiskCache(self._accessor, storage_path)
+        self._cache.open()
 
         # TODO: we may want to use/implement these
         # settings.WHISPER_AUTOFLUSH:
@@ -64,7 +68,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def exists(self, metric):
         # If exists returns "False" then "create" will be called.
         # New metrics are also throttled by some settings.
-        return bool(self._accessor.get_metric(metric))
+        return bool(self._cache.get_metric(metric))
 
     def create(self, metric, retentions, xfilesfactor, aggregation_method):
         metadata = accessor.MetricMetadata(
@@ -73,13 +77,13 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             carbon_retentions=retentions,
             carbon_xfilesfactor=xfilesfactor,
         )
-        self._accessor.create_metric(metadata)
+        self._cache.create_metric(metadata)
 
     def getMetadata(self, metric, key):
         if key != "aggregationMethod":
             msg = "%s[%s]: Unsupported metadata" % (metric, key)
             raise ValueError(msg)
-        metadata = self._accessor.get_metric(metric)
+        metadata = self._cache.get_metric(metric)
         if not metadata:
             raise ValueError("%s: No such metric" % metric)
         return metadata.carbon_aggregation
