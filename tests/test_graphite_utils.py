@@ -25,7 +25,7 @@ from biggraphite import graphite_utils as bg_gu
 class TestGraphiteUtilsInternals(unittest.TestCase):
 
     def _check_settings_exception(self, settings):
-        self.assertRaises(bg_gu.ConfigException, bg_gu.accessor_from_settings, settings)
+        self.assertRaises(bg_gu.ConfigError, bg_gu.accessor_from_settings, settings)
 
     def test_carbon_settings(self):
         from carbon import conf as carbon_conf

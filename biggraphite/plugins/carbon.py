@@ -49,7 +49,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         try:
             self._accessor = graphite_utils.accessor_from_settings(settings)
             self._accessor.connect()
-        except graphite_utils.ConfigException as e:
+        except graphite_utils.ConfigError as e:
             raise carbon_exceptions.CarbonConfigException(e)
         storage_path = graphite_utils.storage_path_from_settings(settings)
         self._cache = metadata_cache.DiskCache(self._accessor, storage_path)
