@@ -26,6 +26,8 @@ import inspect
 import os
 import re
 import sys
+import tempfile
+import shutil
 import unittest
 
 from cassandra import cluster as c_cluster
@@ -33,6 +35,7 @@ import mock
 import sortedcontainers
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import metadata_cache as bg_metadata_cache
 
 
 HAS_CASSANDRA_HOME = bool(os.getenv("CASSANDRA_HOME"))
@@ -84,7 +87,7 @@ def prepare_graphite_imports():
 
 
 class FakeAccessor(object):
-    """A fake acessor that never connects."""
+    """A fake acessor that never connects and doubles as a fake MetadataCache."""
 
     def __init__(self, *args, **kwargs):
         """Validate arguments like accessor.Accessor would."""
@@ -190,7 +193,17 @@ class FakeAccessor(object):
         )
 
 
-class TestCaseWithFakeAccessor(unittest.TestCase):
+class TestCaseWithTempDir(unittest.TestCase):
+    """A TestCase with a temporary directory."""
+
+    def setUp(self):
+        """Create a new temporary diractory in self.tempdir."""
+        super(TestCaseWithTempDir, self).setUp()
+        self.tempdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tempdir)
+
+
+class TestCaseWithFakeAccessor(TestCaseWithTempDir):
     """"A TestCase with a FakeAccessor."""
 
     KEYSPACE = "fake_keyspace"
@@ -200,6 +213,9 @@ class TestCaseWithFakeAccessor(unittest.TestCase):
         super(TestCaseWithFakeAccessor, self).setUp()
         self.accessor = FakeAccessor(self.KEYSPACE, contact_points=[])
         self.addCleanup(self.accessor.shutdown)
+        self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)
+        self.metadata_cache.open()
+        self.addCleanup(self.metadata_cache.close)
 
     def patch_accessor(self):
         """Hijack Accessor() to return self.accessor."""
@@ -211,7 +227,7 @@ class TestCaseWithFakeAccessor(unittest.TestCase):
 @unittest.skipUnless(
     HAS_CASSANDRA_HOME, "CASSANDRA_HOME must be set to a 3.5 install",
 )
-class TestCaseWithAccessor(unittest.TestCase):
+class TestCaseWithAccessor(TestCaseWithTempDir):
     """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
 
     KEYSPACE = "test_keyspace"
@@ -252,6 +268,9 @@ class TestCaseWithAccessor(unittest.TestCase):
             self.KEYSPACE, self.contact_points, self.port)
         self.addCleanup(self.accessor.shutdown)
         self.addCleanup(self.__drop_all_metrics)
+        self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)
+        self.metadata_cache.open()
+        self.addCleanup(self.metadata_cache.close)
 
     def __drop_all_metrics(self):
         self.accessor.connect()

@@ -185,13 +185,24 @@ class MetricMetadata(object):
             self.carbon_xfilesfactor = self._DEFAULT_XFILESFACTOR
         self.carbon_highest_precision = self.carbon_retentions[0][0]
 
+    def as_json(self):
+        """Serialize MetricMetadata into a JSon string from_json() can parse."""
+        return json.dumps(self.as_string_dict())
+
     def as_string_dict(self):
         """Turn an instance into a dict of string to string."""
         return {
+            "name": self.name,
             "carbon_aggregation": self.carbon_aggregation,
             "carbon_retentions": json.dumps(self.carbon_retentions),
             "carbon_xfilesfactor": "%f" % self.carbon_xfilesfactor,
         }
+
+    @classmethod
+    def from_json(cls, s):
+        """Parse MetricMetadata from a JSon string produced by as_json()."""
+        d = json.loads(s)
+        return cls.from_string_dict(d)
 
     @classmethod
     def from_string_dict(cls, d):
@@ -443,9 +454,12 @@ class Accessor(object):
             ))
         padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
         # Finally, create the metric
+        metric_metadata_dict = metric_metadata.as_string_dict()
+        # We drop the name from the json as name is already the first column.
+        del metric_metadata_dict["name"]
         queries.append((
             self.__insert_metrics_statement,
-            [metric_name, metric_metadata.as_string_dict()] + components + padding,
+            [metric_name, metric_metadata_dict] + components + padding,
         ))
 
         # We have to run queries in sequence as:

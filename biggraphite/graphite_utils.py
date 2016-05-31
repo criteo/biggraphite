@@ -2,6 +2,7 @@
 """Graphite utility module."""
 
 import fnmatch
+from os import path as os_path
 import re
 
 from biggraphite import accessor
@@ -9,6 +10,16 @@ from biggraphite import accessor
 
 class ConfigException(Exception):
     """Configuration problems."""
+
+
+def _get_setting(settings, name, optional=False):
+    # Only way we found to support both Carbon & Django settings
+    try:
+        return getattr(settings, name)
+    except:
+        pass
+    if not optional:
+        raise ConfigException("%s missing in configuration" % name)
 
 
 def accessor_from_settings(settings):
@@ -20,31 +31,28 @@ def accessor_from_settings(settings):
     Returns:
       Cassandra accessor (not connected)
     """
-    # Only way we found to support both Carbon & Django settings
-    try:
-        keyspace = getattr(settings, "BG_KEYSPACE")
-    except:
-        keyspace = None
-
-    try:
-        contact_points_str = getattr(settings, "BG_CONTACT_POINTS")
-    except:
-        contact_points_str = None
-
-    try:
-        port = getattr(settings, "BG_PORT")
-    except:
-        port = None
-
-    if not keyspace:
-        raise ConfigException("BG_KEYSPACE is mandatory")
-    if not contact_points_str:
-        raise ConfigException("BG_CONTACT_POINTS are mandatory")
-    # BG_PORT is optional
-
+    keyspace = _get_setting(settings, "BG_KEYSPACE")
+    contact_points_str = _get_setting(settings, "BG_CONTACT_POINTS")
+    port = _get_setting(settings, "BG_PORT", optional=True)
+    if port is not None:
+        port = int(port)
     contact_points = [s.strip() for s in contact_points_str.split(",")]
-
     return accessor.Accessor(keyspace, contact_points, port)
+
+
+def storage_path_from_settings(settings):
+    """Get storage path from configuration.
+
+    Args:
+      settings: either carbon_conf.Settings or a Django-like settings object
+
+    Returns:
+      An absolute path.
+    """
+    path = _get_setting(settings, "STORAGE_DIR")
+    if not os_path.exists(path):
+        raise ConfigException("STORAGE_DIR is set to an unexisting directory: '%s'" % path)
+    return os_path.abspath(path)
 
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
