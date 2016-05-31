@@ -31,15 +31,21 @@ import unittest
 from cassandra import cluster as c_cluster
 import mock
 import sortedcontainers
-from testing import cassandra as testing_cassandra
 
 from biggraphite import accessor as bg_accessor
 
 
-class _SlowerTestingCassandra(testing_cassandra.Cassandra):
-    """Just like testing_cassandra.Cassandra but waits 5 minutes for start."""
+HAS_CASSANDRA_HOME = bool(os.getenv("CASSANDRA_HOME"))
 
-    BOOT_TIMEOUT = 5 * 60
+# Only try to import cassandra if we are going to use it. This is better
+# than using try/except because the failure case is easier to handle.
+if HAS_CASSANDRA_HOME:
+    from testing import cassandra as testing_cassandra
+
+    class _SlowerTestingCassandra(testing_cassandra.Cassandra):
+        """Just like testing_cassandra.Cassandra but waits 5 minutes for start."""
+
+        BOOT_TIMEOUT = 5 * 60
 
 
 def create_unreplicated_keyspace(contact_points, port, keyspace):
@@ -59,16 +65,22 @@ def prepare_graphite_imports():
     try:
         import carbon  # noqa
     except ImportError:
-        to_add = "/opt/graphite/lib"
+        to_add = ["/opt/graphite/lib", "/opt/graphite/webapp"]
         if os.environ.get("VIRTUAL_ENV"):
             # Running in a virtual environment
             for package_path in sys.path:
                 if package_path.endswith("site-packages"):
-                    graphite_path = package_path + "/opt/graphite/lib"
-                    if os.path.isdir(graphite_path):
-                        to_add = graphite_path
-        if to_add not in sys.path:
-            sys.path.insert(0, to_add)
+                    for module_path in list(to_add):
+                        venv_module_path = package_path + module_path
+                        if os.path.isdir(venv_module_path):
+                            # Replace the path in the list.
+                            to_add.remove(module_path)
+                            to_add.append(venv_module_path)
+
+        # Add all custom paths to sys.path.
+        for path in to_add:
+            if path not in sys.path:
+                sys.path.insert(0, path)
 
 
 class FakeAccessor(object):
@@ -197,7 +209,7 @@ class TestCaseWithFakeAccessor(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    os.getenv("CASSANDRA_HOME"), "CASSANDRA_HOME must be set to a 3.5 install",
+    HAS_CASSANDRA_HOME, "CASSANDRA_HOME must be set to a 3.5 install",
 )
 class TestCaseWithAccessor(unittest.TestCase):
     """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
