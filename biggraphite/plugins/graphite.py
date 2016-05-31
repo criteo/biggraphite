@@ -41,13 +41,14 @@ def _round_up(rounded, divider):
 class Reader(object):
     """As per the Graphite API, fetches points for and metadata for a given metric."""
 
-    __slots__ = ("_accessor", "_metric", "_metadata", )
+    __slots__ = ("_accessor", "_metric", "_metadata", "_metadata_cache", )
 
-    def __init__(self, accessor, metric):
+    def __init__(self, accessor, metadata_cache, metric):
         """Create a new reader."""
         self._accessor = accessor
         self._metric = metric
         self._metadata = None
+        self._metadata_cache = metadata_cache
 
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
@@ -72,7 +73,7 @@ class Reader(object):
 
     def __refresh_metadata(self):
         if self._metadata is None:
-            self._metadata = self._accessor.get_metric(self._metric)
+            self._metadata = self._metadata_cache.get_metric(self._metric)
 
     def fetch(self, start_time, end_time, now=None):
         """Fetch point for a given interval as per the Graphite API.
@@ -124,7 +125,7 @@ class Reader(object):
 class Finder(object):
     """Finder plugin for BigGraphite."""
 
-    def __init__(self, directories=None, accessor=None):
+    def __init__(self, directories=None, accessor=None, metadata_cache=None):
         """Build a new finder.
 
         Args:
@@ -133,18 +134,21 @@ class Finder(object):
         """
         if accessor:
             self._accessor = accessor
+            self._metadata_cache = metadata_cache
         else:
             from django.conf import settings as django_settings
+            storage_path = graphite_utils.storage_path_from_settings(django_settings)
             self._accessor = graphite_utils.accessor_from_settings(django_settings)
-
-        self._accessor.connect()
+            self._accessor.connect()
+            self._metadata_cache = metadata_cache.DiskCache(self._accessor, storage_path)
+            self._metadata_cache.open()
 
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: handle directories constructor argument/property
         metrics, directories = graphite_utils.glob(self._accessor, query.pattern)
         for metric in metrics:
-            reader = Reader(self._accessor, metric)
+            reader = Reader(self._accessor, self._metadata_cache, metric)
             yield node.LeafNode(metric, reader)
 
         for directory in directories:
