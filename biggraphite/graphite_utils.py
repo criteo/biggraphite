@@ -1,14 +1,34 @@
 #!/usr/bin/env python
+# Copyright 2016 Criteo
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Graphite utility module."""
 
 import fnmatch
 from os import path as os_path
 import re
 
-from biggraphite import accessor
+from biggraphite import accessor as bg_accessor
+
+# http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
+_GRAPHITE_GLOB_RE = re.compile("^[^*?{}\\[\\]]+$")
 
 
-class ConfigException(Exception):
+class Error(Exception):
+    """Base class for all exceptions from this module."""
+
+
+class ConfigError(Error):
     """Configuration problems."""
 
 
@@ -19,7 +39,7 @@ def _get_setting(settings, name, optional=False):
     except:
         pass
     if not optional:
-        raise ConfigException("%s missing in configuration" % name)
+        raise ConfigError("%s missing in configuration" % name)
 
 
 def accessor_from_settings(settings):
@@ -37,7 +57,7 @@ def accessor_from_settings(settings):
     if port is not None:
         port = int(port)
     contact_points = [s.strip() for s in contact_points_str.split(",")]
-    return accessor.Accessor(keyspace, contact_points, port)
+    return bg_accessor.Accessor(keyspace, contact_points, port)
 
 
 def storage_path_from_settings(settings):
@@ -51,12 +71,8 @@ def storage_path_from_settings(settings):
     """
     path = _get_setting(settings, "STORAGE_DIR")
     if not os_path.exists(path):
-        raise ConfigException("STORAGE_DIR is set to an unexisting directory: '%s'" % path)
+        raise ConfigError("STORAGE_DIR is set to an unexisting directory: '%s'" % path)
     return os_path.abspath(path)
-
-
-# http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
-_GRAPHITE_GLOB_RE = re.compile("^[^*?{}\\[\\]]+$")
 
 
 def _is_graphite_glob(metric_component):
