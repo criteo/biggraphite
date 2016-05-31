@@ -36,6 +36,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         settings = carbon_conf.Settings()
         settings["BG_CONTACT_POINTS"] = "host1,host2"
         settings["BG_KEYSPACE"] = self.KEYSPACE
+        settings["STORAGE_DIR"] = self.tempdir
         self._plugin = bg_carbon.BigGraphiteDatabase(settings)
         self._plugin.create(
             _TEST_METRIC,
