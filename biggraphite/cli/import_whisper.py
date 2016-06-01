@@ -96,7 +96,9 @@ class _Worker(object):
     def import_whisper(self, path):
         if not self._accessor.is_connected:
             self._accessor.connect()
-        metric_name = path[len(self._opts.root_directory) + 1:-4].replace("/", ".")
+        relative_path = os.path.relpath(path, self._opts.root_directory)
+        relative_path_noext = os.path.splitext(relative_path)[0]
+        metric_name = relative_path_noext.replace(os.path.sep, ".")
         points = self._read_points(path)
         meta = self._read_metadata(metric_name, path)
         self._accessor.create_metric(meta)
