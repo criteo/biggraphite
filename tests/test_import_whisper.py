@@ -29,6 +29,18 @@ from biggraphite import test_utils as bg_test_utils
 bg_test_utils.prepare_graphite_imports()
 
 
+class TestUtils(unittest.TestCase):
+
+    def test_metric_name_from_wsp(self):
+        examples = [
+            ("/tmp/", "/tmp/a/b/c.wsp", "a.b.c"),
+            ("/tmp", "/tmp/a/b/c.wsp", "a.b.c"),
+            ("/", "/a/b/c.wsp", "a.b.c"),
+        ]
+        for root, wsp, name in examples:
+            self.assertEqual(name, import_whisper.metric_name_from_wsp(root, wsp))
+
+
 class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
