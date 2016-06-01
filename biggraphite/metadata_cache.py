@@ -128,7 +128,7 @@ class DiskCache(object):
             with self.__json_cache_lock:
                 metadata = self.__json_cache.get(metadata_str)
                 if not metadata:
-                    metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
+                    metadata = bg_accessor.MetricMetadata.from_json(metric_name, metadata_str)
                     self.__json_cache[metadata_str] = metadata
             return metadata
         else:
@@ -145,5 +145,6 @@ class DiskCache(object):
             # Do not cache absent metrics, they will probably soon be created.
             return None
         metadata_json = metadata.as_json()
+        name = metadata.name
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            txn.put(metadata.name, metadata_json, dupdata=False, overwrite=True)
+            txn.put(name, metadata_json, dupdata=False, overwrite=True)
