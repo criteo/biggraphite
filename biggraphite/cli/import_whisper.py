@@ -139,7 +139,7 @@ def _parse_opts(args):
 def main(args=None):
     """Entry point for the module."""
     if not args:
-        args = sys.argv
+        args = sys.argv[1:]
 
     opts = _parse_opts(args)
     paths = [os.path.join(root, f)
