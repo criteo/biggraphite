@@ -16,6 +16,7 @@
 """Abstracts querying Cassandra to manipulate timeseries."""
 from __future__ import print_function
 
+import codecs
 import json
 
 import cassandra
@@ -162,6 +163,26 @@ _SETUP_CQL = [
 ] + _SETUP_CQL_PATH_INDEXES
 
 
+_UTF8_CODEC = codecs.getencoder('utf8')
+
+
+def encode_metric_name(name):
+    """Encode name as utf-8, raise UnicodeError if it can't.
+
+    Args:
+      name: The metric to encode, must be an instance of basestring.
+        If it is an instance of string, it will be assumed to already have been
+        encoded for performance reasons.
+
+    Raises:
+      UnicodeError: Couldn't encode.
+    """
+    if isinstance(name, str):
+        return name
+    # Next line may raise UnicodeError
+    return _UTF8_CODEC(name)[0]
+
+
 class MetricMetadata(object):
     """Represents all information about a metric."""
 
@@ -177,7 +198,7 @@ class MetricMetadata(object):
     def __init__(self, name,
                  carbon_aggregation=None, carbon_retentions=None, carbon_xfilesfactor=None):
         """Record its arguments."""
-        self.name = name
+        self.name = encode_metric_name(name)
         self.carbon_aggregation = carbon_aggregation or self._DEFAULT_AGGREGATION
         self.carbon_retentions = carbon_retentions or self._DEFAULT_RETENTIONS
         self.carbon_xfilesfactor = carbon_xfilesfactor
@@ -192,23 +213,22 @@ class MetricMetadata(object):
     def as_string_dict(self):
         """Turn an instance into a dict of string to string."""
         return {
-            "name": self.name,
             "carbon_aggregation": self.carbon_aggregation,
             "carbon_retentions": json.dumps(self.carbon_retentions),
             "carbon_xfilesfactor": "%f" % self.carbon_xfilesfactor,
         }
 
     @classmethod
-    def from_json(cls, s):
+    def from_json(cls, name, s):
         """Parse MetricMetadata from a JSon string produced by as_json()."""
         d = json.loads(s)
-        return cls.from_string_dict(d)
+        return cls.from_string_dict(name, d)
 
     @classmethod
-    def from_string_dict(cls, d):
+    def from_string_dict(cls, name, d):
         """Turn a dict of string to string into a MetricMetadata."""
         return cls(
-            name=d["name"],
+            name=name,
             carbon_aggregation=d.get("carbon_aggregation"),
             carbon_retentions=json.loads(d.get("carbon_retentions")),
             carbon_xfilesfactor=float(d.get("carbon_xfilesfactor")),
@@ -455,8 +475,6 @@ class Accessor(object):
         padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
         # Finally, create the metric
         metric_metadata_dict = metric_metadata.as_string_dict()
-        # We drop the name from the json as name is already the first column.
-        del metric_metadata_dict["name"]
         queries.append((
             self.__insert_metrics_statement,
             [metric_name, metric_metadata_dict] + components + padding,
@@ -486,8 +504,7 @@ class Accessor(object):
             return None
         name = result[0][0]
         config = result[0][1]
-        config["name"] = name
-        return MetricMetadata.from_string_dict(config)
+        return MetricMetadata.from_string_dict(name, config)
 
     # TODO: handle ranges and the like
     # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards

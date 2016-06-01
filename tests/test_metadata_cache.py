@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding: utf-8
 # Copyright 2016 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,6 +55,10 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         first = self.metadata_cache.get_metric(_TEST_METRIC.name)
         second = self.metadata_cache.get_metric(_TEST_METRIC.name)
         self.assertIs(first, second)
+
+    def test_unicode(self):
+        metric = bg_accessor.MetricMetadata(u"a.b.testé")
+        self.metadata_cache.create_metric(metric)
 
 
 if __name__ == "__main__":

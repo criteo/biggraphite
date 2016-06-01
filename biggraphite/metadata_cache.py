@@ -27,6 +27,7 @@ from __future__ import print_function
 
 import os
 from os import path as os_path
+import sys
 import threading
 
 import lmdb
@@ -83,8 +84,12 @@ class DiskCache(object):
             os.makedirs(self.__path)
         except OSError:
             pass  # Directory already exists
+        map_size = 1024*1024*1024  # 1G on 32 bits systems
+        if sys.maxsize > 2**32:
+            map_size *= 16  # 16G on 64 bits systems
         self.__env = lmdb.open(
             self.__path,
+            map_size=map_size,
             # Only one sync per transaction, system crash can undo a transaction.
             metasync=False,
             # Use mmap()
@@ -128,7 +133,7 @@ class DiskCache(object):
             with self.__json_cache_lock:
                 metadata = self.__json_cache.get(metadata_str)
                 if not metadata:
-                    metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
+                    metadata = bg_accessor.MetricMetadata.from_json(metric_name, metadata_str)
                     self.__json_cache[metadata_str] = metadata
             return metadata
         else:
@@ -145,5 +150,6 @@ class DiskCache(object):
             # Do not cache absent metrics, they will probably soon be created.
             return None
         metadata_json = metadata.as_json()
+        name = metadata.name
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            txn.put(metadata.name, metadata_json, dupdata=False, overwrite=True)
+            txn.put(name, metadata_json, dupdata=False, overwrite=True)
