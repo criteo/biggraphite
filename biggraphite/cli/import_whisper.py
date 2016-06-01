@@ -36,6 +36,24 @@ _POINT_STRUCT = struct.Struct(whisper.pointFormat)
 _WORKER = None
 
 
+def metric_name_from_wsp(root_dir, wsp_path):
+    """Return the name of a metric given a wsp file path and a root directory.
+
+    The path do not have to exist.
+
+    Args:
+      root_dir: A directory that is parent to all metrics.
+      wsp_path: The name of a file ending with wsp file in root_dir.
+
+    Returns:
+      The metric name.
+    """
+    relpath = os.path.relpath(wsp_path, root_dir)
+    assert ".." not in relpath, "%s not a child of %" % (root_dir, wsp_path)
+    relpath_noext = os.path.splitext(relpath)[0]
+    return relpath_noext.replace(os.path.sep, ".")
+
+
 class _Worker(object):
 
     def __init__(self, opts):
@@ -96,7 +114,7 @@ class _Worker(object):
     def import_whisper(self, path):
         if not self._accessor.is_connected:
             self._accessor.connect()
-        metric_name = path[len(self._opts.root_directory) + 1:-4].replace("/", ".")
+        metric_name = metric_name_from_wsp(self._opts.root_directory, path)
         points = self._read_points(path)
         meta = self._read_metadata(metric_name, path)
         self._accessor.create_metric(meta)
