@@ -27,6 +27,7 @@ from __future__ import print_function
 
 import os
 from os import path as os_path
+import sys
 import threading
 
 import lmdb
@@ -83,8 +84,12 @@ class DiskCache(object):
             os.makedirs(self.__path)
         except OSError:
             pass  # Directory already exists
+        map_size = 1024*1024*1024  # 1G on 32 bits systems
+        if sys.maxsize > 2**32:
+            map_size *= 16  # 16G on 64 bits systems
         self.__env = lmdb.open(
             self.__path,
+            map_size=map_size,
             # Only one sync per transaction, system crash can undo a transaction.
             metasync=False,
             # Use mmap()
