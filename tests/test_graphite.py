@@ -124,6 +124,8 @@ class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
         found = list(self.find_nodes(glob))
         found_branches = [node.path for node in found if not node.is_leaf]
         found_leaves = [node.path for node in found if node.is_leaf]
+        for path in found_branches + found_leaves:
+            self.assertIsInstance(path, str)
         self.assertItemsEqual(found_branches, branches)
         self.assertItemsEqual(found_leaves, leaves)
 

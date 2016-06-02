@@ -499,6 +499,7 @@ class Accessor(object):
     def get_metric(self, metric_name):
         """Return a MetricMetadata for this metric_name, None if no such metric."""
         self._check_connected()
+        metric_name = encode_metric_name(metric_name)
         result = list(self.__session.execute(self.__select_metric_statement, (metric_name, )))
         if not result:
             return None

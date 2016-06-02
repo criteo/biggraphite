@@ -125,6 +125,7 @@ class DiskCache(object):
 
     def get_metric(self, metric_name):
         """Return a MetricMetadata for this metric_name, None if no such metric."""
+        metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
             metadata_str = txn.get(metric_name)
         if metadata_str:

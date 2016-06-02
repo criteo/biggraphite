@@ -22,6 +22,7 @@ from graphite import node
 
 
 from biggraphite import graphite_utils
+from biggraphite import metadata_cache as bg_metadata_cache
 
 _CONFIG_NAME = "biggraphite"
 
@@ -134,13 +135,15 @@ class Finder(object):
         """
         if accessor:
             self._accessor = accessor
-            self._metadata_cache = metadata_cache
         else:
             from django.conf import settings as django_settings
             storage_path = graphite_utils.storage_path_from_settings(django_settings)
             self._accessor = graphite_utils.accessor_from_settings(django_settings)
             self._accessor.connect()
-            self._metadata_cache = metadata_cache.DiskCache(self._accessor, storage_path)
+        if metadata_cache:
+            self._metadata_cache = metadata_cache
+        else:
+            self._metadata_cache = bg_metadata_cache.DiskCache(self._accessor, storage_path)
             self._metadata_cache.open()
 
     def find_nodes(self, query):
