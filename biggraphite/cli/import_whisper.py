@@ -90,11 +90,17 @@ class _Worker(object):
         archives = info["archives"]
         with open(path) as f:
             buf = f.read()
+
+        # Two or more archives can contain a given timestamp.
+        # As archives are from most precise to least precise, we track the oldest
+        # point we've found in more precise archives and ignore the newer ones.
+        prev_archive_starts_at = float("inf")
+
         for archive in archives:
             offset = archive["offset"]
             step = archive["secondsPerPoint"]
+            archive_starts_at = 0
             expected_next_timestamp = 0
-
             for _ in range(archive["points"]):
                 timestamp, val = _POINT_STRUCT.unpack_from(buf, offset)
                 # Detect holes in data. The heuristic is the following:
@@ -107,8 +113,11 @@ class _Worker(object):
                     continue
                 else:
                     expected_next_timestamp = timestamp + step
-                res.append((timestamp, val))
+                archive_starts_at = min(timestamp, archive_starts_at)
+                if timestamp < prev_archive_starts_at:
+                    res.append((timestamp, val))
                 offset += whisper.pointSize
+            prev_archive_starts_at = archive_starts_at
         return res
 
     def import_whisper(self, path):

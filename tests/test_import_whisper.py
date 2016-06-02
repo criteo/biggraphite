@@ -52,10 +52,14 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
     def test_single_metric(self):
         xfilesfactor = 0.5
         aggregation_method = "last"
-        retentions = [(1, 60)]
+        # This retentions are such that every other point is present in both
+        # archives. Test validates that duplicate points gets inserted only once.
+        retentions = [(1, 10), (2, 10)]
+        high_precision_duration = retentions[0][0] * retentions[0][1]
+        low_precision_duration = retentions[1][0] * retentions[1][1]
         now = int(time.time())
-        time_from, time_to = now - 10, now
-        points = [(t, now-t) for t in xrange(time_from, time_to)]
+        time_from, time_to = now - low_precision_duration, now
+        points = [(float(t), float(now-t)) for t in xrange(time_from, time_to)]
         metric = "test_metric"
         metric_path = os_path.join(self.tempdir, metric + ".wsp")
         whisper.create(metric_path, retentions, xfilesfactor, aggregation_method)
@@ -71,7 +75,7 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(meta.carbon_retentions, retentions)
 
         points_again = self.accessor.fetch_points(metric, time_from, time_to, step=1)
-        self.assertEqual(points, points_again)
+        self.assertEqual(points[-high_precision_duration:], points_again)
 
     def _call_main(self):
         import_whisper.main([
