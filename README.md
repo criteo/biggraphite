@@ -17,3 +17,8 @@ To run tests you can either use `tox`:
 
     pip install tox
     tox
+
+Contact
+=======
+
+Mailing list: https://groups.google.com/forum/#!forum/biggraphite
