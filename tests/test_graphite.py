@@ -20,7 +20,12 @@ import unittest
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
+
+# This needs to run before we import the plugin.
+bg_test_utils.prepare_graphite()
+
 from biggraphite.plugins import graphite as bg_graphite
+from graphite.readers import FetchInProgress
 
 
 _METRIC_NAME = "test_metric"
@@ -70,8 +75,19 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.insert_points(_METRIC_NAME, self._POINTS)
         self.reader = bg_graphite.Reader(self.accessor, self.metadata_cache, _METRIC_NAME)
 
+    def fetch(self, start_time=0, end_time=0, now=0):
+        result = self.reader.fetch(
+            start_time=start_time,
+            end_time=end_time,
+            now=now
+        )
+        # Readers can return a list or an object.
+        if isinstance(result, FetchInProgress):
+            result = result.waitForResults()
+        return result
+
     def test_fresh_read(self):
-        (start, end, step), points = self.reader.fetch(
+        (start, end, step), points = self.fetch(
             start_time=self._POINTS_START+3,
             end_time=self._POINTS_END-3,
             now=self._POINTS_END+10,

@@ -19,10 +19,13 @@ import time
 
 from graphite import intervals
 from graphite import node
+from graphite.readers import FetchInProgress
+from graphite.logger import log
 
 
 from biggraphite import graphite_utils
 from biggraphite import metadata_cache as bg_metadata_cache
+
 
 _CONFIG_NAME = "biggraphite"
 
@@ -94,15 +97,24 @@ class Reader(object):
 
         # TODO: We do not support downsampling yet.
         start_time, end_time, step = self.__get_time_info(start_time, end_time, now)
-        ts_and_points = self._accessor.fetch_points(self._metric, start_time, end_time, step,
-                                                    self._metadata.carbon_aggregate_points)
-        points_num = (end_time - start_time) // step
-        # TODO: Consider wrapping an array (using NaN for None) for speed&memory efficiency
-        points = [None] * points_num
-        for ts, point in ts_and_points:
-            index = int(ts - start_time) // step
-            points[index] = point
-        return (start_time, end_time, step), points
+
+        # This returns a generator which we can iterate on later.
+        ts_and_points = self._accessor.fetch_points(
+            self._metric, start_time, end_time, step,
+            self._metadata.carbon_aggregate_points)
+
+        def read_points():
+            points_num = (end_time - start_time) // step
+            # TODO: Consider wrapping an array (using NaN for None) for
+            # speed&memory efficiency
+            points = [None] * points_num
+            for ts, point in ts_and_points:
+                index = int(ts - start_time) // step
+                points[index] = point
+            return (start_time, end_time, step), points
+
+        return FetchInProgress(read_points)
+
 
     def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.
