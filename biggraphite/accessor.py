@@ -183,6 +183,14 @@ def encode_metric_name(name):
     return _UTF8_CODEC(name)[0]
 
 
+def _round_down(rounded, devider):
+    return int(rounded) // devider * devider
+
+
+def _round_up(rounded, devider):
+    return int(rounded + devider - 1) // devider * devider
+
+
 class MetricMetadata(object):
     """Represents all information about a metric."""
 
@@ -358,7 +366,7 @@ class Accessor(object):
         return res
 
     def _connect(self, skip_schema_upgrade=False):
-        executor_threads = self._round_up(
+        executor_threads = _round_up(
             self.__concurrency, self._REQUESTS_PER_THREAD) / self._REQUESTS_PER_THREAD
         self.__cluster = c_cluster.Cluster(
             self.contact_points, self.port, executor_threads=executor_threads,
@@ -420,18 +428,10 @@ class Accessor(object):
         self.__session.execute("TRUNCATE directories;")
         self.__session.execute("TRUNCATE metrics;")
 
-    @staticmethod
-    def _round_down(rounded, devider):
-        return int(rounded) // devider * devider
-
-    @staticmethod
-    def _round_up(rounded, devider):
-        return int(rounded + devider - 1) // devider * devider
-
     def _make_all_points_selects(self, metric_name, time_start_ms, time_end_ms):
         # We fetch with ms precision, even though we only store with second precision.
-        first_row = self._round_down(time_start_ms, _ROW_SIZE_MS)
-        last_row = self._round_down(time_end_ms, _ROW_SIZE_MS)
+        first_row = _round_down(time_start_ms, _ROW_SIZE_MS)
+        last_row = _round_down(time_end_ms, _ROW_SIZE_MS)
         res = []
         # xrange(a,b) does not contain b, so we use last_row+1
         for row_start_ms in xrange(first_row, last_row + 1, _ROW_SIZE_MS):
@@ -549,7 +549,7 @@ class Accessor(object):
     # TODO: Remove aggregator_func and perform aggregation server-side.
     def fetch_points(self, metric_name, time_start, time_end, step,
                      aggregator_func=None, _fake_query_results=None):
-        """Fetch points from time_start included to time_end excluded with a duration of step.
+        """Fetch points within [time_start, time_end[ with a periodicity of step.
 
         connect() must have previously been called.
 
@@ -570,66 +570,37 @@ class Accessor(object):
             an implementation detail and may go away at any time.
 
         Returns:
-          a list of (timestamp, value) where timestamp indicates the value is about the
-          range from timestamp included to timestamp+step excluded
+          a generator of (timestamp, value) where timestamp indicates the value
+          is about the range from timestamp included to timestamp+step excluded
 
         Raises:
           InvalidArgumentError: if time_start, time_end or step are not as per above
         """
-        self._fetch_points_validate_args(metric_name, time_start, time_end, step, aggregator_func)
+        self._fetch_points_validate_args(
+            metric_name, time_start, time_end, step, aggregator_func)
+        metric_name = metric_name
         aggregator_func = aggregator_func or self.median_aggregator
         step_ms = int(step) * 1000
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
-        time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
-        statements_and_args = self._make_all_points_selects(metric_name, time_start_ms, time_end_ms)
+        time_start_ms = max(
+            time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
+
+        statements_and_args = self._make_all_points_selects(
+            metric_name, time_start_ms, time_end_ms)
         if _fake_query_results:
             query_results = _fake_query_results
         else:
             self._check_connected()
             query_results = c_concurrent.execute_concurrent(
-                self.__session, statements_and_args, concurrency=self.__concurrency,
+                self.__session,
+                statements_and_args,
+                concurrency=self.__concurrency,
                 results_generator=True,
             )
 
-        first_exc = None
-        current_points = []
-        current_timestamp_ms = None
-        res = []
-
-        def add_current_points_to_res():
-            aggregate = aggregator_func(step, current_points)
-            if aggregate is not None:
-                res.append((current_timestamp_ms / 1000.0, aggregate))
-
-        for successfull, rows_or_exception in query_results:
-            if first_exc:
-                continue  # A query failed, we still consume the results
-            if not successfull:
-                first_exc = rows_or_exception
-            for row in rows_or_exception:
-                timestamp_ms = row[0] + row[1]
-                assert timestamp_ms >= time_start_ms
-                assert timestamp_ms < time_end_ms
-                timestamp_ms = self._round_down(timestamp_ms, step_ms)
-
-                if current_timestamp_ms != timestamp_ms:
-                    if current_timestamp_ms is not None:
-                        # This is the first point we encounter, do not emit it on its own,
-                        # rather wait until we have found points fitting in the next period.
-                        add_current_points_to_res()
-                    current_timestamp_ms = timestamp_ms
-                    del current_points[:]
-
-                current_points.append(row[2])
-
-        if first_exc:
-            raise RetryableCassandraError(first_exc)
-
-        if current_timestamp_ms is not None:
-            # We haven't encountered any point.
-            add_current_points_to_res()
-        return res
+        return _PointFetcher(time_start_ms, time_end_ms, step_ms,
+                             aggregator_func, query_results)
 
     @property
     def is_connected(self):
@@ -641,13 +612,104 @@ class Accessor(object):
             raise NotConnectedError("Accessor's connect() wasn't called")
 
     @staticmethod
-    def _fetch_points_validate_args(metric_name, time_start, time_end, step, aggregator_func):
-        """Check arguments as per fetch() spec, raises InvalidArgumentError if needed."""
+    def _fetch_points_validate_args(metric_name, time_start, time_end, step,
+                                    aggregator_func):
+        """Check arguments as per fetch() spec.
+
+        raises InvalidArgumentError if needed.
+        """
         if step < 1:
             raise InvalidArgumentError("step (%d) is not positive" % step)
         if time_start % step or time_start < 0:
-            raise InvalidArgumentError("time_start (%d) is not a multiple of step (%d)"
-                                       % (time_start, step))
+            raise InvalidArgumentError(
+                "time_start (%d) is not a multiple of step (%d)" % (
+                    time_start, step))
         if time_end % step or time_end < 0:
-            raise InvalidArgumentError("time_end (%d) is not a multiple of step (%d)"
-                                       % (time_end, step))
+            raise InvalidArgumentError(
+                "time_end (%d) is not a multiple of step (%d)" % (
+                    time_end, step))
+
+
+class _PointFetcher(object):
+    """Generator class to fetch points."""
+
+    def __init__(self, time_start_ms, time_end_ms, step_ms,
+                 aggregator_func, query_results):
+        """Constructor for PointFetcher.
+
+        Args:
+          time_start_ms: timestamp in second from the Epoch as an int,
+            inclusive,  must be a multiple of step
+          time_end_ms: timestamp in second from the Epoch as an int,
+            exclusive, must be a multiple of step
+          step_ms: time delta in seconds as an int, must be > 0
+          aggregator_func: (time_span, values...)->value called to aggregate
+            values regarding a single step. defaults to self.median_aggregator().
+            Args:
+              time_span: the duration for which we are aggregating in seconds
+              values: a list of float
+            Returns:
+              either a float or None to reject the step
+           query_results: query results to fetch point from.
+        """
+        self.time_start_ms = time_start_ms
+        self.time_end_ms = time_end_ms
+        self.step_ms = step_ms
+        self.aggregator_func = aggregator_func
+        self.query_results = query_results
+
+        self.current_points = []
+        self.current_timestamp_ms = None
+
+    def __iter__(self):
+        return self.generate_points()
+
+    def run_aggregation(self):
+        """Aggregate points in current_points.
+
+        This will skip the first point and return (None, None)
+        if the function doesn't generate any aggregated point.
+        """
+        # This is the first point we encounter, do not emit it on its own,
+        # rather wait until we have found points fitting in the next period.
+        ret = (None, None)
+        if self.current_timestamp_ms is None:
+            return ret
+        aggregate = self.aggregator_func(
+            self.step_ms / 1000.0, self.current_points)
+        if aggregate is not None:
+            ret = (self.current_timestamp_ms / 1000.0, aggregate)
+            del self.current_points[:]
+        return ret
+
+    def generate_points(self):
+        """Generator function ton consume query_results and produce points."""
+        first_exc = None
+
+        for successfull, rows_or_exception in self.query_results:
+            if first_exc:
+                # A query failed, we still consume the results
+                continue
+            if not successfull:
+                first_exc = rows_or_exception
+            for row in rows_or_exception:
+                timestamp_ms = row[0] + row[1]
+                assert timestamp_ms >= self.time_start_ms
+                assert timestamp_ms < self.time_end_ms
+                timestamp_ms = _round_down(timestamp_ms, self.step_ms)
+
+                if self.current_timestamp_ms != timestamp_ms:
+                    ts, point = self.run_aggregation()
+                    if ts is not None:
+                        yield (ts, point)
+
+                    self.current_timestamp_ms = timestamp_ms
+
+                self.current_points.append(row[2])
+
+        ts, point = self.run_aggregation()
+        if ts is not None:
+            yield (ts, point)
+
+        if first_exc:
+            raise RetryableCassandraError(first_exc)

@@ -1,4 +1,7 @@
+django
+django-tagging
 mock
+pytz
 testing.cassandra
 twisted
 unittest2
