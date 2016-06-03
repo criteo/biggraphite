@@ -17,6 +17,7 @@ from __future__ import print_function
 import unittest
 
 import statistics
+import types
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
@@ -90,6 +91,12 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         super(TestAccessorWithCassandra, self).setUp()
         self.accessor.connect()
 
+    def fetch(self, metric, start, end, step=1):
+        """Helper to fetch points as a list."""
+        ret = self.accessor.fetch_points(metric, start, end, step)
+        self.assertTrue(isinstance(ret, types.GeneratorType))
+        return list(ret)
+
     def test_context_manager(self):
         self.accessor.shutdown()
         self.assertFalse(self.accessor.is_connected)
@@ -100,16 +107,20 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
     def test_fetch_empty(self):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.accessor.drop_all_metrics()
+        self.assertEqual(
+            len(self.fetch("no.such.metric", _POINTS_START, _POINTS_END)),
+            0
+        )
         self.assertFalse(
-            self.accessor.fetch_points("no.such.metric", _POINTS_START, _POINTS_END, step=1))
-        self.assertFalse(
-            self.accessor.fetch_points(_METRIC, _POINTS_START, _POINTS_END, step=1))
+            len(self.fetch(_METRIC, _POINTS_START, _POINTS_END)),
+            0
+        )
 
     def test_insert_fetch(self):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.addCleanup(self.accessor.drop_all_metrics)
 
-        fetched = self.accessor.fetch_points(_METRIC, _QUERY_START, _QUERY_END, step=1)
+        fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END, step=1)
         # assertEqual is very slow when the diff is huge, so we give it a chance of
         # failing early to avoid imprecise test timeouts.
         self.assertEqual(_QUERY_RANGE, len(fetched))
@@ -121,11 +132,11 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.addCleanup(self.accessor.drop_all_metrics)
 
-        fetched_tenth = self.accessor.fetch_points(
+        fetched_tenth = self.fetch(
             _METRIC, _QUERY_START, _QUERY_END, step=_QUERY_RANGE / 10)
         self.assertEqual(10, len(fetched_tenth))
 
-        fetched_median = self.accessor.fetch_points(
+        fetched_median = self.fetch(
             _METRIC, _QUERY_START, _QUERY_END, step=_QUERY_RANGE)
         self.assertEqual(1, len(fetched_median))
         median = statistics.median(v for t, v in _USEFUL_POINTS)

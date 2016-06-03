@@ -570,8 +570,8 @@ class Accessor(object):
             an implementation detail and may go away at any time.
 
         Returns:
-          a list of (timestamp, value) where timestamp indicates the value is about the
-          range from timestamp included to timestamp+step excluded
+          a generator of (timestamp, value) where timestamp indicates the value
+          is about the range from timestamp included to timestamp+step excluded
 
         Raises:
           InvalidArgumentError: if time_start, time_end or step are not as per above
@@ -595,12 +595,24 @@ class Accessor(object):
         first_exc = None
         current_points = []
         current_timestamp_ms = None
-        res = []
 
-        def add_current_points_to_res():
+        def run_aggregation():
+            """Aggregate points in current_points.
+
+            This will skip the first point and return (None, None)
+            if the function doesn't generate any aggregated point.
+            """
+            ret = (None, None)
+
+            # This is the first point we encounter, do not emit it on its own,
+            # rather wait until we have found points fitting in the next period.
+            if current_timestamp_ms is None:
+                return ret
             aggregate = aggregator_func(step, current_points)
             if aggregate is not None:
-                res.append((current_timestamp_ms / 1000.0, aggregate))
+                ret = (current_timestamp_ms / 1000.0, aggregate)
+            del current_points[:]
+            return ret
 
         for successfull, rows_or_exception in query_results:
             if first_exc:
@@ -614,22 +626,22 @@ class Accessor(object):
                 timestamp_ms = self._round_down(timestamp_ms, step_ms)
 
                 if current_timestamp_ms != timestamp_ms:
-                    if current_timestamp_ms is not None:
-                        # This is the first point we encounter, do not emit it on its own,
-                        # rather wait until we have found points fitting in the next period.
-                        add_current_points_to_res()
+                    ts, point = run_aggregation()
+                    if ts is not None:
+                        yield (ts, point)
+
                     current_timestamp_ms = timestamp_ms
-                    del current_points[:]
 
                 current_points.append(row[2])
 
         if first_exc:
             raise RetryableCassandraError(first_exc)
 
+        # Aggregate remaining points.
         if current_timestamp_ms is not None:
-            # We haven't encountered any point.
-            add_current_points_to_res()
-        return res
+            ts, point = run_aggregation()
+            if ts is not None:
+                yield (ts, point)
 
     @property
     def is_connected(self):

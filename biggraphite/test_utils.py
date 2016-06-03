@@ -63,6 +63,23 @@ def create_unreplicated_keyspace(contact_points, port, keyspace):
     cluster.shutdown()
 
 
+def prepare_graphite():
+    """Make sure that we have a working Graphite environment."""
+    # Setup sys.path
+    prepare_graphite_imports()
+
+    # Point the the correct settings
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
+
+    # Redirect logs somewhere writable
+    from django.conf import settings
+    settings.LOG_DIR = tempfile.gettempdir()
+
+    # Setup Django
+    import django
+    django.setup()
+
+
 def prepare_graphite_imports():
     """Add to graphite libs to sys.path."""
     try:
