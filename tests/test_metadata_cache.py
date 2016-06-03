@@ -57,8 +57,10 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertIs(first, second)
 
     def test_unicode(self):
-        metric = bg_accessor.MetricMetadata(u"a.b.testé")
+        metric_name = u"a.b.testé"
+        metric = bg_accessor.MetricMetadata(metric_name)
         self.metadata_cache.create_metric(metric)
+        self.metadata_cache.get_metric(metric_name)
 
 
 if __name__ == "__main__":
