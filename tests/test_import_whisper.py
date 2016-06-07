@@ -67,12 +67,12 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
 
         self._call_main()
 
-        meta = self.accessor.get_metric(metric)
-        self.assertTrue(meta)
-        self.assertEqual(meta.name, metric)
-        self.assertEqual(meta.carbon_aggregation, aggregation_method)
-        self.assertEqual(meta.carbon_xfilesfactor, xfilesfactor)
-        self.assertEqual(meta.carbon_retentions, retentions)
+        metric = self.accessor.get_metric(metric)
+        self.assertTrue(metric)
+        self.assertEqual(metric.name, metric.name)
+        self.assertEqual(metric.carbon_aggregation, aggregation_method)
+        self.assertEqual(metric.carbon_xfilesfactor, xfilesfactor)
+        self.assertEqual(metric.carbon_retentions, retentions)
 
         points_again = self.accessor.fetch_points(metric, time_from, time_to, step=1)
         self.assertEqual(points[-high_precision_duration:], points_again)

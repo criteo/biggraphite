@@ -86,6 +86,16 @@ def prepare_graphite_imports():
                 sys.path.insert(0, path)
 
 
+def make_metric(name, metadata=None, *args, **kwargs):
+    """Create a bg_accesor.Metric with specified metadata."""
+    assert not args
+    if metadata:
+        assert isinstance(metadata, bg_accessor.MetricMetadata)
+    else:
+        metadata = bg_accessor.MetricMetadata(**kwargs)
+    return bg_accessor.Metric(name, metadata)
+
+
 class FakeAccessor(object):
     """A fake acessor that never connects and doubles as a fake MetadataCache."""
 
@@ -106,7 +116,9 @@ class FakeAccessor(object):
         """Validate arguments of a method on the real Accessor."""
         method = getattr(self._real_accessor, method_name)
         # Will raise a TypeError if arguments don't match.
-        inspect.getcallargs(method, *args, **kwargs)
+        bound = inspect.getcallargs(method, *args, **kwargs)
+        if "metric" in bound:
+            assert isinstance(bound["metric"], bg_accessor.Metric), type(bound["metric"])
 
     @property
     def is_connected(self):
@@ -126,11 +138,11 @@ class FakeAccessor(object):
         self.__check_args("shutdown", *args, **kwargs)
         self._is_connected = False
 
-    def insert_points(self, metric_name, timestamps_and_values):
+    def insert_points(self, metric, timestamps_and_values):
         """See the real Accessor for a description."""
-        self.__check_args("insert_points", metric_name, timestamps_and_values)
-        assert metric_name in self._metric_to_metadata
-        points = self._metric_to_points[metric_name]
+        self.__check_args("insert_points", metric, timestamps_and_values)
+        assert metric.name in self._metric_to_metadata
+        points = self._metric_to_points[metric.name]
         for t, v in timestamps_and_values:
             points[t] = v
 
@@ -141,11 +153,11 @@ class FakeAccessor(object):
         self._metric_to_metadata.clear()
         self._directory_names.clear()
 
-    def create_metric(self, metric_metadata):
+    def create_metric(self, metric):
         """See the real Accessor for a description."""
-        self.__check_args("create_metric", metric_metadata)
-        self._metric_to_metadata[metric_metadata.name] = metric_metadata
-        parts = metric_metadata.name.split(".")[:-1]
+        self.__check_args("create_metric", metric)
+        self._metric_to_metadata[metric.name] = metric.metadata
+        parts = metric.name.split(".")[:-1]
         path = []
         for part in parts:
             path.append(part)
@@ -175,13 +187,17 @@ class FakeAccessor(object):
     def get_metric(self, metric_name):
         """See the real Accessor for a description."""
         self.__check_args("get_metric", metric_name)
-        return self._metric_to_metadata.get(metric_name)
+        metadata = self._metric_to_metadata.get(metric_name)
+        if metadata:
+            return bg_accessor.Metric(metric_name, metadata)
+        else:
+            return None
 
-    def fetch_points(self, metric_name, time_start, time_end, step,
-                     aggregator_func=None, _fake_query_results=None):
+    def fetch_points(self, metric, time_start, time_end, step, _fake_query_results=None):
         """See the real Accessor for a description."""
+        assert isinstance(metric, bg_accessor.Metric), type(metric)
         if not _fake_query_results:
-            points = self._metric_to_points[metric_name]
+            points = self._metric_to_points[metric.name]
             rows = []
             for ts in points.irange(time_start, time_end):
                 # A row is time_base_ms, time_offset_ms, value
@@ -189,7 +205,7 @@ class FakeAccessor(object):
                 rows.append(row)
             _fake_query_results = [(True, rows)]
         return self._real_accessor.fetch_points(
-            metric_name, time_start, time_end, step, aggregator_func, _fake_query_results,
+            metric, time_start, time_end, step, _fake_query_results,
         )
 
 

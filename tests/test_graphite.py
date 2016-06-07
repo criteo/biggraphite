@@ -18,7 +18,6 @@ from __future__ import print_function
 
 import unittest
 
-from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 from biggraphite.plugins import graphite as bg_graphite
 
@@ -59,15 +58,12 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
     _POINTS = _make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_PRECISION,
     )
+    _METRIC = bg_test_utils.make_metric(_METRIC_NAME, carbon_retentions=_RETENTIONS)
 
     def setUp(self):
         super(TestReader, self).setUp()
-        meta = bg_accessor.MetricMetadata(
-            _METRIC_NAME,
-            carbon_retentions=self._RETENTIONS,
-        )
-        self.accessor.create_metric(meta)
-        self.accessor.insert_points(_METRIC_NAME, self._POINTS)
+        self.accessor.create_metric(self._METRIC)
+        self.accessor.insert_points(self._METRIC, self._POINTS)
         self.reader = bg_graphite.Reader(self.accessor, self.metadata_cache, _METRIC_NAME)
 
     def test_fresh_read(self):
@@ -109,9 +105,9 @@ class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
         super(TestFinder, self).setUp()
-        for metric in "a", "a.a", "a.b.c", "x.y":
-            meta = bg_accessor.MetricMetadata(metric)
-            self.accessor.create_metric(meta)
+        for metric_name in "a", "a.a", "a.b.c", "x.y":
+            metric = bg_test_utils.make_metric(metric_name)
+            self.accessor.create_metric(metric)
         self.finder = bg_graphite.Finder(
             accessor=self.accessor,
             metadata_cache=self.metadata_cache,

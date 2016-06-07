@@ -73,7 +73,6 @@ class _Worker(object):
             for a in info["archives"]
         ]
         return bg_accessor.MetricMetadata(
-            name=metric_name,
             carbon_aggregation=info["aggregationMethod"],
             carbon_retentions=retentions,
             carbon_xfilesfactor=info["xFilesFactor"],
@@ -126,8 +125,9 @@ class _Worker(object):
         metric_name = metric_name_from_wsp(self._opts.root_directory, path)
         points = self._read_points(path)
         meta = self._read_metadata(metric_name, path)
-        self._accessor.create_metric(meta)
-        self._accessor.insert_points(metric_name, points)
+        metric = bg_accessor.Metric(metric_name, meta)
+        self._accessor.create_metric(metric)
+        self._accessor.insert_points(metric, points)
         return len(points)
 
 

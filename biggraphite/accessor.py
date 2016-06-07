@@ -23,7 +23,6 @@ import cassandra
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
-import statistics
 
 
 class Error(Exception):
@@ -184,27 +183,34 @@ def encode_metric_name(name):
 
 
 class MetricMetadata(object):
-    """Represents all information about a metric."""
+    """Represents all information about a metric except its name.
+
+    Not meant to be mutated.
+    """
 
     __slots__ = (
         "carbon_aggregation", "carbon_highest_precision",
-        "carbon_retentions", "carbon_xfilesfactor", "name",
+        "carbon_retentions", "carbon_xfilesfactor",
     )
 
     _DEFAULT_AGGREGATION = "average"
     _DEFAULT_RETENTIONS = [[1, 24*3600]]  # One second for one day
     _DEFAULT_XFILESFACTOR = 0.5
 
-    def __init__(self, name,
-                 carbon_aggregation=None, carbon_retentions=None, carbon_xfilesfactor=None):
+    def __init__(self, carbon_aggregation=None, carbon_retentions=None, carbon_xfilesfactor=None):
         """Record its arguments."""
-        self.name = encode_metric_name(name)
         self.carbon_aggregation = carbon_aggregation or self._DEFAULT_AGGREGATION
         self.carbon_retentions = carbon_retentions or self._DEFAULT_RETENTIONS
         self.carbon_xfilesfactor = carbon_xfilesfactor
         if self.carbon_xfilesfactor is None:
             self.carbon_xfilesfactor = self._DEFAULT_XFILESFACTOR
         self.carbon_highest_precision = self.carbon_retentions[0][0]
+
+    def __setattr__(self, name, value):
+        # carbon_highest_precision is the last attribute __init__ sets.
+        if hasattr(self, "carbon_highest_precision"):
+            raise AttributeError("can't set attribute")
+        super(MetricMetadata, self).__setattr__(name, value)
 
     def as_json(self):
         """Serialize MetricMetadata into a JSon string from_json() can parse."""
@@ -219,16 +225,14 @@ class MetricMetadata(object):
         }
 
     @classmethod
-    def from_json(cls, name, s):
+    def from_json(cls, s):
         """Parse MetricMetadata from a JSon string produced by as_json()."""
-        d = json.loads(s)
-        return cls.from_string_dict(name, d)
+        return cls.from_string_dict(json.loads(s))
 
     @classmethod
-    def from_string_dict(cls, name, d):
+    def from_string_dict(cls, d):
         """Turn a dict of string to string into a MetricMetadata."""
         return cls(
-            name=name,
             carbon_aggregation=d.get("carbon_aggregation"),
             carbon_retentions=json.loads(d.get("carbon_retentions")),
             carbon_xfilesfactor=float(d.get("carbon_xfilesfactor")),
@@ -262,6 +266,36 @@ class MetricMetadata(object):
         if self.carbon_aggregation == "sum":
             return sum(points)
         raise InvalidArgumentError("Unknown aggregation method: %s" % self.carbon_aggregation)
+
+
+class Metric(object):
+    """Represents all information about a metric.
+
+    This is not an instance of MetricMetadata: It cannot be serialized
+    in JSON to minimise confusion in cache that expects few possible
+    Metadata at any time.
+
+    Not meant to be mutated.
+    """
+
+    __slots__ = ("name", "metadata")
+
+    def __init__(self, name, metadata):
+        """Record its arguments."""
+        super(Metric, self).__init__()
+        assert metadata, "Metric: metadata is None"
+        assert name, "Metric: name is None"
+        self.name = encode_metric_name(name)
+        self.metadata = metadata
+
+    def __getattr__(self, name):
+        return getattr(self.metadata, name)
+
+    def __dir__(self):
+        res = dir(self.metadata)
+        res.extend(self.__slots__)
+        res.sort()
+        return res
 
 
 class Accessor(object):
@@ -387,7 +421,7 @@ class Accessor(object):
             % (components_names, components_marks)
         )
         self.__select_metric_statement = self.__session.prepare(
-            "SELECT name, config FROM metrics WHERE name = ?;"
+            "SELECT config FROM metrics WHERE name = ?;"
         )
 
     def _make_insert_points(self, metric_name, timestamp, value):
@@ -397,16 +431,16 @@ class Accessor(object):
         time_start_ms = timestamp_ms - time_offset_ms
         return (self.__insert_statement, (metric_name, time_start_ms, time_offset_ms, value))
 
-    def insert_points(self, metric_name, timestamps_and_values):
+    def insert_points(self, metric, timestamps_and_values):
         """Insert points for a given metric.
 
         Args:
-          metric_name: A graphite-like metric name (like "my.own.metric")
+          metric: A Metric instance.
           timestamps_and_values: An iterable of (timestamp in seconds, values as double)
         """
         self._check_connected()
         statements_and_args = [
-            self._make_insert_points(metric_name, t, v)
+            self._make_insert_points(metric.name, t, v)
             for t, v in timestamps_and_values
         ]
         c_concurrent.execute_concurrent(
@@ -446,19 +480,18 @@ class Accessor(object):
             res.append(statement)
         return res
 
-    def create_metric(self, metric_metadata):
-        """Create a metric definition from a MetricMetadata.
+    def create_metric(self, metric):
+        """Create a metric definition from a Metric.
 
         Parent directory are implicitly created.
         As this requires O(10) sequential inserts, it is worthwile to first check
         if the metric exists and not recreate it if it does.
 
         Args:
-          metric_metadata: The metric definition.
+          metric: The metric definition.
         """
         self._check_connected()
-        metric_name = metric_metadata.name
-        components = self._components_from_name(metric_name)
+        components = self._components_from_name(metric.name)
         queries = []
 
         directory_path = []
@@ -474,10 +507,10 @@ class Accessor(object):
             ))
         padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
         # Finally, create the metric
-        metric_metadata_dict = metric_metadata.as_string_dict()
+        metric_metadata_dict = metric.metadata.as_string_dict()
         queries.append((
             self.__insert_metrics_statement,
-            [metric_name, metric_metadata_dict] + components + padding,
+            [metric.name, metric_metadata_dict] + components + padding,
         ))
 
         # We have to run queries in sequence as:
@@ -488,24 +521,15 @@ class Accessor(object):
         for statement, args in queries:
             self.__session.execute(statement, args)
 
-    @staticmethod
-    def median_aggregator(time_span, points):
-        """The default aggregator for fetch(), returns the median of points."""
-        if points:
-            return statistics.median(points)
-        else:
-            return None
-
     def get_metric(self, metric_name):
-        """Return a MetricMetadata for this metric_name, None if no such metric."""
+        """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
         metric_name = encode_metric_name(metric_name)
         result = list(self.__session.execute(self.__select_metric_statement, (metric_name, )))
         if not result:
             return None
-        name = result[0][0]
-        config = result[0][1]
-        return MetricMetadata.from_string_dict(name, config)
+        config = result[0][0]
+        return Metric(metric_name, MetricMetadata.from_string_dict(config))
 
     # TODO: handle ranges and the like
     # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
@@ -546,26 +570,19 @@ class Accessor(object):
         metrics_names.sort()
         return metrics_names
 
-    # TODO: Remove aggregator_func and perform aggregation server-side.
-    def fetch_points(self, metric_name, time_start, time_end, step,
-                     aggregator_func=None, _fake_query_results=None):
+    # TODO: Perform aggregation server-side.
+    def fetch_points(self, metric, time_start, time_end, step, _fake_query_results=None):
         """Fetch points from time_start included to time_end excluded with a duration of step.
 
         connect() must have previously been called.
 
         Args:
+          metric: The metric for which to insert point.
           time_start: timestamp in second from the Epoch as an int, inclusive,
             must be a multiple of step
           time_end: timestamp in second from the Epoch as an int, exclusive,
             must be a multiple of step
           step: time delta in seconds as an int, must be > 0
-          aggregator_func: (time_span, values...)->value called to aggregate
-            values regarding a single step. defaults to self.median_aggregator().
-            Args:
-              time_span: the duration for which we are aggregating in seconds
-              values: a list of float
-            Returns:
-              either a float or None to reject the step
           _fake_query_results: Only meant for test_utils.FakeAccessor, considered to be
             an implementation detail and may go away at any time.
 
@@ -576,14 +593,14 @@ class Accessor(object):
         Raises:
           InvalidArgumentError: if time_start, time_end or step are not as per above
         """
-        self._fetch_points_validate_args(metric_name, time_start, time_end, step, aggregator_func)
-        aggregator_func = aggregator_func or self.median_aggregator
+        self._fetch_points_validate_args(metric, time_start, time_end, step)
         step_ms = int(step) * 1000
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
         time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
-        statements_and_args = self._make_all_points_selects(metric_name, time_start_ms, time_end_ms)
+        statements_and_args = self._make_all_points_selects(metric.name, time_start_ms, time_end_ms)
         if _fake_query_results:
+            assert isinstance(_fake_query_results, list), _fake_query_results
             query_results = _fake_query_results
         else:
             self._check_connected()
@@ -598,7 +615,7 @@ class Accessor(object):
         res = []
 
         def add_current_points_to_res():
-            aggregate = aggregator_func(step, current_points)
+            aggregate = metric.metadata.carbon_aggregate_points(step, current_points)
             if aggregate is not None:
                 res.append((current_timestamp_ms / 1000.0, aggregate))
 
@@ -641,8 +658,10 @@ class Accessor(object):
             raise NotConnectedError("Accessor's connect() wasn't called")
 
     @staticmethod
-    def _fetch_points_validate_args(metric_name, time_start, time_end, step, aggregator_func):
+    def _fetch_points_validate_args(metric, time_start, time_end, step):
         """Check arguments as per fetch() spec, raises InvalidArgumentError if needed."""
+        if not isinstance(metric, Metric):
+            raise InvalidArgumentError("%s is not a Metric instance" % metric)
         if step < 1:
             raise InvalidArgumentError("step (%d) is not positive" % step)
         if time_start % step or time_start < 0:
