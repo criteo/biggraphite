@@ -42,20 +42,20 @@ def _round_up(rounded, divider):
 class Reader(object):
     """As per the Graphite API, fetches points for and metadata for a given metric."""
 
-    __slots__ = ("_accessor", "_metric", "_metadata", "_metadata_cache", )
+    __slots__ = ("_accessor", "_metric_name", "_metric", "_metadata_cache", )
 
-    def __init__(self, accessor, metadata_cache, metric):
+    def __init__(self, accessor, metadata_cache, metric_name):
         """Create a new reader."""
         self._accessor = accessor
-        self._metric = metric
-        self._metadata = None
+        self._metric_name = metric_name
+        self._metric = None
         self._metadata_cache = metadata_cache
 
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
         # TODO: We do not support downsampling yet.
-        if self._metadata and self._metadata.carbon_retentions:
-            step, retention = self._metadata.carbon_retentions[0]
+        if self._metric and self._metric.carbon_retentions:
+            step, retention = self._metric.carbon_retentions[0]
         else:
             step, retention = 1, 60
 
@@ -72,9 +72,10 @@ class Reader(object):
             end_time = start_time
         return start_time, end_time, step
 
-    def __refresh_metadata(self):
-        if self._metadata is None:
-            self._metadata = self._metadata_cache.get_metric(self._metric)
+    def __refresh_metric(self):
+        if self._metric is None:
+            self._metric = self._metadata_cache.get_metric(self._metric_name)
+            self._metadata_cache = None
 
     def fetch(self, start_time, end_time, now=None):
         """Fetch point for a given interval as per the Graphite API.
@@ -88,14 +89,13 @@ class Reader(object):
           A tuple made of (rounded start time, rounded end time, step as per retention), points
           Points is a list for which missing points are set to None.
         """
-        self.__refresh_metadata()
+        self.__refresh_metric()
         if now is None:
             now = time.time()
 
         # TODO: We do not support downsampling yet.
         start_time, end_time, step = self.__get_time_info(start_time, end_time, now)
-        ts_and_points = self._accessor.fetch_points(self._metric, start_time, end_time, step,
-                                                    self._metadata.carbon_aggregate_points)
+        ts_and_points = self._accessor.fetch_points(self._metric, start_time, end_time, step)
         points_num = (end_time - start_time) // step
         # TODO: Consider wrapping an array (using NaN for None) for speed&memory efficiency
         points = [None] * points_num
@@ -113,7 +113,7 @@ class Reader(object):
         Returns:
           A list of interval.Intervals for which we have data.
         """
-        self.__refresh_metadata()
+        self.__refresh_metric()
         if now is None:
             now = time.time()
         # Call __get_time_info with the widest conceivable range will make it be

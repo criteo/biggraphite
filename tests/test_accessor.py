@@ -21,7 +21,7 @@ import statistics
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 
-_METRIC = "test.metric"
+_METRIC = bg_test_utils.make_metric("test.metric")
 
 # Points test query.
 _QUERY_RANGE = 3600
@@ -45,7 +45,6 @@ class TestMetricMetadata(unittest.TestCase):
     def _make_metric_metadata(self, **kwargs):
         """Like bg_accessor.MetricMetadata but with different default values."""
         kwargs.setdefault("carbon_retentions", self._RETENTIONS)
-        kwargs.setdefault("name", _METRIC)
         return bg_accessor.MetricMetadata(**kwargs)
 
     def test_carbon_aggregations(self):
@@ -79,8 +78,16 @@ class TestMetricMetadata(unittest.TestCase):
         self.assertFalse(m_explicit.carbon_aggregate_points(points_duration, points=points[:2]))
         self.assertTrue(m_explicit.carbon_aggregate_points(points_duration, points=points[:3]))
 
-        m_default = bg_accessor.MetricMetadata(_METRIC)
+        m_default = bg_accessor.MetricMetadata()
         self.assertEqual(0.5, m_default.carbon_xfilesfactor)
+
+
+class TestMetric(unittest.TestCase):
+
+    def test_dir(self):
+        metric = bg_test_utils.make_metric("a.b.c")
+        self.assertIn("name", dir(metric))
+        self.assertIn("carbon_xfilesfactor", dir(metric))
 
 
 class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
@@ -98,10 +105,11 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertFalse(self.accessor.is_connected)
 
     def test_fetch_empty(self):
+        no_such_metric = bg_test_utils.make_metric("no.such.metric")
         self.accessor.insert_points(_METRIC, _POINTS)
         self.accessor.drop_all_metrics()
         self.assertFalse(
-            self.accessor.fetch_points("no.such.metric", _POINTS_START, _POINTS_END, step=1))
+            self.accessor.fetch_points(no_such_metric, _POINTS_START, _POINTS_END, step=1))
         self.assertFalse(
             self.accessor.fetch_points(_METRIC, _POINTS_START, _POINTS_END, step=1))
 
@@ -139,8 +147,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
     def test_glob_metrics(self):
         for name in "a", "a.a", "a.b", "a.a.a", "x.y.z":
-            meta = bg_accessor.MetricMetadata(name)
-            self.accessor.create_metric(meta)
+            metric = bg_test_utils.make_metric(name)
+            self.accessor.create_metric(metric)
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
@@ -159,8 +167,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
     def test_glob_directories(self):
         for name in "a", "a.b", "x.y.z":
-            meta = bg_accessor.MetricMetadata(name)
-            self.accessor.create_metric(meta)
+            metric = bg_test_utils.make_metric(name)
+            self.accessor.create_metric(metric)
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
@@ -178,17 +186,18 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         assert_find("*", [])
 
     def test_create_metrics(self):
-        metric_data = {
-            "name": "a.b.c.d.e.f",
+        meta_dict = {
             "carbon_aggregation": "last",
             "carbon_retentions": [[1, 60], [60, 3600]],
             "carbon_xfilesfactor": 0.3,
         }
-        metric = bg_accessor.MetricMetadata(**metric_data)
+        metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
+
         self.accessor.create_metric(metric)
-        metric_again = self.accessor.get_metric(metric_data['name'])
-        for k, v in metric_data.iteritems():
-            self.assertEqual(v, getattr(metric_again, k))
+        metric_again = self.accessor.get_metric(metric.name)
+        self.assertEqual(metric.name, metric_again.name)
+        for k, v in meta_dict.iteritems():
+            self.assertEqual(v, getattr(metric_again.metadata, k))
 
 
 if __name__ == "__main__":

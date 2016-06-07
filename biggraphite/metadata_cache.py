@@ -114,17 +114,17 @@ class DiskCache(object):
             self.__env.close()
             self.__env = None
 
-    def create_metric(self, metadata):
-        """Create a metric definition from a MetricMetadata.
+    def create_metric(self, metric):
+        """Create a metric definition from a Metric.
 
         Args:
-          metadata: The metric definition.
+          metric: The metric definition.
         """
-        self.__accessor.create_metric(metadata)
-        self._cache(metadata)
+        self.__accessor.create_metric(metric)
+        self._cache(metric.name, metric.metadata)
 
     def get_metric(self, metric_name):
-        """Return a MetricMetadata for this metric_name, None if no such metric."""
+        """Return a Metric for this metric_name, None if no such metric."""
         metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
             metadata_str = txn.get(metric_name)
@@ -134,23 +134,25 @@ class DiskCache(object):
             with self.__json_cache_lock:
                 metadata = self.__json_cache.get(metadata_str)
                 if not metadata:
-                    metadata = bg_accessor.MetricMetadata.from_json(metric_name, metadata_str)
+                    metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
                     self.__json_cache[metadata_str] = metadata
-            return metadata
         else:
             # on disk cache miss
             self.miss_count += 1
             with self.__accessor_lock:
                 metadata = self.__accessor.get_metric(metric_name)
-            self._cache(metadata)
-            return metadata
+            self._cache(metric_name, metadata)
 
-    def _cache(self, metadata):
+        if metadata:
+            return bg_accessor.Metric(metric_name, metadata)
+        else:
+            return None
+
+    def _cache(self, metric_name, metadata):
         """If metadata add it to the cache."""
         if not metadata:
             # Do not cache absent metrics, they will probably soon be created.
             return None
         metadata_json = metadata.as_json()
-        name = metadata.name
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            txn.put(name, metadata_json, dupdata=False, overwrite=True)
+            txn.put(metric_name, metadata_json, dupdata=False, overwrite=True)

@@ -17,10 +17,9 @@ from __future__ import print_function
 
 import unittest
 
-from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 
-_TEST_METRIC = bg_accessor.MetricMetadata("a.b.c")
+_TEST_METRIC = bg_test_utils.make_metric("a.b.c")
 
 
 class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
@@ -54,11 +53,11 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         self.metadata_cache.create_metric(_TEST_METRIC)
         first = self.metadata_cache.get_metric(_TEST_METRIC.name)
         second = self.metadata_cache.get_metric(_TEST_METRIC.name)
-        self.assertIs(first, second)
+        self.assertIs(first.metadata, second.metadata)
 
     def test_unicode(self):
         metric_name = u"a.b.testé"
-        metric = bg_accessor.MetricMetadata(metric_name)
+        metric = bg_test_utils.make_metric(metric_name)
         self.metadata_cache.create_metric(metric)
         self.metadata_cache.get_metric(metric_name)
 
