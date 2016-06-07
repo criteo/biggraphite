@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Abstracts querying Cassandra to manipulate timeseries."""
 from __future__ import print_function
 
@@ -56,27 +55,6 @@ class TooManyMetrics(InvalidArgumentError):
 
 _COMPONENTS_MAX_LEN = 64
 _LAST_COMPONENT = "__END__"
-# THE "METRICS" TABLE
-# To resolve globs, we store metrics in a table that among other
-# things contain 64 columns, one for each path component.
-# The metric "a.b.c" is therefore indexed as:
-#   name="a.b.c", config=...,
-#   component_0="a", component_1="b", component_2="c", component_3="__END__",
-#   component_4=NULL, component_5=NULL, ..., component_63=NULL
-# A SASI Index is declared on each of the component columns. We use SASI
-# because it knows to process multi-column queries without filtering.
-#
-# The way it works is by indexing tokens in a B+Tree for each column of
-# each sstable.
-# After finding the right places in the B+Trees, SASI picks the column with
-# the least results, and merge the result together. It uses multiple lookups
-# if one column is 100 times bigger than the other, otherwise it uses a merge join.
-#
-# SASI support for LIKE queries is limited to finding substrings.
-# So when resolving a query like a.x*z.c we query for a.*.c and then do
-# client-side filtering.
-#
-# For more details on SASI: https://github.com/apache/cassandra/blob/trunk/doc/SASI.md
 _SETUP_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
@@ -88,29 +66,6 @@ _SETUP_CQL_METRICS = str(
     "  PRIMARY KEY (name)"
     ");"
 )
-# THE "DIRECTORIES" TABLE
-# Similar to the metrics table, we create for parents of all metrics an entry in a
-# directory table. It is used to implement the 'metric' API in graphite.
-#
-# Directories are implicitely created before metrics by the Accessor.create_metric()
-# function. Because of this, it is possible to end up with an empty directory (if the
-# program crashes). A cleaner job will be needed if they accumulate for too long.
-#
-# WHY TWO DIFFERENT TABLES?
-# Pros of 2 tables:
-#  - We expect them to end up with increasingly different metadata (quotas on directories and
-#    whisper-header-like on metrics) and the semantic of a merged entry will become complex
-#  - We suspect that implementing quota or cleaning of empty directories will be easier if
-#    we can iterate on directories without filtering all metrics
-# Pros of 1 table:
-#  - We get batch transactions to update metadata at the same time as parent entries
-#  - We could not need an additional parameter for functions that use fields presents in
-#    both metrics and directories (but I expect they will diverge later to make the return
-#    type not depend on the argument)
-#  - We could still build a materialized view of directories only to get performance
-#    benefits above
-# None of the points above is a strong decision factor, but merging things later is generally
-# easier than untangling them so we keept them separate for now.
 _SETUP_CQL_DIRECTORIES = str(
     "CREATE TABLE IF NOT EXISTS directories ("
     "  name text,"
@@ -128,16 +83,6 @@ _SETUP_CQL_PATH_INDEXES = [
     for t in 'metrics', 'directories'
     for n in range(_COMPONENTS_MAX_LEN)
 ]
-# THE "RAW" TABLE
-# To allow for efficient compaction, we use the DateTieredCompactionStrategy, "DTCS".
-# Its usage in the context of timeserie databases is described at:
-# http://www.datastax.com/dev/blog/datetieredcompactionstrategy
-#
-# Another trick we use is grouping related timestamps (_ROW_SIZE_MS)
-# in the same row described by time_start_ms and using time_offset_ms to describe
-# a delta from it. This saves space in two ways:
-#  - No need to repeat metric names on each row.
-#  - The relative time offset is 4 bytes only when a timestamp would be 8.
 _ROW_SIZE_MS = 3600 * 1000
 _SETUP_CQL_DATAPOINTS = str(
     "CREATE TABLE IF NOT EXISTS datapoints ("
