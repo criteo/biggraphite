@@ -16,18 +16,23 @@ Developpment
 Environment
 -----------
 
-    $ virtualenv bg
-    $ source bg/bin/activate
+```
+# Setup the virtualenv
+$ export BG_VENV=bg
+$ virtualenv ${BG_VENV}
+$ source bg/bin/activate
 
-    $ export GRAPHITE_NO_PREFIX=true
-    $ pip install -r requirements.txt
-    $ pip install -r tests-requirements.txt
+# Install Graphite dependencies
+$ export GRAPHITE_NO_PREFIX=true
+$ pip install -r requirements.txt
+$ pip install -r tests-requirements.txt
 
-    $ export CASSANDRA_VERSION=3.5
-    $ wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
-    $ tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
-    $ export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}
-
+# Install Cassandra
+$ export CASSANDRA_VERSION=3.5
+$ wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+$ tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+$ export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}
+```
 
 If you're planning to run tests, you'll also need to mount /tmp as tmpfs unless
 you have a fast SSD.
@@ -37,40 +42,49 @@ Tests
 
 To run tests you can either use `tox`:
 
-    $ pip install tox
-    $ tox
+```
+$ pip install tox
+$ tox
+```
+
+You can also simply use unittest.discover if you have a working dev environment.
 
 
-or simply
-
-    $ python -m unittest discover --failfast --verbose --catch
+```
+$ python -m unittest discover --failfast --verbose --catch
+```
 
 Test instance
 -------------
 
-Here is how to run a test instance of Graphite Web reading metrics
-from Cassandra:
+Assuming you have a working dev environment, here is how to run a test instance
+of Graphite Web reading metrics from Cassandra:
 
-    $ export PYTHONPATH=$(pwd)
-    $ export DJANGO_SETTINGS_MODULE=graphite.settings
-    $ django-admin migrate
-    $ django-admin migrate --run-syncdb
+```
+$ pip install -e .
+$ export DJANGO_SETTINGS_MODULE=graphite.settings
+$ django-admin migrate
+$ django-admin migrate --run-syncdb
+```
 
-Edit bg/lib/python2.7/site-packages/graphite/local_settings.py and put
+Edit ${BG_VENV}/lib/python2.7/site-packages/graphite/local_settings.py and put
 
-    DEBUG = True
-    LOG_DIR = '/tmp'
-    STORAGE_DIR = '/tmp'
-    STORAGE_FINDERS = ['graphite.finders.standard.StandardFinder', 'biggraphite.plugins.graphite.Finder']
-    BG_KEYSPACE = 'biggraphite'
-    BG_CONTACT_POINTS = '<MY_CASSANDRA_NODES>'
-    WEBAPP_DIR = "bg/webapp/"
-
+```
+import os
+DEBUG = True
+LOG_DIR = '/tmp'
+STORAGE_DIR = '/tmp'
+STORAGE_FINDERS = ['biggraphite.plugins.graphite.Finder']
+BG_KEYSPACE = 'biggraphite'
+BG_CONTACT_POINTS = '<MY_CASSANDRA_NODES>'
+WEBAPP_DIR = "%s/webapp/" % os.environ['BG_VENV']
+```
 
 Start Graphite Web
 
-    $ run-graphite-devel-server.py bg
-
+```
+$ run-graphite-devel-server.py ${BG_VENV}
+```
 
 Contact
 =======

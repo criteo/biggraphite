@@ -67,8 +67,6 @@ def prepare_graphite():
     """Make sure that we have a working Graphite environment."""
     # Setup sys.path
     prepare_graphite_imports()
-
-    # Point the the correct settings
     os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
 
     # Redirect logs somewhere writable

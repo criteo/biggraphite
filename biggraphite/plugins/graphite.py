@@ -19,7 +19,7 @@ import time
 
 from graphite import intervals
 from graphite import node
-from graphite.readers import FetchInProgress
+from graphite import readers
 
 
 from biggraphite import graphite_utils
@@ -112,7 +112,7 @@ class Reader(object):
                 points[index] = point
             return (start_time, end_time, step), points
 
-        return FetchInProgress(read_points)
+        return readers.FetchInProgress(read_points)
 
     def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.

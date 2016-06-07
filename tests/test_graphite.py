@@ -25,7 +25,7 @@ from biggraphite import test_utils as bg_test_utils
 bg_test_utils.prepare_graphite()
 
 from biggraphite.plugins import graphite as bg_graphite  # noqa
-from graphite.readers import FetchInProgress  # noqa
+from graphite import readers  # noqa
 
 _METRIC_NAME = "test_metric"
 
@@ -74,14 +74,10 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.insert_points(_METRIC_NAME, self._POINTS)
         self.reader = bg_graphite.Reader(self.accessor, self.metadata_cache, _METRIC_NAME)
 
-    def fetch(self, start_time=0, end_time=0, now=0):
-        result = self.reader.fetch(
-            start_time=start_time,
-            end_time=end_time,
-            now=now
-        )
+    def fetch(self, *args, **kwargs):
+        result = self.reader.fetch(*args, **kwargs)
         # Readers can return a list or an object.
-        if isinstance(result, FetchInProgress):
+        if isinstance(result, readers.FetchInProgress):
             result = result.waitForResults()
         return result
 

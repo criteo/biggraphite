@@ -91,10 +91,10 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         super(TestAccessorWithCassandra, self).setUp()
         self.accessor.connect()
 
-    def fetch(self, metric, start, end, step=1):
+    def fetch(self, *args, **kwargs):
         """Helper to fetch points as a list."""
-        ret = self.accessor.fetch_points(metric, start, end, step)
-        self.assertTrue(isinstance(ret, types.GeneratorType))
+        ret = self.accessor.fetch_points(*args, **kwargs)
+        self.assertTrue(hasattr(ret, '__next__'))
         return list(ret)
 
     def test_context_manager(self):
