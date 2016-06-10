@@ -63,43 +63,44 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def write(self, metric, datapoints):
         self._accessor.insert_points(
-            metric_name=metric, timestamps_and_values=datapoints)
+            metric=metric, timestamps_and_values=datapoints)
 
-    def exists(self, metric):
+    def exists(self, metric_name):
         # If exists returns "False" then "create" will be called.
         # New metrics are also throttled by some settings.
-        return bool(self._cache.get_metric(metric))
+        return bool(self._cache.get_metric(metric_name=metric_name))
 
-    def create(self, metric, retentions, xfilesfactor, aggregation_method):
+    def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
         metadata = accessor.MetricMetadata(
-            name=metric,
             carbon_aggregation=aggregation_method,
             carbon_retentions=retentions,
             carbon_xfilesfactor=xfilesfactor,
         )
-        self._cache.create_metric(metadata)
+        metric = accessor.Metric(metric_name, metadata)
+        self._cache.create_metric(metric)
 
-    def getMetadata(self, metric, key):
+    def getMetadata(self, metric_name, key):
         if key != "aggregationMethod":
-            msg = "%s[%s]: Unsupported metadata" % (metric, key)
+            msg = "%s[%s]: Unsupported metadata" % (metric_name, key)
             raise ValueError(msg)
-        metadata = self._cache.get_metric(metric)
+        metadata = self._cache.get_metric(metric_name=metric_name)
         if not metadata:
-            raise ValueError("%s: No such metric" % metric)
+            raise ValueError("%s: No such metric" % metric_name)
+        assert metadata.carbon_aggregation
         return metadata.carbon_aggregation
 
-    def setMetadata(self, metric, key, value):
-        old_value = self.getMetadata(metric, key)
+    def setMetadata(self, metric_name, key, value):
+        old_value = self.getMetadata(metric_name, key)
         # Changing aggregation or xfilesfactor requires invalidating aggregates and caches,
         # and the meaning of existing data would be ambiguous at best.
         # Changing retention would be feasible but we'll probably end up restraining
         # metadata to be by determined by prefix/suffix in the metric name for
         # efficiency.
         if old_value != value:
-            msg = "%s[%s]=%s: Changing metadata is not supported" % (metric, key, value)
+            msg = "%s[%s]=%s: Changing metadata is not supported" % (metric_name, key, value)
             raise ValueError(msg)
         return old_value
 
-    def getFilesystemPath(self, metric):
+    def getFilesystemPath(self, metric_name):
         # Only used for logging.
-        return "/".join(("//biggraphite", self._accessor.keyspace, metric))
+        return "/".join(("//biggraphite", self._accessor.keyspace, metric_name))

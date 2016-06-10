@@ -17,7 +17,6 @@ from __future__ import print_function
 
 import unittest
 
-from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 from biggraphite import graphite_utils as bg_gu
 
@@ -83,8 +82,8 @@ class TestGraphiteUtils(bg_test_utils.TestCaseWithFakeAccessor):
     def test_glob(self):
         self.addCleanup(self.accessor.drop_all_metrics)
         for name in "a", "a.b.c", "a.b.d", "x.y.c", "a.a.a":
-            meta = bg_accessor.MetricMetadata(name)
-            self.accessor.create_metric(meta)
+            metric = bg_test_utils.make_metric(name)
+            self.accessor.create_metric(metric)
         self.assertEqual((["a"], ["a", "x"]), bg_gu.glob(self.accessor, "*"))
         self.assertEqual((["a.b.c", "x.y.c"], []), bg_gu.glob(self.accessor, "*.*.c"))
         self.assertEqual((["a.a.a", "a.b.c", "a.b.d"], []), bg_gu.glob(self.accessor, "a.*.*"))
