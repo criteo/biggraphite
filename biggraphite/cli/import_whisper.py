@@ -27,7 +27,7 @@ import progressbar
 import whisper
 
 from biggraphite import accessor as bg_accessor
-
+from biggraphite.drivers import cassandra as bg_cassandra
 
 _DEV_NULL = open(os.devnull, "w")
 
@@ -57,7 +57,7 @@ def metric_name_from_wsp(root_dir, wsp_path):
 class _Worker(object):
 
     def __init__(self, opts):
-        self._accessor = bg_accessor.Accessor(
+        self._accessor = bg_cassandra.connect(
             keyspace=opts.keyspace,
             contact_points=opts.contact_points,
             port=opts.port,

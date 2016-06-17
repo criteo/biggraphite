@@ -16,25 +16,12 @@ from __future__ import print_function
 
 import unittest
 
-import statistics
+import mock
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 
 _METRIC = bg_test_utils.make_metric("test.metric")
-
-# Points test query.
-_QUERY_RANGE = 3600
-_QUERY_START = 1000 * _QUERY_RANGE
-_QUERY_END = _QUERY_START + _QUERY_RANGE
-
-# Points injected in the test DB, a superset of above.
-_EXTRA_POINTS = 1000
-_POINTS_START = _QUERY_START - _EXTRA_POINTS
-_POINTS_END = _QUERY_END + _EXTRA_POINTS
-_POINTS = [(t, v) for v, t in enumerate(xrange(_POINTS_START, _POINTS_END))]
-_USEFUL_POINTS = _POINTS[_EXTRA_POINTS:-_EXTRA_POINTS]
-assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 
 class TestMetricMetadata(unittest.TestCase):
@@ -95,21 +82,7 @@ class TestMetric(unittest.TestCase):
         self.assertIn("carbon_xfilesfactor", dir(metric))
 
 
-class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
-
-    def setUp(self):
-        """Create a new Accessor in self.acessor."""
-        super(TestAccessorWithCassandra, self).setUp()
-        self.accessor.connect()
-
-    def fetch(self, *args, **kwargs):
-        """Helper to fetch points as a list."""
-        # default kwargs for step.
-        if 'step' not in kwargs:
-            kwargs['step'] = 1
-        ret = self.accessor.fetch_points(*args, **kwargs)
-        self.assertTrue(hasattr(ret, "__iter__"))
-        return list(ret)
+class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_context_manager(self):
         self.accessor.shutdown()
@@ -118,104 +91,20 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             self.assertTrue(self.accessor.is_connected)
         self.assertFalse(self.accessor.is_connected)
 
-    def test_fetch_empty(self):
-        no_such_metric = bg_test_utils.make_metric("no.such.metric")
-        self.accessor.insert_points(_METRIC, _POINTS)
-        self.accessor.drop_all_metrics()
-        self.assertEqual(
-            len(self.fetch(no_such_metric, _POINTS_START, _POINTS_END)),
-            0
-        )
-        self.assertFalse(
-            len(self.fetch(_METRIC, _POINTS_START, _POINTS_END)),
-            0
-        )
+    def test_insert_error(self):
+        """Check that errors propagate from asynchronous API calls to synchronous ones."""
+        class CustomException(Exception):
+            pass
 
-    def test_insert_fetch(self):
-        self.accessor.insert_points(_METRIC, _POINTS)
-        self.addCleanup(self.accessor.drop_all_metrics)
+        def async_mock(metric, timestamps_and_values, on_done):
+            on_done(CustomException("fake failure"))
+            return mock.DEFAULT
 
-        fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END, step=1)
-        # assertEqual is very slow when the diff is huge, so we give it a chance of
-        # failing early to avoid imprecise test timeouts.
-        self.assertEqual(_QUERY_RANGE, len(fetched))
-        self.assertEqual(_USEFUL_POINTS[:10], fetched[:10])
-        self.assertEqual(_USEFUL_POINTS[-10:], fetched[-10:])
-        self.assertEqual(_USEFUL_POINTS, fetched)
-
-    def test_fetch_lower_res(self):
-        self.accessor.insert_points(_METRIC, _POINTS)
-        self.addCleanup(self.accessor.drop_all_metrics)
-
-        fetched_tenth = self.fetch(
-            _METRIC, _QUERY_START, _QUERY_END, step=_QUERY_RANGE / 10)
-        self.assertEqual(10, len(fetched_tenth))
-
-        fetched_median = self.fetch(
-            _METRIC, _QUERY_START, _QUERY_END, step=_QUERY_RANGE)
-        self.assertEqual(1, len(fetched_median))
-        median = statistics.median(v for t, v in _USEFUL_POINTS)
-        self.assertEqual(median, fetched_median[0][1])
-
-    @staticmethod
-    def _remove_after_dot(string):
-        if "." not in string:
-            return string
-        return string[:string.rindex(".")]
-
-    def test_glob_metrics(self):
-        for name in "a", "a.a", "a.b", "a.a.a", "x.y.z":
-            metric = bg_test_utils.make_metric(name)
-            self.accessor.create_metric(metric)
-
-        def assert_find(glob, expected_matches):
-            # Check we can find the matches of a glob
-            self.assertEqual(expected_matches, self.accessor.glob_metric_names(glob))
-
-        assert_find("a.a", ["a.a"])  # Test exact match
-        assert_find("A", [])  # Test case mismatch
-
-        # Test various lengths
-        assert_find("*", ["a"])
-        assert_find("*.*", ["a.a", "a.b"])
-        assert_find("*.*.*", ["a.a.a", "x.y.z"])
-
-        self.accessor.drop_all_metrics()
-        assert_find("*", [])
-
-    def test_glob_directories(self):
-        for name in "a", "a.b", "x.y.z":
-            metric = bg_test_utils.make_metric(name)
-            self.accessor.create_metric(metric)
-
-        def assert_find(glob, expected_matches):
-            # Check we can find the matches of a glob
-            self.assertEqual(expected_matches, self.accessor.glob_directory_names(glob))
-
-        assert_find("x.y", ["x.y"])  # Test exact match
-        assert_find("A", [])  # Test case mismatch
-
-        # Test various depths
-        assert_find("*", ["a", "x"])
-        assert_find("*.*", ["x.y"])
-        assert_find("*.*.*", [])
-
-        self.accessor.drop_all_metrics()
-        assert_find("*", [])
-
-    def test_create_metrics(self):
-        meta_dict = {
-            "carbon_aggregation": "last",
-            "carbon_retentions": [[1, 60], [60, 3600]],
-            "carbon_xfilesfactor": 0.3,
-        }
-        metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
-
-        self.accessor.create_metric(metric)
-        metric_again = self.accessor.get_metric(metric.name)
-        self.assertEqual(metric.name, metric_again.name)
-        for k, v in meta_dict.iteritems():
-            self.assertEqual(v, getattr(metric_again.metadata, k))
+        with mock.patch.object(self.accessor, "insert_points_async", side_effect=async_mock):
+            self.assertRaises(
+                CustomException,
+                self.accessor.insert_points, _METRIC, (0, 42),
+            )
 
 
 if __name__ == "__main__":

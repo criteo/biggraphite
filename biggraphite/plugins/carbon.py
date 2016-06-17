@@ -103,4 +103,4 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def getFilesystemPath(self, metric_name):
         # Only used for logging.
-        return "/".join(("//biggraphite", self._accessor.keyspace, metric_name))
+        return "/".join(("//biggraphite", self._accessor.backend_name, metric_name))
