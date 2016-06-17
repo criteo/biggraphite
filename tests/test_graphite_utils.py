@@ -78,9 +78,8 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
 
 
 class TestGraphiteUtils(bg_test_utils.TestCaseWithFakeAccessor):
-
+    
     def test_glob(self):
-        self.addCleanup(self.accessor.drop_all_metrics)
         for name in "a", "a.b.c", "a.b.d", "x.y.c", "a.a.a":
             metric = bg_test_utils.make_metric(name)
             self.accessor.create_metric(metric)

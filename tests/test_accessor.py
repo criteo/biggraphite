@@ -124,11 +124,11 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.drop_all_metrics()
         self.assertEqual(
             len(self.fetch(no_such_metric, _POINTS_START, _POINTS_END)),
-            0
+            0,
         )
         self.assertFalse(
             len(self.fetch(_METRIC, _POINTS_START, _POINTS_END)),
-            0
+            0,
         )
 
     def test_insert_fetch(self):
