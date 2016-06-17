@@ -22,7 +22,6 @@ from __future__ import print_function
 
 import collections
 import fnmatch
-import inspect
 import os
 import re
 import sys
@@ -35,6 +34,7 @@ import mock
 import sortedcontainers
 
 from biggraphite import accessor as bg_accessor
+from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite import metadata_cache as bg_metadata_cache
 
 
@@ -111,14 +111,12 @@ def make_metric(name, metadata=None, *args, **kwargs):
     return bg_accessor.Metric(name, metadata)
 
 
-class FakeAccessor(object):
+class FakeAccessor(bg_accessor.Accessor):
     """A fake acessor that never connects and doubles as a fake MetadataCache."""
 
-    def __init__(self, *args, **kwargs):
-        """Validate arguments like accessor.Accessor would."""
-        self._real_accessor = bg_accessor.Accessor(*args, **kwargs)
-        self.keyspace = self._real_accessor.keyspace
-        self._is_connected = False
+    def __init__(self):
+        """Create a new FakeAccessor."""
+        super(FakeAccessor, self).__init__("fake")
         self._metric_to_points = collections.defaultdict(sortedcontainers.SortedDict)
         self._metric_to_metadata = {}
         self._directory_names = sortedcontainers.SortedSet()
@@ -127,50 +125,36 @@ class FakeAccessor(object):
     def _metric_names(self):
         return self._metric_to_metadata.keys()
 
-    def __check_args(self, method_name, *args, **kwargs):
-        """Validate arguments of a method on the real Accessor."""
-        method = getattr(self._real_accessor, method_name)
-        # Will raise a TypeError if arguments don't match.
-        bound = inspect.getcallargs(method, *args, **kwargs)
-        if "metric" in bound:
-            assert isinstance(bound["metric"], bg_accessor.Metric), type(bound["metric"])
-
-    @property
-    def is_connected(self):
-        """See the real Accessor for a description."""
-        return self._is_connected
-
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
-        try:
-            self.__check_args("connect", *args, **kwargs)
-        except bg_accessor.CassandraError:
-            pass
-        self._is_connected = True
+        super(FakeAccessor, self).connect(*args, **kwargs)
+        self.is_connected = True
 
     def shutdown(self, *args, **kwargs):
         """See the real Accessor for a description."""
-        self.__check_args("shutdown", *args, **kwargs)
-        self._is_connected = False
+        super(FakeAccessor, self).shutdown(*args, **kwargs)
+        self.is_connected = False
 
-    def insert_points(self, metric, timestamps_and_values):
+    def insert_points_async(self, metric, timestamps_and_values, on_done=None):
         """See the real Accessor for a description."""
-        self.__check_args("insert_points", metric, timestamps_and_values)
+        super(FakeAccessor, self).insert_points_async(metric, timestamps_and_values, on_done)
         assert metric.name in self._metric_to_metadata
         points = self._metric_to_points[metric.name]
         for t, v in timestamps_and_values:
             points[t] = v
+        if on_done:
+            on_done(None)
 
     def drop_all_metrics(self, *args, **kwargs):
         """See the real Accessor for a description."""
-        self.__check_args("drop_all_metrics", *args, **kwargs)
+        super(FakeAccessor, self).drop_all_metrics(*args, **kwargs)
         self._metric_to_points.clear()
         self._metric_to_metadata.clear()
         self._directory_names.clear()
 
     def create_metric(self, metric):
         """See the real Accessor for a description."""
-        self.__check_args("create_metric", metric)
+        super(FakeAccessor, self).create_metric(metric)
         self._metric_to_metadata[metric.name] = metric.metadata
         parts = metric.name.split(".")[:-1]
         path = []
@@ -191,37 +175,38 @@ class FakeAccessor(object):
 
     def glob_metric_names(self, glob):
         """See the real Accessor for a description."""
-        self.__check_args("glob_metric_names", glob)
+        super(FakeAccessor, self).glob_metric_names(glob)
         return self.__glob_names(self._metric_names, glob)
 
     def glob_directory_names(self, glob):
         """See the real Accessor for a description."""
-        self.__check_args("glob_directory_names", glob)
+        super(FakeAccessor, self).glob_directory_names(glob)
         return self.__glob_names(self._directory_names, glob)
 
     def get_metric(self, metric_name):
         """See the real Accessor for a description."""
-        self.__check_args("get_metric", metric_name)
+        super(FakeAccessor, self).get_metric(metric_name)
         metadata = self._metric_to_metadata.get(metric_name)
         if metadata:
             return bg_accessor.Metric(metric_name, metadata)
         else:
             return None
 
-    def fetch_points(self, metric, time_start, time_end, step, _fake_query_results=None):
+    def fetch_points(self, metric, time_start, time_end, step):
         """See the real Accessor for a description."""
-        assert isinstance(metric, bg_accessor.Metric), type(metric)
-        if not _fake_query_results:
-            points = self._metric_to_points[metric.name]
-            rows = []
-            for ts in points.irange(time_start, time_end):
-                # A row is time_base_ms, time_offset_ms, value
-                row = (ts * 1000.0, 0, float(points[ts]))
-                rows.append(row)
-            _fake_query_results = [(True, rows)]
-        return self._real_accessor.fetch_points(
-            metric, time_start, time_end, step, _fake_query_results,
-        )
+        super(FakeAccessor, self).fetch_points(metric, time_start, time_end, step)
+        points = self._metric_to_points[metric.name]
+        rows = []
+        for ts in points.irange(time_start, time_end):
+            # A row is time_base_ms, time_offset_ms, value
+            row = (ts * 1000.0, 0, float(points[ts]))
+            rows.append(row)
+        query_results = [(True, rows)]
+
+        step_ms = int(step) * 1000
+        time_start_ms = int(time_start) * 1000
+        time_end_ms = int(time_end) * 1000
+        return bg_accessor.PointGrouper(metric, time_start_ms, time_end_ms, step_ms, query_results)
 
 
 class TestCaseWithTempDir(unittest.TestCase):
@@ -242,15 +227,16 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
     def setUp(self):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithFakeAccessor, self).setUp()
-        self.accessor = FakeAccessor(self.KEYSPACE, contact_points=[])
+        self.accessor = FakeAccessor()
+        self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
         self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 
-    def patch_accessor(self):
-        """Hijack Accessor() to return self.accessor."""
-        patcher = mock.patch('biggraphite.accessor.Accessor', return_value=self.accessor)
+    def fake_drivers(self):
+        """Hijack drivers' connect() functions to return self.accessor."""
+        patcher = mock.patch('biggraphite.drivers.cassandra.connect', return_value=self.accessor)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -295,8 +281,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     def setUp(self):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithAccessor, self).setUp()
-        self.accessor = bg_accessor.Accessor(
-            self.KEYSPACE, self.contact_points, self.port)
+        self.accessor = bg_cassandra.connect(self.KEYSPACE, self.contact_points, self.port)
         self.addCleanup(self.accessor.shutdown)
         self.addCleanup(self.__drop_all_metrics)
         self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)

@@ -66,6 +66,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
         super(TestReader, self).setUp()
+        self.accessor.connect()
         self.accessor.create_metric(self._METRIC)
         self.accessor.insert_points(self._METRIC, self._POINTS)
         self.reader = bg_graphite.Reader(self.accessor, self.metadata_cache, _METRIC_NAME)
