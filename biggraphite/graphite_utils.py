@@ -18,10 +18,10 @@ import fnmatch
 from os import path as os_path
 import re
 
-from biggraphite import accessor as bg_accessor
+from biggraphite.drivers import cassandra as bg_cassandra
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
-_GRAPHITE_GLOB_RE = re.compile("^[^*?{}\\[\\]]+$")
+_GRAPHITE_GLOB_RE = re.compile(r"^[^*?{}\[\]]+$")
 
 
 class Error(Exception):
@@ -35,15 +35,16 @@ class ConfigError(Error):
 def _get_setting(settings, name, optional=False):
     # Only way we found to support both Carbon & Django settings
     try:
-        return getattr(settings, name)
+        res = getattr(settings, name)
     except:
-        pass
-    if not optional:
+        res = None
+    if not res and not optional:
         raise ConfigError("%s missing in configuration" % name)
+    return res
 
 
 def accessor_from_settings(settings):
-    """Get accessor from configuration.
+    """Get Accessor from configuration.
 
     Args:
       settings: either carbon_conf.Settings or a Django-like settings object
@@ -57,7 +58,7 @@ def accessor_from_settings(settings):
     if port is not None:
         port = int(port)
     contact_points = [s.strip() for s in contact_points_str.split(",")]
-    return bg_accessor.Accessor(keyspace, contact_points, port)
+    return bg_cassandra.connect(keyspace, contact_points, port)
 
 
 def storage_path_from_settings(settings):

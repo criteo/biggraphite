@@ -45,7 +45,7 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
         super(TestMain, self).setUp()
-        self.patch_accessor()
+        self.fake_drivers()
         self.tempdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tempdir)
 
