@@ -32,7 +32,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
         super(TestCarbonDatabase, self).setUp()
-        self.patch_accessor()
+        self.fake_drivers()
         settings = carbon_conf.Settings()
         settings["BG_CONTACT_POINTS"] = "host1,host2"
         settings["BG_KEYSPACE"] = self.KEYSPACE
@@ -53,7 +53,6 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         path = self._plugin.getFilesystemPath(_TEST_METRIC)
         self.assertTrue(path.startswith("//biggraphite/"))
         self.assertIn(_TEST_METRIC, path)
-        self.assertIn(self.KEYSPACE, path)
 
     def test_create_get(self):
         other_metric = _TEST_METRIC + "-other"
