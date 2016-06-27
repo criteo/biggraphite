@@ -5,6 +5,8 @@
 Big Graphite
 ============
 
+[![Join the chat at https://gitter.im/criteo/biggraphite](https://badges.gitter.im/criteo/biggraphite.svg)](https://gitter.im/criteo/biggraphite?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 We are experimenting with storing Graphite metrics in Cassandra. This repository contains related code.
 
 *None of it is ready for its premiere yet.*
