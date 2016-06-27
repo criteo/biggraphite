@@ -68,13 +68,14 @@ class _Worker(object):
     @staticmethod
     def _read_metadata(metric_name, path):
         info = whisper.info(path)
-        retentions = [
-            (a["secondsPerPoint"], a["points"])
+        retentions = bg_accessor.Retention([
+            bg_accessor.Stage(precision=a["secondsPerPoint"], points=a["points"])
             for a in info["archives"]
-        ]
+        ])
+        aggregator = bg_accessor.Aggregator.from_carbon_name(info["aggregationMethod"])
         return bg_accessor.MetricMetadata(
-            carbon_aggregation=info["aggregationMethod"],
-            carbon_retentions=retentions,
+            aggregator=aggregator,
+            retention=retentions,
             carbon_xfilesfactor=info["xFilesFactor"],
         )
 

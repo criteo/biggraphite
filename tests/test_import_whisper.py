@@ -70,9 +70,9 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
         metric = self.accessor.get_metric(metric)
         self.assertTrue(metric)
         self.assertEqual(metric.name, metric.name)
-        self.assertEqual(metric.carbon_aggregation, aggregation_method)
+        self.assertEqual(metric.aggregator.carbon_name, aggregation_method)
         self.assertEqual(metric.carbon_xfilesfactor, xfilesfactor)
-        self.assertEqual(metric.carbon_retentions, retentions)
+        self.assertEqual(metric.retention.as_string, "10*1s:10*2s")
 
         points_again = list(self.accessor.fetch_points(metric, time_from, time_to, step=1))
         self.assertEqual(points[-high_precision_duration:], points_again)

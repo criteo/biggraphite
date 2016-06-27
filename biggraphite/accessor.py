@@ -18,8 +18,12 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import abc
+import array
 import codecs
+import enum
 import json
+import math
+import re
 import threading
 
 
@@ -36,6 +40,8 @@ class InvalidArgumentError(Error):
 
 
 _UTF8_CODEC = codecs.getencoder('utf8')
+
+_NAN = float("nan")
 
 
 def encode_metric_name(name):
@@ -65,6 +71,276 @@ def round_up(rounded, divider):
     return int(rounded + divider - 1) // divider * divider
 
 
+@enum.unique
+class Aggregator(enum.Enum):
+    """Represents one of the known aggregations."""
+
+    minimum = "min"
+    maximum = "max"
+    total = "sum"
+    average = "avg"
+    last = "last"
+
+    def __init__(self, carbon_name):
+        """Set attributes."""
+        self.carbon_name = carbon_name
+        self._downsample = getattr(self, "_downsample_" + self.name)
+        self._merge = getattr(self, "_merge_" + self.name)
+
+    def merge(self, old, old_weight, fresh):
+        """Merge fresh values from a finer grained Stage in a coarser Stage.
+
+        For example: old=DAY_DATA, old_weight=24, fresh=CURRENT_HOUR_DATA.
+        NaNs are ignored: if one of old or fresh is NaN, the other is returned.
+
+        Args:
+          old: A float, the value for the coarser, older Stage.
+          old_weight: Weights given to old VS fresh when computing averages.
+          fresh: A float, the value for the less coarse, newer Stage.
+
+        Returns:
+          The merged value, NaN if both are NaN.
+        """
+        if math.isnan(fresh):
+            return old
+        if math.isnan(old):
+            return fresh
+        return self._merge(old, old_weight, fresh)
+
+    def _merge_average(self, old, old_weight, fresh):
+        return (old * old_weight + fresh) / float(old_weight + 1)
+
+    def _merge_last(self, old, old_weight, fresh):
+        return fresh
+
+    def _merge_maximum(self, old, old_weight, fresh):
+        return max(old, fresh)
+
+    def _merge_minimum(self, old, old_weight, fresh):
+        return min(old, fresh)
+
+    def _merge_total(self, old, old_weight, fresh):
+        return old + fresh
+
+    def downsample(self, values, newest_first):
+        """Merge fresh values from a finer grained Stage in a coarser stage.
+
+        Args:
+          coarse_stage: A Stage from which
+          values: values to aggregate as float from oldest to most recent (unless
+            newest_first is True).
+          newest_first: if True, values are in reverse order.
+
+        Returns:
+          The downsampled value, NaN if values is empty or all values are NaN.
+        """
+        if not values:
+            return _NAN
+        return self._downsample(values, newest_first)
+
+    def _downsample_average(self, values, values_newest_first):
+        total, count = self.__sum_and_count(values)
+        return total / count
+
+    def _downsample_last(self, values, values_newest_first):
+        if not values_newest_first:
+            values = reversed(values)
+        for v in values:
+            if not math.isnan(v):
+                return v
+        return _NAN
+
+    def _downsample_maximum(self, values, values_newest_first):
+        _, maximum = self.__min_and_max(values)
+        return maximum
+
+    def _downsample_minimum(self, values, values_newest_first):
+        minimum, _ = self.__min_and_max(values)
+        return minimum
+
+    def _downsample_total(self, values, values_newest_first):
+        total, count = self.__sum_and_count(values)
+        return total
+
+    @classmethod
+    def from_carbon_name(cls, name):
+        """Make an instance from a carbon-like name."""
+        if not name:
+            return None
+        try:
+            return cls(name)
+        except ValueError:
+            raise InvalidArgumentError("Unknown carbon aggregation: %s" % name)
+
+    @classmethod
+    def from_config_name(cls, name):
+        """Make an instance from a BigGraphite name."""
+        if not name:
+            return None
+        try:
+            return cls[name]
+        except KeyError:
+            raise InvalidArgumentError("Unknown BG aggregator: %s" % name)
+
+    @staticmethod
+    def __sum_and_count(values):
+        total = 0.0
+        count = 0
+        for v in values:
+            if math.isnan(v):
+                continue
+            total += v
+            count += 1
+        if not count:
+            return _NAN, _NAN
+        return total, count
+
+    @staticmethod
+    def __min_and_max(values):
+        minimum = None
+        maximum = None
+        for v in values:
+            if math.isnan(v):
+                continue
+            if minimum is None:
+                maximum = v
+                minimum = v
+            elif maximum < v:
+                maximum = v
+            elif minimum > v:
+                minimum = v
+        if minimum is None:
+            assert maximum is None
+            return _NAN, _NAN
+        return minimum, maximum
+
+
+class Stage(object):
+    """One of the element of a retention policy.
+
+    A stage means "keep that many points with that precision".
+    Precision is the amount of time a point covers, measured in seconds.
+    """
+
+    __slots__ = ("points", "precision", )
+
+    # Parses the values of as_string into points and precision group
+    _STR_RE = re.compile(r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s$")
+
+    def __init__(self, points, precision):
+        """Set attributes."""
+        self.points = int(points)
+        self.precision = int(precision)
+
+    def __str__(self):
+        return self.as_string
+
+    def __eq__(self, other):
+        if not isinstance(other, Stage):
+            return False
+        return self.points == other.points and self.precision == other.precision
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    @property
+    def duration(self):
+        """The duration of this stage in seconds."""
+        return self.points * self.precision
+
+    @property
+    def as_string(self):
+        """A string like "${POINTS}*${PRECISION}s"."""
+        return "{}*{}s".format(self.points, self.precision)
+
+    @classmethod
+    def from_string(cls, s):
+        """Parse results of as_string into an instance."""
+        match = cls._STR_RE.match(s)
+        if not match:
+            raise InvalidArgumentError("Invalid retention: '%s'" % s)
+        groups = match.groupdict()
+        return cls(
+            points=int(groups['points']),
+            precision=int(groups['precision']),
+        )
+
+    def epoch(self, timestamp):
+        """Return time elapsed since Unix epoch in count of self.duration.
+
+        A "stage epoch" is a range of timestamps: [N*stage_duration, (N+1)*stage_duration[
+        This function returns N.
+
+        Args:
+          timestamp: A timestamp in seconds.
+        """
+        return int(timestamp / self.duration)
+
+
+class Retention(object):
+    """A retention policy, made of 0 or more Stages."""
+
+    __slots__ = ("stages", )
+
+    def __init__(self, stages):
+        """Set self.stages ."""
+        prev = None
+        for s in stages:
+            if prev and s.precision % prev.precision:
+                raise InvalidArgumentError("precision of %s must be a multiple of %s" % (s, prev))
+            if prev and prev.duration >= s.duration:
+                raise InvalidArgumentError("duration of %s must be lesser than %s" % (s, prev))
+            prev = s
+        self.stages = tuple(stages)
+
+    def __eq__(self, other):
+        if not isinstance(other, Retention):
+            return False
+        return self.stages == other.stages
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    @property
+    def as_string(self):
+        """Return strings like "60*60s:24*3600s"."""
+        return ":".join(s.as_string for s in self.stages)
+
+    @classmethod
+    def from_string(cls, string):
+        """Parse results of as_string into an instance.
+
+        Args:
+          string: A string like "60*60s:24*3600s"
+        """
+        if string:
+            stages = [Stage.from_string(s) for s in string.split(":")]
+        else:
+            stages = []
+        return cls(stages=stages)
+
+    @property
+    def duration(self):
+        """Return the maximum duration of all stages."""
+        if not self.stages:
+            return 0
+        return self.stages[-1].duration
+
+    def __getitem__(self, n):
+        """Return the n-th stage."""
+        return self.stages[n]
+
+    @classmethod
+    def from_carbon(cls, l):
+        """Make new instance from list of (precision, points).
+
+        Note that precision is first, unlike in Stage.__init__
+        """
+        stages = [Stage(points=points, precision=precision)
+                  for precision, points in l]
+        return cls(stages)
+
+
 class MetricMetadata(object):
     """Represents all information about a metric except its name.
 
@@ -72,26 +348,26 @@ class MetricMetadata(object):
     """
 
     __slots__ = (
-        "carbon_aggregation", "carbon_highest_precision",
-        "carbon_retentions", "carbon_xfilesfactor",
+        "aggregator", "retention", "carbon_xfilesfactor",
     )
 
-    _DEFAULT_AGGREGATION = "average"
-    _DEFAULT_RETENTIONS = [[1, 24*3600]]  # One second for one day
+    _DEFAULT_AGGREGATOR = Aggregator.average
+    _DEFAULT_RETENTION = Retention.from_string("86400*1s")
     _DEFAULT_XFILESFACTOR = 0.5
 
-    def __init__(self, carbon_aggregation=None, carbon_retentions=None, carbon_xfilesfactor=None):
+    def __init__(self, aggregator=None, retention=None, carbon_xfilesfactor=None):
         """Record its arguments."""
-        self.carbon_aggregation = carbon_aggregation or self._DEFAULT_AGGREGATION
-        self.carbon_retentions = carbon_retentions or self._DEFAULT_RETENTIONS
-        self.carbon_xfilesfactor = carbon_xfilesfactor
-        if self.carbon_xfilesfactor is None:
+        self.aggregator = aggregator or self._DEFAULT_AGGREGATOR
+        assert isinstance(self.aggregator, Aggregator), self.aggregator
+        self.retention = retention or self._DEFAULT_RETENTION
+        if carbon_xfilesfactor is None:
             self.carbon_xfilesfactor = self._DEFAULT_XFILESFACTOR
-        self.carbon_highest_precision = self.carbon_retentions[0][0]
+        else:
+            self.carbon_xfilesfactor = carbon_xfilesfactor
 
     def __setattr__(self, name, value):
-        # carbon_highest_precision is the last attribute __init__ sets.
-        if hasattr(self, "carbon_highest_precision"):
+        # carbon_xfilesfactor is the last attribute __init__ sets.
+        if hasattr(self, "carbon_xfilesfactor"):
             raise AttributeError("can't set attribute")
         super(MetricMetadata, self).__setattr__(name, value)
 
@@ -102,8 +378,8 @@ class MetricMetadata(object):
     def as_string_dict(self):
         """Turn an instance into a dict of string to string."""
         return {
-            "carbon_aggregation": self.carbon_aggregation,
-            "carbon_retentions": json.dumps(self.carbon_retentions),
+            "aggregator": self.aggregator.name,
+            "retention": self.retention.as_string,
             "carbon_xfilesfactor": "%f" % self.carbon_xfilesfactor,
         }
 
@@ -116,39 +392,10 @@ class MetricMetadata(object):
     def from_string_dict(cls, d):
         """Turn a dict of string to string into a MetricMetadata."""
         return cls(
-            carbon_aggregation=d.get("carbon_aggregation"),
-            carbon_retentions=json.loads(d.get("carbon_retentions")),
+            aggregator=Aggregator.from_config_name(d.get("aggregator")),
+            retention=Retention.from_string(d.get("retention")),
             carbon_xfilesfactor=float(d.get("carbon_xfilesfactor")),
         )
-
-    def carbon_aggregate_points(self, time_span, points):
-        """"An aggregator function suitable for Accessor.fetch().
-
-        Args:
-          time_span: the duration for which we are aggregating, in seconds.
-            For example, if points are meant to represent an hour, the value is 3600.
-          points: values to aggregate as float from most recent to oldest
-
-        Returns:
-          A float, or None to reject the points.
-        """
-        # TODO: Handle precomputation of aggregates.
-        assert time_span
-        coverage = len(points) * self.carbon_highest_precision / float(time_span)
-        if not points or coverage < self.carbon_xfilesfactor:
-            return None
-        if self.carbon_aggregation == "average":
-            return float(sum(points)) / len(points)
-        if self.carbon_aggregation == "last":
-            # Points are stored in descending order, the "last" is actually the first
-            return points[0]
-        if self.carbon_aggregation == "min":
-            return min(points)
-        if self.carbon_aggregation == "max":
-            return max(points)
-        if self.carbon_aggregation == "sum":
-            return sum(points)
-        raise InvalidArgumentError("Unknown aggregation method: %s" % self.carbon_aggregation)
 
 
 class Metric(object):
@@ -340,7 +587,7 @@ class Accessor(object):
 
 
 class PointGrouper(object):
-    """Helper for client-side aggregation.
+    """Helper for client-side aggregator.
 
     It hardcodes a knowledge of how Casssandra results are returned together, this should be
     abstracted away if more datastores do client-side agregation.
@@ -350,13 +597,13 @@ class PointGrouper(object):
         """Constructor for PointGrouper.
 
         Args:
-          metric: The metric for which to insert point.
+          metric: The metric for which to group values.
           time_start_ms: timestamp in second from the Epoch as an int,
             inclusive,  must be a multiple of step
           time_end_ms: timestamp in second from the Epoch as an int,
             exclusive, must be a multiple of step
           step_ms: time delta in seconds as an int, must be > 0
-          query_results: query results to fetch point from.
+          query_results: query results to fetch values from.
         """
         self.metric = metric
         self.time_start_ms = time_start_ms
@@ -364,32 +611,33 @@ class PointGrouper(object):
         self.step_ms = step_ms
         self.query_results = query_results
 
-        self.current_points = []
+        self.current_values = array.array("d")
         self.current_timestamp_ms = None
 
     def __iter__(self):
-        return self.generate_points()
+        return self.generate_values()
 
-    def run_aggregation(self):
-        """Aggregate points in current_points.
+    def run_aggregator(self):
+        """Aggregate values in current_values.
 
         This will skip the first point and return (None, None)
         if the function doesn't generate any aggregated point.
         """
         # This is the first point we encounter, do not emit it on its own,
-        # rather wait until we have found points fitting in the next period.
+        # rather wait until we have found values fitting in the next period.
         ret = (None, None)
         if self.current_timestamp_ms is None:
             return ret
-        aggregate = self.metric.metadata.carbon_aggregate_points(
-            self.step_ms / 1000.0, self.current_points)
+        aggregate = self.metric.metadata.aggregator.downsample(
+            values=self.current_values, newest_first=True,
+        )
         if aggregate is not None:
             ret = (self.current_timestamp_ms / 1000.0, aggregate)
-            del self.current_points[:]
+            del self.current_values[:]
         return ret
 
-    def generate_points(self):
-        """Generator function ton consume query_results and produce points."""
+    def generate_values(self):
+        """Generator function, consume query_results and produce values."""
         first_exc = None
 
         for successfull, rows_or_exception in self.query_results:
@@ -405,15 +653,15 @@ class PointGrouper(object):
                 timestamp_ms = round_down(timestamp_ms, self.step_ms)
 
                 if self.current_timestamp_ms != timestamp_ms:
-                    ts, point = self.run_aggregation()
+                    ts, point = self.run_aggregator()
                     if ts is not None:
                         yield (ts, point)
 
                     self.current_timestamp_ms = timestamp_ms
 
-                self.current_points.append(row[2])
+                self.current_values.append(row[2])
 
-        ts, point = self.run_aggregation()
+        ts, point = self.run_aggregator()
         if ts is not None:
             yield (ts, point)
 

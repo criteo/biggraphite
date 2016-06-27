@@ -72,8 +72,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
         metadata = accessor.MetricMetadata(
-            carbon_aggregation=aggregation_method,
-            carbon_retentions=retentions,
+            aggregator=accessor.Aggregator.from_carbon_name(aggregation_method),
+            retention=accessor.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
         metric = accessor.Metric(metric_name, metadata)
@@ -86,8 +86,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         metadata = self._cache.get_metric(metric_name=metric_name)
         if not metadata:
             raise ValueError("%s: No such metric" % metric_name)
-        assert metadata.carbon_aggregation
-        return metadata.carbon_aggregation
+        assert metadata.aggregator.carbon_name
+        return metadata.aggregator.carbon_name
 
     def setMetadata(self, metric_name, key, value):
         old_value = self.getMetadata(metric_name, key)
