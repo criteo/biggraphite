@@ -19,6 +19,7 @@ from __future__ import print_function
 import unittest
 
 from biggraphite import test_utils as bg_test_utils
+from biggraphite import accessor as bg_accessor
 
 # This needs to run before we import the plugin.
 bg_test_utils.prepare_graphite()
@@ -56,13 +57,11 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3600
-    _PRECISION = 60
-    _RETENTION_DURATION = 24 * 3600
-    _RETENTIONS = [(_PRECISION, _RETENTION_DURATION/_PRECISION)]
+    _RETENTION = bg_accessor.Retention.from_string("1440*60s")
     _POINTS = _make_easily_queryable_points(
-        start=_POINTS_START, end=_POINTS_END, period=_PRECISION,
+        start=_POINTS_START, end=_POINTS_END, period=_RETENTION[0].precision,
     )
-    _METRIC = bg_test_utils.make_metric(_METRIC_NAME, carbon_retentions=_RETENTIONS)
+    _METRIC = bg_test_utils.make_metric(_METRIC_NAME, retention=_RETENTION)
 
     def setUp(self):
         super(TestReader, self).setUp()
@@ -84,7 +83,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
             end_time=self._POINTS_END-3,
             now=self._POINTS_END+10,
         )
-        self.assertEqual(self._PRECISION, step)
+        self.assertEqual(self._RETENTION[0].precision, step)
         # We expect these to have been rounded to match precision.
         self.assertEqual(self._POINTS_START, start)
         self.assertEqual(self._POINTS_END, end)
@@ -94,11 +93,11 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_get_intervals(self):
         # start and end are the expected results, aligned on the precision
-        now_rounded = 10000000 * self._PRECISION
+        now_rounded = 10000000 * self._RETENTION[0].precision
         now = now_rounded - 3
         res = self.reader.get_intervals(now=now)
 
-        self.assertEqual(self._RETENTION_DURATION, res.size)
+        self.assertEqual(self._RETENTION.duration, res.size)
         self.assertEqual(1, len(res.intervals))
         self.assertEqual(now_rounded, res.intervals[0].end)
 
