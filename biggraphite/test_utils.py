@@ -101,11 +101,14 @@ def prepare_graphite_imports():
                 sys.path.insert(0, path)
 
 
-def make_metric(name, metadata=None, *args, **kwargs):
+def make_metric(name, metadata=None, **kwargs):
     """Create a bg_accesor.Metric with specified metadata."""
-    assert not args
+    retention = kwargs.get("retention")
+    if isinstance(retention, basestring):
+        kwargs["retention"] = bg_accessor.Retention.from_string(retention)
     if metadata:
         assert isinstance(metadata, bg_accessor.MetricMetadata)
+        assert not kwargs
     else:
         metadata = bg_accessor.MetricMetadata(**kwargs)
     return bg_accessor.Metric(name, metadata)
@@ -198,8 +201,8 @@ class FakeAccessor(bg_accessor.Accessor):
         points = self._metric_to_points[metric.name]
         rows = []
         for ts in points.irange(time_start, time_end):
-            # A row is time_base_ms, time_offset_ms, value
-            row = (ts * 1000.0, 0, float(points[ts]))
+            # A row is time_base_ms, time_offset_ms, value, count
+            row = (ts * 1000.0, 0, float(points[ts]), 1)
             rows.append(row)
         query_results = [(True, rows)]
 
