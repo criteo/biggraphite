@@ -18,6 +18,7 @@ import unittest
 
 import statistics
 
+from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 
 _METRIC = bg_test_utils.make_metric("test.metric")
@@ -134,8 +135,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
     def test_create_metrics(self):
         meta_dict = {
-            "carbon_aggregation": "last",
-            "carbon_retentions": [[1, 60], [60, 3600]],
+            "aggregator": bg_accessor.Aggregator.last,
+            "retention": bg_accessor.Retention.from_string("60*1s:60*60s"),
             "carbon_xfilesfactor": 0.3,
         }
         metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
