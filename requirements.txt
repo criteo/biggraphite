@@ -1,4 +1,5 @@
 cassandra-driver
+enum34
 lmdb
 progressbar2
 sortedcontainers
