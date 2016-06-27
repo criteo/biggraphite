@@ -23,6 +23,7 @@ from graphite import readers
 
 
 from biggraphite import graphite_utils
+from biggraphite import accessor as bg_accessor
 from biggraphite import metadata_cache as bg_metadata_cache
 
 
@@ -56,23 +57,22 @@ class Reader(object):
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
         # TODO: We do not support downsampling yet.
-        if self._metric and self._metric.carbon_retentions:
-            step, retention = self._metric.carbon_retentions[0]
-        else:
-            step, retention = 1, 60
+        first_stage = bg_accessor.Stage(precision=1, points=60)
+        if self._metric and self._metric.retention:
+            first_stage = self._metric.retention[0]
 
-        now = _round_up(now, step)
+        now = _round_up(now, first_stage.precision)
 
-        oldest_timestamp = now - retention * step
+        oldest_timestamp = now - first_stage.duration
         start_time = max(start_time, oldest_timestamp)
-        start_time = _round_down(start_time, step)
+        start_time = _round_down(start_time, first_stage.precision)
 
         end_time = min(now, end_time)
-        end_time = _round_up(end_time, step)
+        end_time = _round_up(end_time, first_stage.precision)
 
         if end_time < start_time:
             end_time = start_time
-        return start_time, end_time, step
+        return start_time, end_time, first_stage.precision
 
     def __refresh_metric(self):
         if self._metric is None:
