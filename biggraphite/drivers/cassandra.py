@@ -91,6 +91,7 @@ _SETUP_CQL_DATAPOINTS = str(
     "  time_start_ms bigint,"
     "  time_offset_ms int,"
     "  value double,"
+    "  count int,"
     "  PRIMARY KEY ((metric, time_start_ms), time_offset_ms)"
     ")"
     "  WITH CLUSTERING ORDER BY (time_offset_ms DESC)"
@@ -165,11 +166,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not skip_schema_upgrade:
             self._upgrade_schema()
         self.__insert_statement = self.__session.prepare(
-            "INSERT INTO datapoints (metric, time_start_ms, time_offset_ms, value)"
-            " VALUES (?, ?, ?, ?);")
+            "INSERT INTO datapoints (metric, time_start_ms, time_offset_ms, value, count)"
+            " VALUES (?, ?, ?, ?, 1);")
         self.__insert_statement.consistency_level = cassandra.ConsistencyLevel.ONE
         self.__select_statement = self.__session.prepare(
-            "SELECT time_start_ms, time_offset_ms, value FROM datapoints"
+            "SELECT time_start_ms, time_offset_ms, value, count FROM datapoints"
             " WHERE metric=? AND time_start_ms=? "
             " AND time_offset_ms >= ? AND time_offset_ms < ? "
             " ORDER BY time_offset_ms;")
