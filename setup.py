@@ -55,6 +55,7 @@ setuptools.setup(
         "console_scripts": [
             'bg-carbon-cache = biggraphite.cli.bg_carbon_cache:main',
             'bg-import-whisper = biggraphite.cli.import_whisper:main',
+            'bg-clusters-diff = biggraphite.cli.clusters_diff:main',
         ]
     },
 )
