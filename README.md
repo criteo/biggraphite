@@ -46,6 +46,7 @@ To run tests you can either use `tox`:
 $ pip install tox
 $ tox
 ```
+You can set /tmp as tmpfs to make tests run faster.
 
 You can also simply use unittest.discover if you have a working dev environment.
 
