@@ -16,11 +16,18 @@ import sys
 import urllib
 import collections
 import progressbar
-import numpy
 import operator
 import abc
 import netrc
 
+# Numpy is nice to have to get more precise stats but do
+# not depend on it because it can be a mess to install, especially
+# on travis.
+try:
+    import numpy
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
 
 class Error(Exception):
     """Error."""
@@ -309,6 +316,8 @@ class TxtPrinter(Printer):
 
     def _print_pctls(self, name, pctls, prefix="", chip="", delay=""):
         self._print("\n %s %s %s : %s" % (delay, chip, prefix, name))
+        if pctls is None:
+            return
         for k in pctls.iterkeys():
             if prefix == "host":
                 self._print("\t%s %s" % (delay, self._format_pctl(pctls, k, unit="s")))
@@ -450,12 +459,21 @@ def _compute_pctls(measures):
     if not measures:
         return None
 
-    numpy_array = numpy.array(measures)
     pctls = collections.OrderedDict()
-    pctls[50] = numpy.percentile(numpy_array, 50, interpolation="higher")
-    pctls[90] = numpy.percentile(numpy_array, 90, interpolation="higher")
-    pctls[99] = numpy.percentile(numpy_array, 99, interpolation="higher")
-    pctls[99.9] = numpy.percentile(numpy_array, 99.9, interpolation="higher")
+
+    if not HAS_NUMPY:
+        sorted_measures = sorted(measures)
+        for i in [50, 75, 90, 99, 99.9]:
+            # Don't even try to interpolate.
+            rank = int(i / 100. * (len(measures)-1))
+            pctls[i] = sorted_measures[rank]
+    else:
+        numpy_array = numpy.array(measures)
+        pctls[50] = numpy.percentile(numpy_array, 50, interpolation="higher")
+        pctls[90] = numpy.percentile(numpy_array, 90, interpolation="higher")
+        pctls[99] = numpy.percentile(numpy_array, 99, interpolation="higher")
+        pctls[99.9] = numpy.percentile(numpy_array, 99.9, interpolation="higher")
+
     return pctls
 
 
