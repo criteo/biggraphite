@@ -243,6 +243,9 @@ class Stage(object):
     def __ne__(self, other):
         return not (self == other)
 
+    def __hash__(self):
+        return hash((self.points, self.precision))
+
     @property
     def duration(self):
         """The duration of this stage in seconds."""
@@ -276,6 +279,14 @@ class Stage(object):
         """
         return int(timestamp / self.duration)
 
+    def round_down(self, timestamp):
+        """Round down a timestamp to a multiple of the precision."""
+        return round_down(timestamp, self.precision)
+
+    def round_up(self, timestamp):
+        """Round down a timestamp to a multiple of the precision."""
+        return round_up(timestamp, self.precision)
+
 
 class Retention(object):
     """A retention policy, made of 0 or more Stages."""
@@ -292,6 +303,13 @@ class Retention(object):
                 raise InvalidArgumentError("duration of %s must be lesser than %s" % (s, prev))
             prev = s
         self.stages = tuple(stages)
+
+    def __getitem__(self, n):
+        """Return the n-th stage."""
+        return self.stages[n]
+
+    def __hash__(self):
+        return hash(self.stages)
 
     def __eq__(self, other):
         if not isinstance(other, Retention):
@@ -326,9 +344,10 @@ class Retention(object):
             return 0
         return self.stages[-1].duration
 
-    def __getitem__(self, n):
-        """Return the n-th stage."""
-        return self.stages[n]
+    @property
+    def downsampled_stages(self):
+        """An alias for stages[1:]."""
+        return self.stages[1:]
 
     @classmethod
     def from_carbon(cls, l):
