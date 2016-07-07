@@ -190,6 +190,7 @@ class Aggregator(enum.Enum):
             if math.isnan(v):
                 continue
             total += v
+            # TODO(c.chary): Get the count from the database.
             count += 1
         if not count:
             return _NAN, _NAN
@@ -514,16 +515,16 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def fetch_points(self, metric, time_start, time_end, resolution):
+    def fetch_points(self, metric, time_start, time_end, step):
         """Fetch points from time_start included to time_end excluded.
 
         Args:
           metric: The metric definition as per get_metric.
           time_start: timestamp in second from the Epoch as an int, inclusive,
-            must be a multiple of resolution
+            must be a multiple of step
           time_end: timestamp in second from the Epoch as an int, exclusive,
-            must be a multiple of resolution
-          resolution: time delta in seconds as an int, must be > 0, must be one of
+            must be a multiple of step
+          step: time delta in seconds as an int, must be > 0, must be one of
             the resolution the metrics stores
 
         Yields:
@@ -531,20 +532,20 @@ class Accessor(object):
           [timestamp, timestep+step[
 
         Raises:
-          InvalidArgumentError: if time_start, time_end or resolution are not as per above
+          InvalidArgumentError: if time_start, time_end or step are not as per above
         """
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
-        if resolution < 1:
-            raise InvalidArgumentError("resolution (%d) is not positive" % resolution)
-        if time_start % resolution or time_start < 0:
+        if step < 1:
+            raise InvalidArgumentError("step (%d) is not positive" % step)
+        if time_start % step or time_start < 0:
             raise InvalidArgumentError(
-                "time_start (%d) is not a multiple of resolution (%d)" % (
-                    time_start, resolution))
-        if time_end % resolution or time_end < 0:
+                "time_start (%d) is not a multiple of step (%d)" % (
+                    time_start, step))
+        if time_end % step or time_end < 0:
             raise InvalidArgumentError(
-                "time_end (%d) is not a multiple of resolution (%d)" % (
-                    time_end, resolution))
+                "time_end (%d) is not a multiple of step (%d)" % (
+                    time_end, step))
 
     @abc.abstractmethod
     def get_metric(self, metric_name):
@@ -561,12 +562,12 @@ class Accessor(object):
         """Return a sorted list of metric directories matching this glob."""
         self._check_connected()
 
-    def insert_points(self, metric, timestamps_and_values):
+    def insert_points(self, metric, datapoints):
         """Insert points for a given metric.
 
         Args:
           metric: A Metric instance.
-          timestamps_and_values: An iterable of (timestamp in seconds, values as double)
+          datapoints: An iterable of (timestamp in seconds, values as double)
         """
         self._check_connected()
 
@@ -578,18 +579,18 @@ class Accessor(object):
 
             event.set()
 
-        self.insert_points_async(metric, timestamps_and_values, on_done)
+        self.insert_points_async(metric, datapoints, on_done)
         event.wait()
         if exception_box[0]:
             raise exception_box[0]
 
     @abc.abstractmethod
-    def insert_points_async(self, metric, timestamps_and_values, on_done=None):
+    def insert_points_async(self, metric, datapoints, on_done=None):
         """Insert points for a given metric.
 
         Args:
           metric: The metric definition as per get_metric.
-          timestamps_and_values: An iterable of (timestamp in seconds, values as double)
+          datapoints: An iterable of (timestamp in seconds, values as double)
           on_done(e: Exception): called on done, with an exception or None if succesfull
         """
         if not isinstance(metric, Metric):
@@ -679,6 +680,7 @@ class PointGrouper(object):
                     self.current_timestamp_ms = timestamp_ms
 
                 self.current_values.append(row[2])
+                # what if sum/count
 
         ts, point = self.run_aggregator()
         if ts is not None:

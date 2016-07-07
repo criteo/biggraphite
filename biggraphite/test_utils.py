@@ -28,6 +28,7 @@ import sys
 import tempfile
 import shutil
 import unittest
+import logging
 
 from cassandra import cluster as c_cluster
 import mock
@@ -49,6 +50,14 @@ if HAS_CASSANDRA_HOME:
         """Just like testing_cassandra.Cassandra but waits 5 minutes for start."""
 
         BOOT_TIMEOUT = 5 * 60
+
+
+def setup_logging():
+    """To be called to enable logs in unittests."""
+    logger = logging.getLogger()
+    logger.level = logging.DEBUG
+    stream_handler = logging.StreamHandler(sys.stdout)
+    logger.addHandler(stream_handler)
 
 
 def create_unreplicated_keyspace(contact_points, port, keyspace):
