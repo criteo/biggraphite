@@ -17,6 +17,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import logging
 import cassandra
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
@@ -87,12 +88,13 @@ _SETUP_CQL_PATH_INDEXES = [
 _ROW_SIZE_MS = 3600 * 1000
 _SETUP_CQL_DATAPOINTS = str(
     "CREATE TABLE IF NOT EXISTS datapoints ("
-    "  metric text,"
-    "  time_start_ms bigint,"
-    "  time_offset_ms int,"
-    "  value double,"
-    "  count int,"
-    "  PRIMARY KEY ((metric, time_start_ms), time_offset_ms)"
+    "  metric text,"              # Metric name.
+    "  time_step_ms int,"         # Time step (AKA granularity, resolution).
+    "  time_start_ms bigint,"     # Lower bound for this row.
+    "  time_offset_ms int,"       # time_start_ms + time_offset_ms = timestamp
+    "  value double,"             # Value for the point.
+    "  count int,"                # If value is sum, divide by count to get the avg.
+    "  PRIMARY KEY ((metric, time_step_ms, time_start_ms), time_offset_ms)"
     ")"
     "  WITH CLUSTERING ORDER BY (time_offset_ms DESC)"
     "  AND compaction={"
@@ -166,12 +168,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not skip_schema_upgrade:
             self._upgrade_schema()
         self.__insert_statement = self.__session.prepare(
-            "INSERT INTO datapoints (metric, time_start_ms, time_offset_ms, value, count)"
-            " VALUES (?, ?, ?, ?, 1);")
+            "INSERT INTO datapoints "
+            "(metric, time_step_ms, time_start_ms, time_offset_ms, value, count)"
+            " VALUES (?, ?, ?, ?, ?, ?);")
         self.__insert_statement.consistency_level = cassandra.ConsistencyLevel.ONE
         self.__select_statement = self.__session.prepare(
             "SELECT time_start_ms, time_offset_ms, value, count FROM datapoints"
-            " WHERE metric=? AND time_start_ms=? "
+            " WHERE metric=? AND time_step_ms=? AND time_start_ms=?"
             " AND time_offset_ms >= ? AND time_offset_ms < ? "
             " ORDER BY time_offset_ms;")
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
@@ -238,14 +241,24 @@ class _CassandraAccessor(bg_accessor.Accessor):
     # TODO: Perform aggregation server-side.
     def fetch_points(self, metric, time_start, time_end, step):
         """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).fetch_points(metric, time_start, time_end, step)
+        super(_CassandraAccessor, self).fetch_points(
+            metric, time_start, time_end, step)
+
+        logging.debug(
+            "fetch: [%s, start=%d, end=%d, step=%d]",
+            metric.name, time_start, time_end, step)
+
         step_ms = int(step) * 1000
+        # FIXME: Once we can do downsampling on ingestion:
+        # - validate that step is including in the resolutions
+        # - use step to fetch points instead of fetching raw points.
+        raw_step_ms = 1000
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
         time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
 
         statements_and_args = self._fetch_points_make_selects(
-            metric.name, time_start_ms, time_end_ms)
+            metric.name, time_start_ms, time_end_ms, raw_step_ms)
 
         query_results = c_concurrent.execute_concurrent(
             self.__session,
@@ -253,10 +266,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             concurrency=self.__concurrency,
             results_generator=True,
         )
-        return bg_accessor.PointGrouper(metric, time_start_ms, time_end_ms, step_ms, query_results)
+        return bg_accessor.PointGrouper(
+            metric, time_start_ms, time_end_ms, step_ms, query_results)
 
-    def _fetch_points_make_selects(self, metric_name, time_start_ms, time_end_ms):
-        # We fetch with ms precision, even though we only store with second precision.
+    def _fetch_points_make_selects(self, metric_name, time_start_ms,
+                                   time_end_ms, step_ms):
+        # We fetch with ms precision, even though we only store with second
+        # precision.
         first_row = bg_accessor.round_down(time_start_ms, _ROW_SIZE_MS)
         last_row = bg_accessor.round_down(time_end_ms, _ROW_SIZE_MS)
         res = []
@@ -268,9 +284,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 row_min_offset = time_start_ms - row_start_ms
             if row_start_ms == last_row:
                 row_max_offset = time_end_ms - row_start_ms
-            statement = (self.__select_statement,
-                         (metric_name, row_start_ms, row_min_offset, row_max_offset))
+            statement = (
+                self.__select_statement,
+                (
+                    metric_name,
+                    step_ms, row_start_ms,
+                    row_min_offset, row_max_offset
+                )
+            )
             res.append(statement)
+
         return res
 
     def get_metric(self, metric_name):
@@ -322,18 +345,46 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metrics_names.sort()
         return metrics_names
 
-    def insert_points_async(self, metric, timestamps_and_values, on_done=None):
-        """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).insert_points_async(metric, timestamps_and_values, on_done)
+    def insert_points_async(self, metric, datapoints, on_done=None):
+        """See bg_accessor.Accessor.
+
+        The datapoint argument is slightly different because it accepts
+        another format for aggregated points:
+           (timestamp in seconds, value as double,
+            count as int, step in seconds).
+        """
+        super(_CassandraAccessor, self).insert_points_async(
+            metric, datapoints, on_done)
+
+        logging.debug("insert: [%s, %s]", metric.name, datapoints)
+
+        # TODO(c.chary): Including downsampler here.
+
         count_down = None
         if on_done:
-            count_down = _utils.CountDown(count=len(timestamps_and_values), on_zero=on_done)
+            count_down = _utils.CountDown(count=len(datapoints), on_zero=on_done)
 
-        for timestamp, value in timestamps_and_values:
+        for datapoint in datapoints:
+            if len(datapoint) == 4:
+                # Aggregated points (for example avg) can have a count field
+                # and have a specific time granularity.
+                timestamp, value, count, step = datapoint
+                count = int(count)
+                time_step_ms = int(step) * 1000
+            else:
+                # Raw points have a default step of 1s.
+                timestamp, value = datapoint
+                count = 1
+                time_step_ms = 1000
+
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _ROW_SIZE_MS
             time_start_ms = timestamp_ms - time_offset_ms
-            args = (metric.name, time_start_ms, time_offset_ms, value, )
+            args = (
+                metric.name,
+                time_step_ms, time_start_ms, time_offset_ms,
+                value, count
+            )
 
             future = self.__session.execute_async(self.__insert_statement, args)
             if count_down:
