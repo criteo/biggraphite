@@ -32,8 +32,9 @@ class TestAggregator(unittest.TestCase):
 
     def test_downsample(self):
         values = [_NAN, 0, 1, _NAN, 2, 3, _NAN]
+        counts = [0, 1, 1, 0, 2, 1, 0]
         expectations = (
-            ("average", 1.5),
+            ("average", 1.2),
             ("last", 0),  # Values from most recent to oldest
             ("minimum", 0),
             ("maximum", 3),
@@ -41,13 +42,16 @@ class TestAggregator(unittest.TestCase):
         )
         for name, value_expected in expectations:
             aggregator = bg_accessor.Aggregator.from_config_name(name)
-            downsampled = aggregator.downsample(values=values, newest_first=True)
+            downsampled = aggregator.downsample(
+                values=values, counts=counts, newest_first=True)
             self.assertEqual(value_expected, downsampled)
 
     def test_downsample_nan(self):
         values = [_NAN, _NAN]
+        counts = [0, 0]
         for aggregator in bg_accessor.Aggregator:
-            downsampled = aggregator.downsample(values, newest_first=True)
+            downsampled = aggregator.downsample(
+                values=values, counts=counts, newest_first=True)
             self.assertTrue(math.isnan(downsampled), aggregator)
 
     def test_downsample_newest_last(self):

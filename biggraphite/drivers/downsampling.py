@@ -13,9 +13,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Downsampling interface."""
-
+"""Downsampling helpers for drivers that do not implement it server-side."""
+from __future__ import absolute_import
 from __future__ import print_function
+
+
+class Downsampler(object):
+    """Stupid downsampler that produces per minute average."""
+
+    def __init__(self):
+        """Default constructor."""
+        self.__precision = 60
+        self.__epoch = 0
+        self.__counters = {}
+
+    def feed(self, metric, datapoints):
+        """Feed the downsampler and produce points.
+
+        Arg:
+          metric: Metric
+          datapoints: tuple(timestamp as sec, value as float)
+        Returns:
+          tuple(timestamp as sec, value as float) generated datapoints.
+        """
+        results = []
+
+        for timestamp, value in datapoints:
+            epoch = timestamp // self.__precision
+
+            if epoch < self.__epoch:
+                continue
+            if epoch > self.__epoch:
+                self.__epoch = epoch
+                values = self.__counters.values()
+                if values:
+                    results.extend(values)
+                self.__counters.clear()
+
+            count = 1
+            if metric.name in self.__counters:
+                value += self.__counters[metric.name][1]
+                count += self.__counters[metric.name][2]
+            self.__counters[metric.name] = (
+                epoch * self.__precision,
+                value,
+                count,
+                self.__precision
+            )
+        return results
 
 
 class MetricBuffer(object):
