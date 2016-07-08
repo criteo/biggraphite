@@ -24,6 +24,7 @@ from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 
 from biggraphite import accessor as bg_accessor
+from biggraphite.drivers import downsampling
 from biggraphite.drivers import _utils
 
 
@@ -145,6 +146,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.contact_points = contact_points
         self.port = port or self._DEFAULT_CASSANDRA_PORT
         self.__concurrency = concurrency
+        self.__downsampler = downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
         self.__default_timeout = default_timeout
         self.__insert_metrics_statement = None  # setup by connect()
@@ -238,7 +240,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__session.execute("TRUNCATE directories;")
         self.__session.execute("TRUNCATE metrics;")
 
-    # TODO: Perform aggregation server-side.
+    # TODO: Downsampling: Perform aggregation server-side.
     def fetch_points(self, metric, time_start, time_end, step):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).fetch_points(
@@ -249,9 +251,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             metric.name, time_start, time_end, step)
 
         step_ms = int(step) * 1000
-        # FIXME: Once we can do downsampling on ingestion:
-        # - validate that step is including in the resolutions
-        # - use step to fetch points instead of fetching raw points.
+        # TODO: Downsampling: once we have a proper downsampler choose the
+        #   highest possible valid step included in the valid resolutions
+        #   for this metric.
         raw_step_ms = 1000
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
@@ -300,11 +302,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
         metric_name = bg_accessor.encode_metric_name(metric_name)
-        result = list(self.__session.execute(self.__select_metric_statement, (metric_name, )))
+        result = list(self.__session.execute(
+            self.__select_metric_statement, (metric_name, )))
+
         if not result:
             return None
         config = result[0][0]
-        return bg_accessor.Metric(metric_name, bg_accessor.MetricMetadata.from_string_dict(config))
+        return bg_accessor.Metric(
+            metric_name, bg_accessor.MetricMetadata.from_string_dict(config))
 
     def glob_directory_names(self, glob):
         """Return a sorted list of metric directories matching this glob."""
@@ -358,7 +363,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         logging.debug("insert: [%s, %s]", metric.name, datapoints)
 
-        # TODO(c.chary): Including downsampler here.
+        if self.__downsampler:
+            additional_points = self.__downsampler.feed(metric, datapoints)
+            if additional_points:
+                logging.debug("also: [%s, %s]", metric.name, additional_points)
+                datapoints = datapoints + additional_points
 
         count_down = None
         if on_done:

@@ -21,6 +21,7 @@ import abc
 import array
 import codecs
 import enum
+import itertools
 import json
 import math
 import re
@@ -123,12 +124,14 @@ class Aggregator(enum.Enum):
     def _merge_total(self, old, old_weight, fresh):
         return old + fresh
 
-    def downsample(self, values, newest_first):
+    def downsample(self, values=[], counts=[], newest_first=False):
         """Aggregate together values of a given stage.
 
         Args:
           values: values to aggregate as float from oldest to most recent (unless
             newest_first is True).
+          counts: counts associated with values as int.  when dealing with
+            already aggregated values.
           newest_first: if True, values are in reverse order.
 
         Returns:
@@ -136,13 +139,15 @@ class Aggregator(enum.Enum):
         """
         if not values:
             return _NAN
-        return self._downsample(values, newest_first)
+        if not counts:
+            counts = [1] * len(values)
+        return self._downsample(values, counts, newest_first)
 
-    def _downsample_average(self, values, values_newest_first):
-        total, count = self.__sum_and_count(values)
+    def _downsample_average(self, values, counts, values_newest_first):
+        total, count = self.__sum_and_count(values, counts)
         return total / count
 
-    def _downsample_last(self, values, values_newest_first):
+    def _downsample_last(self, values, counts, values_newest_first):
         if not values_newest_first:
             values = reversed(values)
         for v in values:
@@ -150,16 +155,16 @@ class Aggregator(enum.Enum):
                 return v
         return _NAN
 
-    def _downsample_maximum(self, values, values_newest_first):
+    def _downsample_maximum(self, values, counts, values_newest_first):
         _, maximum = self.__min_and_max(values)
         return maximum
 
-    def _downsample_minimum(self, values, values_newest_first):
+    def _downsample_minimum(self, values, counts, values_newest_first):
         minimum, _ = self.__min_and_max(values)
         return minimum
 
-    def _downsample_total(self, values, values_newest_first):
-        total, _ = self.__sum_and_count(values)
+    def _downsample_total(self, values, counts, values_newest_first):
+        total, _ = self.__sum_and_count(values, counts)
         return total
 
     @classmethod
@@ -183,15 +188,14 @@ class Aggregator(enum.Enum):
             raise InvalidArgumentError("Unknown BG aggregator: %s" % name)
 
     @staticmethod
-    def __sum_and_count(values):
+    def __sum_and_count(values, counts):
         total = 0.0
         count = 0
-        for v in values:
+        for v, c in itertools.izip(values, counts): # FIXME(now): counts izip
             if math.isnan(v):
                 continue
             total += v
-            # TODO(c.chary): Get the count from the database.
-            count += 1
+            count += c
         if not count:
             return _NAN, _NAN
         return total, count
@@ -372,7 +376,7 @@ class MetricMetadata(object):
     )
 
     _DEFAULT_AGGREGATOR = Aggregator.average
-    _DEFAULT_RETENTION = Retention.from_string("86400*1s")
+    _DEFAULT_RETENTION = Retention.from_string("86400*1s:2000*60s")
     _DEFAULT_XFILESFACTOR = 0.5
 
     def __init__(self, aggregator=None, retention=None, carbon_xfilesfactor=None):
@@ -632,6 +636,7 @@ class PointGrouper(object):
         self.query_results = query_results
 
         self.current_values = array.array("d")
+        self.current_counts = array.array("d")
         self.current_timestamp_ms = None
 
     def __iter__(self):
@@ -649,17 +654,21 @@ class PointGrouper(object):
         if self.current_timestamp_ms is None:
             return ret
         aggregate = self.metric.metadata.aggregator.downsample(
-            values=self.current_values, newest_first=True,
+            values=self.current_values,
+            counts=self.current_counts,
+            newest_first=True,
         )
         if aggregate is not None:
             ret = (self.current_timestamp_ms / 1000.0, aggregate)
             del self.current_values[:]
+            del self.current_counts[:]
         return ret
 
     def generate_values(self):
         """Generator function, consume query_results and produce values."""
         first_exc = None
 
+        # TODO: This function is still quite Cassandra Specific.
         for successfull, rows_or_exception in self.query_results:
             if first_exc:
                 # A query failed, we still consume the results
@@ -680,7 +689,7 @@ class PointGrouper(object):
                     self.current_timestamp_ms = timestamp_ms
 
                 self.current_values.append(row[2])
-                # what if sum/count
+                self.current_counts.append(row[3])
 
         ts, point = self.run_aggregator()
         if ts is not None:
