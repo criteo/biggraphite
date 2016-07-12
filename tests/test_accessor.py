@@ -32,13 +32,13 @@ class TestAggregator(unittest.TestCase):
 
     def test_downsample(self):
         values = [_NAN, 0, 1, _NAN, 2, 3, _NAN]
-        counts = [0, 1, 1, 0, 2, 1, 0]
+        counts = [   0, 1, 1,    0, 2, 1,    0]
         expectations = (
-            ("average", 1.2),
+            ("average", 1.6),
             ("last", 0),  # Values from most recent to oldest
             ("minimum", 0),
             ("maximum", 3),
-            ("total", 6),
+            ("total", 8),
         )
         for name, value_expected in expectations:
             aggregator = bg_accessor.Aggregator.from_config_name(name)
@@ -48,7 +48,7 @@ class TestAggregator(unittest.TestCase):
 
     def test_downsample_nan(self):
         values = [_NAN, _NAN]
-        counts = [0, 0]
+        counts = [   0,    0]
         for aggregator in bg_accessor.Aggregator:
             downsampled = aggregator.downsample(
                 values=values, counts=counts, newest_first=True)

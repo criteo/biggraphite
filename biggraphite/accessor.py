@@ -194,7 +194,7 @@ class Aggregator(enum.Enum):
         for v, c in itertools.izip(values, counts):
             if math.isnan(v):
                 continue
-            total += v
+            total += v * c
             count += c
         if not count:
             return _NAN, _NAN
