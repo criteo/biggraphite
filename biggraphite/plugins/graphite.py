@@ -56,7 +56,7 @@ class Reader(object):
 
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
-        # TODO: We do not support downsampling yet.
+        # TODO: Downsampling: We do not support downsampling yet.
         first_stage = bg_accessor.Stage(precision=1, points=60)
         if self._metric and self._metric.retention:
             first_stage = self._metric.retention[0]
