@@ -162,3 +162,129 @@ class MetricBuffer(object):
         if epoch > self._epoch:
             self._epoch = epoch
         return expired
+
+
+class StageAggregate(object):
+    """Perform aggregation on the data of a given retention stage."""
+
+    __slots__ = (
+        "precision",
+        "_aggregator",
+        "_epoch",
+        "value",
+        "count"
+    )
+
+    def __init__(self, precision, aggregator):
+        """Initialize a new StageAggregator.
+
+        Args:
+          precision: precision of the stage, in seconds.
+          aggregator: aggregator object to compute aggregates.
+        """
+        self.precision = precision
+        self._aggregator = aggregator
+        self._epoch = None
+        self.value = None
+        self.count = 0
+
+    def compute(self, points):
+        """Compute aggregated value but do not store it.
+
+        The points have to be sorted by increasing timestamps.
+
+        Args:
+          points: new points to be added into the current aggregate.
+
+        Returns:
+          Iterable of (timestamp, value, count, precision).
+        """
+        if self._epoch is None and not points:
+            return []
+
+        res = [(self._epoch, self.value, self.count, self.precision)]
+        for (timestamp, value) in points:
+            epoch = timestamp // self.precision
+            current_point = res[-1]
+            current_epoch = current_point[0]
+            if current_epoch is None:
+                # no prior state => take first point
+                res[0] = (epoch, value, 1, self.precision)
+            elif current_epoch == epoch:
+                # point is in current epoch => aggregate:
+                #   1. get current value from last point in res
+                #   2. get current count from last point in res
+                #   3. compute aggregated value with new value
+                #   4. replace last point in res
+                # the last point in res now contains up-to-date information
+                current_value = current_point[1]
+                current_count = current_point[2]
+                aggregated_value = self._aggregator.merge(current_value, current_count, value)
+                res[-1] = (current_epoch, aggregated_value, current_count + 1, self.precision)
+            elif current_epoch < epoch:
+                # point is in new epoch => add new epoch
+                res.append((epoch, value, 1, self.precision))
+        return [(r[0] * self.precision, r[1], r[2], r[3]) for r in res]
+
+    def update(self, points):
+        """Compute aggregated value and store it.
+
+        The points have to be sorted by increasing timestamps.
+
+        Args:
+          points: new points to be added into the current aggregate.
+
+        Returns:
+          Iterable of (timestamp, value, count, precision).
+        """
+        res = self.compute(points)
+        if res:
+            # update current stage with last element of res
+            current_point = res[-1]
+            self._epoch = current_point[0] // self.precision
+            self.value = current_point[1]
+            self.count = current_point[2]
+        return res
+
+
+class MetricAggregates(object):
+    """Perform aggregation on the data of a given metric."""
+
+    __slots__ = (
+        "_stages",
+    )
+
+    def __init__(self, metric_metadata):
+        """Initialize a new MetricAggregator.
+
+        Args:
+          metric_metadata: MetricMetadata object.
+        """
+        self._stages = [StageAggregate(r.precision, metric_metadata.aggregator)
+                        for r in metric_metadata.retention]
+
+    def compute(self, points):
+        """Compute aggregated values but do not store them.
+
+        The points have to be sorted by increasing timestamps.
+
+        Args:
+          points: new points to be added into the current aggregates.
+
+        Returns:
+          Iterable of iterables of (timestamp, value, count, precision).
+        """
+        return [[p for p in s.compute(points)] for s in self._stages]
+
+    def update(self, points):
+        """Compute aggregated values and store them.
+
+        The points have to be sorted by increasing timestamps.
+
+        Args:
+          points: new points to be added into the current aggregates.
+
+        Returns:
+          Iterable of iterables of (timetsamp, value, count, precision).
+        """
+        return [[p for p in s.update(points)] for s in self._stages]
