@@ -251,5 +251,66 @@ class TestMetricAggregates(unittest.TestCase):
         self.assertEqual(result, expected)
 
 
+class TestDownsampler(unittest.TestCase):
+    METRIC_NAME = "test.metric"
+    PRECISION = 10
+    CAPACITY = 3
+
+    def setUp(self):
+        aggregator = bg_accessor.Aggregator.total
+        capacity_precisions = (self.CAPACITY, self.PRECISION,
+                               self.CAPACITY, self.PRECISION ** 2)
+        retention_string = "%d*%ds:%d*%ds" % (capacity_precisions)
+        retention = bg_accessor.Retention.from_string(retention_string)
+        metric_metadata = bg_accessor.MetricMetadata(aggregator=aggregator, retention=retention)
+        self.metric = bg_accessor.Metric(self.METRIC_NAME, metric_metadata)
+        self.ds = bg_ds.Downsampler()
+
+    def test_downsampler_simple(self):
+        # 1. Put value 1 at timestamp 0.
+        # 2. Evict this value with a large timestamp that fits in the buffer.
+        # 3. Check that only the first point is used in the computation.
+        points = [
+            (0, 1),
+            (self.PRECISION * self.CAPACITY, 55555),
+        ]
+        expected = [
+            (0, 1, 1, self.PRECISION),
+            (0, 1, 1, self.PRECISION ** 2)
+        ]
+        result = self.ds.feed(self.metric, points)
+        self.assertEqual(result, expected)
+
+        # 1. Reset point with value 55555 (this should not evict anything).
+        # 2. Check that the aggregates are still the same.
+        points = [(self.PRECISION * self.CAPACITY, -1)]
+        result = self.ds.feed(self.metric, points)
+        self.assertEqual(result, expected)
+
+    def test_downsampler_extended(self):
+        # Check with several points.
+        # Since we have some capacity in the buffer, the points with the largest
+        # timestamps should not be evicted
+        points = [
+            (0, 1),
+            (self.PRECISION - 1, 9),        # replaces previous point
+            (self.PRECISION, 10),
+            (self.PRECISION * self.CAPACITY, 7),
+            (self.PRECISION ** 2 - 1, 20),  # not evicted
+            (self.PRECISION ** 2, 50)       # not evicted
+        ]
+        expected_stage_0 = [
+            (0, 9, 1, self.PRECISION),
+            (self.PRECISION, 10, 1, self.PRECISION),
+            (self.PRECISION * self.CAPACITY, 7, 1, self.PRECISION)
+        ]
+        expected_stage_1 = [
+            (0, 26, 3, self.PRECISION ** 2)
+        ]
+        expected = expected_stage_0 + expected_stage_1
+        result = self.ds.feed(self.metric, points)
+        self.assertEqual(result, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
