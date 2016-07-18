@@ -18,49 +18,76 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 
+class MetricDownsampler(object):
+    """Metric-bound downsampler using MetricAggregates to produce aggregates."""
+
+    slots = (
+        "__metric_buffer",
+        "__metric_aggregates"
+    )
+
+    def __init__(self, metric_metadata):
+        """Initialize a new MetricDownsampler.
+
+        Args:
+          metric_metadata: MetricMetadata object.
+        """
+        stage_0 = metric_metadata.retention[0]
+        precision = stage_0.precision
+        capacity = stage_0.points
+        self.__buffer = MetricBuffer(precision, capacity)
+        self.__aggregates = MetricAggregates(metric_metadata)
+
+    def feed(self, datapoints):
+        """Feed the downsampler and produce points.
+
+        Arg:
+          metric: Metric
+          datapoints: iterable of (timestamp as sec, value as float)
+        Returns:
+          Iterable of (timestamp, value, count, precision).
+        """
+        # Sort points by increasing timestamp.
+        sorted_points = sorted(datapoints)
+
+        # Put points in buffer and pop expired points.
+        expired_points = []
+        for timestamp, value in sorted_points:
+            expired_points.extend(self.__buffer.put(timestamp, value))
+        # TODO: remove from __metrics if/when
+        # all the points have been removed from the buffer.
+
+        # Update aggregates with expired points.
+        aggregates = self.__aggregates.update(expired_points)
+
+        # Compute result with aggregates.
+        result = []
+        for aggregate in aggregates:
+            result.extend(aggregate)
+        return result
+
+
 class Downsampler(object):
-    """Stupid downsampler that produces per minute average."""
+    """Downsampler using MetricAggregates to produce aggregates."""
 
     def __init__(self):
         """Default constructor."""
-        self.__precision = 60
-        self.__epoch = 0
-        self.__counters = {}
+        self.__metrics = {}
 
     def feed(self, metric, datapoints):
         """Feed the downsampler and produce points.
 
         Arg:
           metric: Metric
-          datapoints: tuple(timestamp as sec, value as float)
+          datapoints: iterable of (timestamp as sec, value as float)
         Returns:
-          tuple(timestamp as sec, value as float) generated datapoints.
+          Iterable of (timestamp, value, count, precision).
         """
-        results = []
+        # Ensure we have the required aggregation mechanism.
+        if metric.name not in self.__metrics:
+            self.__metrics[metric.name] = MetricDownsampler(metric.metadata)
 
-        for timestamp, value in datapoints:
-            epoch = timestamp // self.__precision
-
-            if epoch < self.__epoch:
-                continue
-            if epoch > self.__epoch:
-                self.__epoch = epoch
-                values = self.__counters.values()
-                if values:
-                    results.extend(values)
-                self.__counters.clear()
-
-            count = 1
-            if metric.name in self.__counters:
-                value += self.__counters[metric.name][1]
-                count += self.__counters[metric.name][2]
-            self.__counters[metric.name] = (
-                epoch * self.__precision,
-                value,
-                count,
-                self.__precision
-            )
-        return results
+        return self.__metrics[metric.name].feed(datapoints)
 
 
 class MetricBuffer(object):
@@ -150,7 +177,7 @@ class MetricBuffer(object):
           value: value of the data point.
 
         Returns:
-          The list of expired points form the raw buffer.
+          The list of expired (timestamp, value) from the raw buffer.
         """
         expiry_timestamp = timestamp - (self._capacity - 1) * self._precision
         expired = self.pop_expired(expiry_timestamp)
@@ -199,6 +226,7 @@ class StageAggregate(object):
         Returns:
           Iterable of (timestamp, value, count, precision).
         """
+        # No prior state and no update => return empty list.
         if self._epoch is None and not points:
             return []
 
@@ -285,6 +313,6 @@ class MetricAggregates(object):
           points: new points to be added into the current aggregates.
 
         Returns:
-          Iterable of iterables of (timetsamp, value, count, precision).
+          Iterable of iterables of (timestamp, value, count, precision).
         """
         return [[p for p in s.update(points)] for s in self._stages]
