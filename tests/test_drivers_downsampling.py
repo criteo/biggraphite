@@ -251,5 +251,48 @@ class TestMetricAggregates(unittest.TestCase):
         self.assertEqual(result, expected)
 
 
+class TestDownsampler(unittest.TestCase):
+    METRIC_NAME = "test.metric"
+    PRECISION = 10
+
+    def setUp(self):
+        aggregator = bg_accessor.Aggregator.average
+        precisions = (self.PRECISION, self.PRECISION ** 2)
+        retention_string = "5*%ds:10*%ds" % (precisions)
+        retention = bg_accessor.Retention.from_string(retention_string)
+        metric_metadata = bg_accessor.MetricMetadata(aggregator=aggregator, retention=retention)
+        self.metric = bg_accessor.Metric(self.METRIC_NAME, metric_metadata)
+        self.ds = bg_ds.Downsampler()
+
+    def test_downsampler(self):
+        points = [(0, 1)]
+        expected = [
+            (0, 1, 1, self.PRECISION),
+            (0, 1, 1, self.PRECISION ** 2)
+        ]
+        result = self.ds.feed(self.metric, points)
+        self.assertEqual(result, expected)
+
+        points = [
+            (self.PRECISION - 1, 9),
+            (self.PRECISION, 10),
+            (self.PRECISION ** 2 - 1, 20),
+            (self.PRECISION ** 2, 50)
+        ]
+        expected_stage_0 = [
+            (0, 5, 2, self.PRECISION),
+            (self.PRECISION, 10, 1, self.PRECISION),
+            (self.PRECISION ** 2 - self.PRECISION, 20, 1, self.PRECISION),
+            (self.PRECISION ** 2, 50, 1, self.PRECISION)
+        ]
+        expected_stage_1 = [
+            (0, 10, 4, self.PRECISION ** 2),
+            (self.PRECISION ** 2, 50, 1, self.PRECISION ** 2)
+        ]
+        expected = expected_stage_0 +expected_stage_1
+        result = self.ds.feed(self.metric, points)
+        self.assertEqual(result, expected)
+
+
 if __name__ == "__main__":
     unittest.main()

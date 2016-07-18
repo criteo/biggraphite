@@ -19,47 +19,37 @@ from __future__ import print_function
 
 
 class Downsampler(object):
-    """Stupid downsampler that produces per minute average."""
+    """Downsampler using MetricAggregates to produce aggregates."""
 
     def __init__(self):
         """Default constructor."""
-        self.__precision = 60
-        self.__epoch = 0
-        self.__counters = {}
+        self.__metrics = {}
 
     def feed(self, metric, datapoints):
         """Feed the downsampler and produce points.
 
         Arg:
           metric: Metric
-          datapoints: tuple(timestamp as sec, value as float)
+          datapoints: iterable of (timestamp as sec, value as float)
         Returns:
-          tuple(timestamp as sec, value as float) generated datapoints.
+          Iterable of (timestamp, value, count, precision).
         """
         results = []
 
-        for timestamp, value in datapoints:
-            epoch = timestamp // self.__precision
+        # Ensure we have the required aggregation mechanism.
+        if metric.name not in self.__metrics:
+            self.__metrics[metric.name] = MetricAggregates(metric.metadata)
 
-            if epoch < self.__epoch:
-                continue
-            if epoch > self.__epoch:
-                self.__epoch = epoch
-                values = self.__counters.values()
-                if values:
-                    results.extend(values)
-                self.__counters.clear()
+        # Sort points by increasing timestamp.
+        sorted_points = sorted(datapoints, key=lambda p: p[0])
+        # Compute aggregates for all stages.
+        aggregates = self.__metrics[metric.name].update(sorted_points)
+        # Add aggregates to results.
+        for aggregate in aggregates:
+            results.extend(aggregate)
 
-            count = 1
-            if metric.name in self.__counters:
-                value += self.__counters[metric.name][1]
-                count += self.__counters[metric.name][2]
-            self.__counters[metric.name] = (
-                epoch * self.__precision,
-                value,
-                count,
-                self.__precision
-            )
+        # TODO: remove from __metrics if/when
+        # all the points have been removed from the buffer.
         return results
 
 
@@ -285,6 +275,6 @@ class MetricAggregates(object):
           points: new points to be added into the current aggregates.
 
         Returns:
-          Iterable of iterables of (timetsamp, value, count, precision).
+          Iterable of iterables of (timestamp, value, count, precision).
         """
         return [[p for p in s.update(points)] for s in self._stages]
