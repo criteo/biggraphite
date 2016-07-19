@@ -34,7 +34,7 @@ class MetricDownsampler(object):
         """
         stage_0 = metric_metadata.retention[0]
         precision = stage_0.precision
-        capacity = stage_0.points
+        capacity = 5  # TODO: make capacity a constant
         self.__buffer = MetricBuffer(precision, capacity)
         self.__aggregates = MetricAggregates(metric_metadata)
 
