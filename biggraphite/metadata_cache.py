@@ -71,7 +71,7 @@ class DiskCache(object):
         self.__json_cache_lock = threading.Lock()
         self.__json_cache = {}
         self.__metric_to_metadata_db = None
-        self.__path = os_path.join(path, "biggraphite", "cache", "version0")
+        self.__path = os_path.join(path, "biggraphite", "cache", "version1")
 
     def open(self):
         """Allocate ressources used by the cache.
