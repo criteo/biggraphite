@@ -183,7 +183,7 @@ class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
         class CustomException(Exception):
             pass
 
-        def async_mock(metric, timestamps_and_values, on_done):
+        def async_mock(metric, datapoints, on_done):
             on_done(CustomException("fake failure"))
             return mock.DEFAULT
 

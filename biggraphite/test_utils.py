@@ -147,13 +147,13 @@ class FakeAccessor(bg_accessor.Accessor):
         super(FakeAccessor, self).shutdown(*args, **kwargs)
         self.is_connected = False
 
-    def insert_points_async(self, metric, timestamps_and_values, on_done=None):
+    def insert_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
-        super(FakeAccessor, self).insert_points_async(metric, timestamps_and_values, on_done)
+        super(FakeAccessor, self).insert_points_async(metric, datapoints, on_done)
         assert metric.name in self._metric_to_metadata
         points = self._metric_to_points[metric.name]
-        for t, v in timestamps_and_values:
-            points[t] = v
+        for timestamp, value in datapoints:
+            points[timestamp] = value
         if on_done:
             on_done(None)
 
