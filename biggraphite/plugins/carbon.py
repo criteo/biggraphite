@@ -61,9 +61,12 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # settings.WHISPER_FALLOCATE_CREATE:
         # settings.WHISPER_LOCK_WRITES:
 
-    def write(self, metric, datapoints):
-        self._accessor.insert_points(
-            metric=metric, timestamps_and_values=datapoints)
+    def write(self, metric_name, datapoints):
+        # Get a Metric object from metric name.
+        metric = self._cache.get_metric(metric_name=metric_name)
+        # Round down timestamp because inner functions expect integers.
+        datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
+        self._accessor.insert_points(metric=metric, datapoints=datapoints)
 
     def exists(self, metric_name):
         # If exists returns "False" then "create" will be called.
