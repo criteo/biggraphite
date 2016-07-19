@@ -109,6 +109,7 @@ class MetricBuffer(object):
           precision: precision of the raw buffer in seconds.
           capacity: number of slots in the raw buffer.
         """
+        # TODO: use stage in constructor
         self._precision = precision
         self._capacity = capacity
         self._buffer = [None] * capacity
@@ -143,6 +144,7 @@ class MetricBuffer(object):
         if self._epoch is None:
             return []
         res = []
+        timestamp = int(timestamp)
         epoch_start = self._epoch - (self._capacity - 1)
         epoch_end = timestamp // self._precision
         for e in xrange(epoch_start, epoch_end):
@@ -164,6 +166,7 @@ class MetricBuffer(object):
         """
         if self._epoch is None:
             return None
+        timestamp = int(timestamp)
         epoch = timestamp // self._precision
         epoch_start = self._epoch - (self._capacity - 1)
         epoch_end = self._epoch
@@ -175,12 +178,13 @@ class MetricBuffer(object):
         """"Insert a data point in the raw buffer and pop expired points.
 
         Args:
-          timestamp: timestamp of the data point.
+          timestamp: timestamp of the data point, in seconds.
           value: value of the data point.
 
         Returns:
           The list of expired (timestamp, value) from the raw buffer.
         """
+        timestamp = int(timestamp)
         expiry_timestamp = timestamp - (self._capacity - 1) * self._precision
         expired = self.pop_expired(expiry_timestamp)
         epoch = timestamp // self._precision
