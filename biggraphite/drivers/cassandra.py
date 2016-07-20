@@ -200,19 +200,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
         components = self._components_from_name(metric.name)
         queries = []
 
-        directory_path = []
-        # Create parent directories
-        for component in components[:-2]:  # -1 for _LAST_COMPONENT, -1 for metric
-            directory_path.append(component)
-            directory_name = ".".join(directory_path)
-            directory_components = directory_path + [_LAST_COMPONENT]
-            directory_padding = [None] * (_COMPONENTS_MAX_LEN - len(directory_components))
-            queries.append((
-                self.__insert_directories_statement,
-                [directory_name] + directory_components + directory_padding,
-            ))
-        padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
+        parent_dir = metric.name.rpartition(".")[0]
+        if not self.glob_directory_names(parent_dir):
+            # Create parent directories
+            directory_path = []
+            for component in components[:-2]:  # -1 for _LAST_COMPONENT, -1 for metric
+                directory_path.append(component)
+                directory_name = ".".join(directory_path)
+                directory_components = directory_path + [_LAST_COMPONENT]
+                directory_padding = [None] * (_COMPONENTS_MAX_LEN - len(directory_components))
+                queries.append((
+                    self.__insert_directories_statement,
+                    [directory_name] + directory_components + directory_padding,
+                ))
+
         # Finally, create the metric
+        padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
         metric_metadata_dict = metric.metadata.as_string_dict()
         queries.append((
             self.__insert_metrics_statement,
