@@ -265,7 +265,7 @@ class TestDownsampler(unittest.TestCase):
         retention = bg_accessor.Retention.from_string(retention_string)
         metric_metadata = bg_accessor.MetricMetadata(aggregator=aggregator, retention=retention)
         self.metric = bg_accessor.Metric(self.METRIC_NAME, metric_metadata)
-        self.ds = bg_ds.Downsampler()
+        self.ds = bg_ds.Downsampler(self.CAPACITY)
 
     def test_simple(self):
         """Simple test with few points."""

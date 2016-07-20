@@ -159,10 +159,10 @@ class Finder(object):
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: handle directories constructor argument/property
-        metrics, directories = graphite_utils.glob(self._accessor, query.pattern)
-        for metric in metrics:
-            reader = Reader(self._accessor, self._metadata_cache, metric)
-            yield node.LeafNode(metric, reader)
+        metric_names, directories = graphite_utils.glob(self._accessor, query.pattern)
+        for metric_name in metric_names:
+            reader = Reader(self._accessor, self._metadata_cache, metric_name)
+            yield node.LeafNode(metric_name, reader)
 
         for directory in directories:
             yield node.BranchNode(directory)

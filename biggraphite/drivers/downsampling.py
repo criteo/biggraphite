@@ -26,15 +26,15 @@ class MetricDownsampler(object):
         "__metric_aggregates"
     )
 
-    def __init__(self, metric_metadata):
+    def __init__(self, metric_metadata, capacity):
         """Initialize a new MetricDownsampler.
 
         Args:
           metric_metadata: MetricMetadata object.
+          capacity: capacity of the MetricBuffer object.
         """
         stage_0 = metric_metadata.retention[0]
         precision = stage_0.precision
-        capacity = stage_0.points
         self.__buffer = MetricBuffer(precision, capacity)
         self.__aggregates = MetricAggregates(metric_metadata)
 
@@ -72,8 +72,15 @@ class MetricDownsampler(object):
 class Downsampler(object):
     """Downsampler using MetricAggregates to produce aggregates."""
 
-    def __init__(self):
+    CAPACITY = 20
+
+    slots = (
+        "__capacity"
+    )
+
+    def __init__(self, capacity=CAPACITY):
         """Default constructor."""
+        self.__capacity = capacity
         self.__metrics = {}
 
     def feed(self, metric, datapoints):
@@ -87,7 +94,7 @@ class Downsampler(object):
         """
         # Ensure we have the required aggregation mechanism.
         if metric.name not in self.__metrics:
-            self.__metrics[metric.name] = MetricDownsampler(metric.metadata)
+            self.__metrics[metric.name] = MetricDownsampler(metric.metadata, self.__capacity)
 
         return self.__metrics[metric.name].feed(datapoints)
 
@@ -109,6 +116,7 @@ class MetricBuffer(object):
           precision: precision of the raw buffer in seconds.
           capacity: number of slots in the raw buffer.
         """
+        # TODO: use stage in constructor
         self._precision = precision
         self._capacity = capacity
         self._buffer = [None] * capacity
@@ -175,7 +183,7 @@ class MetricBuffer(object):
         """"Insert a data point in the raw buffer and pop expired points.
 
         Args:
-          timestamp: timestamp of the data point.
+          timestamp: timestamp of the data point, in seconds.
           value: value of the data point.
 
         Returns:
@@ -269,7 +277,7 @@ class StageAggregate(object):
         """
         res = self.compute(points)
         if res:
-            # update current stage with last element of res
+            # update current state with last element of res
             current_point = res[-1]
             self._epoch = current_point[0] // self.precision
             self.value = current_point[1]
