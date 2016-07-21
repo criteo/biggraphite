@@ -65,6 +65,7 @@ You can use `tox` to run tests:
     pip install tox
     tox
 ```
+Cassandra tests generate a lot of I/O, make sure you /tmp is mounted as tmpfs.
 
 You can also simply use unittest.discover if you have a working dev environment (see previous paragraph).
 
