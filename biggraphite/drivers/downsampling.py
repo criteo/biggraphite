@@ -17,56 +17,10 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import array
+import math
 
-class MetricDownsampler(object):
-    """Metric-bound downsampler using MetricAggregates to produce aggregates."""
-
-    slots = (
-        "__metric_buffer",
-        "__metric_aggregates"
-    )
-
-    def __init__(self, metric_metadata, capacity):
-        """Initialize a new MetricDownsampler.
-
-        Args:
-          metric_metadata: MetricMetadata object.
-          capacity: capacity of the MetricBuffer object.
-        """
-        stage_0 = metric_metadata.retention[0]
-        precision = stage_0.precision
-        self.__buffer = MetricBuffer(precision, capacity)
-        self.__aggregates = MetricAggregates(metric_metadata)
-
-    def feed(self, datapoints):
-        """Feed the downsampler and produce points.
-
-        Points older than the latest ingested point may be ignored.
-
-        Arg:
-          metric: Metric
-          datapoints: iterable of (timestamp as sec, value as float)
-        Returns:
-          Iterable of (timestamp, value, count, precision).
-        """
-        # Sort points by increasing timestamp, because put expects them in order.
-        sorted_points = sorted(datapoints)
-
-        # Put points in buffer and pop expired points.
-        expired_points = []
-        for timestamp, value in sorted_points:
-            expired_points.extend(self.__buffer.put(timestamp, value))
-        # TODO: remove from __metrics if/when
-        # all the points have been removed from the buffer.
-
-        # Update aggregates with expired points.
-        aggregates = self.__aggregates.update(expired_points)
-
-        # Compute result with aggregates.
-        result = []
-        for aggregate in aggregates:
-            result.extend(aggregate)
-        return result
+_NaN = float("NaN")
 
 
 class Downsampler(object):
@@ -75,254 +29,254 @@ class Downsampler(object):
     CAPACITY = 20
 
     slots = (
-        "__capacity"
+        "_capacity",
+        "_names_to_aggregates"
     )
 
     def __init__(self, capacity=CAPACITY):
         """Default constructor."""
-        self.__capacity = capacity
-        self.__metrics = {}
+        self._capacity = capacity
+        self._names_to_aggregates = {}
 
     def feed(self, metric, datapoints):
         """Feed the downsampler and produce points.
 
         Arg:
           metric: Metric
-          datapoints: iterable of (timestamp as sec, value as float)
+          datapoints: iterable of (timestamp, value)
         Returns:
           Iterable of (timestamp, value, count, precision).
         """
         # Ensure we have the required aggregation mechanism.
-        if metric.name not in self.__metrics:
-            self.__metrics[metric.name] = MetricDownsampler(metric.metadata, self.__capacity)
+        if metric.name not in self._names_to_aggregates:
+            self._names_to_aggregates[metric.name] = MetricAggregates(metric.metadata, self._capacity)
 
-        return self.__metrics[metric.name].feed(datapoints)
+        # Sort points by increasing timestamp, because put expects them in order.
+        return self._names_to_aggregates[metric.name].update(metric.metadata, sorted(datapoints))
 
 
-class MetricBuffer(object):
-    """Perform computation on the data of a given metric."""
+class MetricAggregates(object):
+    """Perform aggregation on metric data points."""
+
+    DEFAULT_RAW_CAPACITY = 10
 
     __slots__ = (
-        "_precision",
-        "_capacity",
-        "_buffer",
-        "_epoch"
+        "_raw_capacity",   # TODO: remove (use stage in methods)
+        "_timestamps",
+        "_values",
+        "_counts",
     )
 
-    def __init__(self, precision=60, capacity=10):
-        """"Initialize a MetricBuffer object.
+    def __init__(self, metric_metadata, raw_capacity=DEFAULT_RAW_CAPACITY):
+        """"Initialize a MetricAggregates object.
 
         Args:
+          metric_metadata: MetricMetadata object.
           precision: precision of the raw buffer in seconds.
           capacity: number of slots in the raw buffer.
         """
         # TODO: use stage in constructor
-        self._precision = precision
-        self._capacity = capacity
-        self._buffer = [None] * capacity
-        self._epoch = None
+        stages = len(metric_metadata.retention.stages)
 
-    def current_points(self):
-        """Get list of points currently in the buffer.
+        # _raw_capacity: length of the raw buffer
+        self._raw_capacity = raw_capacity
 
-        Returns:
-          The list of (timestamp, value) of points in the buffer.
-        """
-        if self._epoch is None:
-            return []
-        res = []
-        epoch_start = self._epoch - (self._capacity - 1)
-        epoch_end = epoch_start + self._capacity
-        for e in xrange(epoch_start, epoch_end):
-            index = e % self._capacity
-            if self._buffer[index] is not None:
-                res.append((e * self._precision, self._buffer[index]))
-        return res
+        # _timestamps: array of integers:
+        #   - raw timestamp at index 0
+        #   - stage timestamp from index 1
+        # TODO: make sure that each stage timestamp is equal to:
+        # (raw_timestamp - (raw_capacity - 1) * raw_precision) % stage_precision
+        self._timestamps = array.array("i", [-1] * (1 + stages))
 
-    def pop_expired(self, timestamp):
-        """"Pop expired elements strictly older than timestamp.
+        # _values: array of doubles:
+        #   - raw buffer values from index 0 with length raw_capacity
+        #   - stage values from index raw_capacity
+        self._values = array.array("d", [_NaN] * (raw_capacity + stages))
+
+        # _counts: array of integer: stage counts from index 0
+        self._counts = array.array("i", [0] * stages)
+
+    def _update_raw(self, datapoints, precision):
+        """"Put raw data points in raw buffer and pop expired raw data points.
 
         Args:
-          timestamp: time horizon to clear elements, in seconds.
+          datapoints: iterable of (timestamp, value).
+          precision: precision of the raw buffer in seconds.
 
         Returns:
-          The list of (timestamp, value) popped from the buffer.
+          The list of (timestamp, value) expired from the raw buffer.
         """
-        if self._epoch is None:
-            return []
-        res = []
-        epoch_start = self._epoch - (self._capacity - 1)
-        epoch_end = timestamp // self._precision
-        for e in xrange(epoch_start, epoch_end):
-            index = e % self._capacity
-            if self._buffer[index] is not None:
-                res.append((e * self._precision, self._buffer[index]))
-                self._buffer[index] = None
-        return res
+        if self._timestamps[0] == -1:
+            # There is no prior stage in the raw buffer.
+            if not datapoints:
+                # No update => nothing to expire
+                return []
+            # Otherwise, update raw timestamp to first point.
+            first_datapoint = datapoints[0]
+            first_timestamp = first_datapoint[0]
+            self._timestamps[0] = first_timestamp
 
-    def get(self, timestamp):
-        """"Get a data point from the raw buffer.
-
-        Args:
-          timestamp: timestamp of the data point.
-
-        Returns:
-          The value of the data point at the requested time,
-          or None if it's not in the raw buffer.
-        """
-        if self._epoch is None:
-            return None
-        epoch = timestamp // self._precision
-        epoch_start = self._epoch - (self._capacity - 1)
-        epoch_end = self._epoch
-        if epoch >= epoch_start and epoch <= epoch_end:
-            return self._buffer[epoch % self._capacity]
-        return None
-
-    def put(self, timestamp, value):
-        """"Insert a data point in the raw buffer and pop expired points.
-
-        Args:
-          timestamp: timestamp of the data point, in seconds.
-          value: value of the data point.
-
-        Returns:
-          The list of expired (timestamp, value) from the raw buffer.
-        """
-        expiry_timestamp = timestamp - (self._capacity - 1) * self._precision
-        expired = self.pop_expired(expiry_timestamp)
-        epoch = timestamp // self._precision
-        if self._epoch is None:
-            self._epoch = epoch
-        if epoch > self._epoch - self._capacity:
-            self._buffer[epoch % self._capacity] = value
-        if epoch > self._epoch:
-            self._epoch = epoch
+        expired = []
+        for timestamp, value in datapoints:
+            current_epoch = self._timestamps[0] // precision
+            point_epoch = timestamp // precision
+            if point_epoch > current_epoch:
+                # Point is more recent than most recent raw point => expire.
+                # TODO: if there no point was received for a long while,
+                # this can take linear time. Optimize this.
+                start_epoch = current_epoch - (self._raw_capacity - 1)
+                end_epoch = point_epoch - (self._raw_capacity - 1)
+                for epoch in xrange(start_epoch, end_epoch):
+                    index = epoch % self._raw_capacity
+                    if not math.isnan(self._values[index]):
+                        expired.append((epoch * precision, self._values[index]))
+                    self._values[index] = _NaN
+                # Round raw timestamp to a multiple of precision.
+                self._timestamps[0] = point_epoch * precision
+                self._values[point_epoch % self._raw_capacity] = value
+            elif point_epoch > current_epoch - self._raw_capacity:
+                self._values[point_epoch % self._raw_capacity] = value
         return expired
 
-
-class StageAggregate(object):
-    """Perform aggregation on the data of a given retention stage."""
-
-    __slots__ = (
-        "precision",
-        "_aggregator",
-        "_epoch",
-        "value",
-        "count"
-    )
-
-    def __init__(self, precision, aggregator):
-        """Initialize a new StageAggregator.
-
-        Args:
-          precision: precision of the stage, in seconds.
-          aggregator: aggregator object to compute aggregates.
-        """
-        self.precision = precision
-        self._aggregator = aggregator
-        self._epoch = None
-        self.value = None
-        self.count = 0
-
-    def compute(self, points):
-        """Compute aggregated value but do not store it.
+    def _update_stage(self, stage, precision, aggregator, points):
+        """Compute aggregated value for a stage and store it.
 
         The points have to be sorted by increasing timestamps.
 
         Args:
-          points: new points to be added into the current aggregate.
+          stage: stage to update with raw points.
+          precision: stage precision, in seconds.
+          aggregator: metric aggregator function.
+          points: raw points to be added into the current stage aggregate.
 
         Returns:
           Iterable of (timestamp, value, count, precision).
         """
-        # No prior state and no update => return empty list.
-        if self._epoch is None and not points:
+        current_timestamp = self._get_stage_timestamp(stage)
+        current_value = self._get_stage_value(stage)
+        current_count = self._get_stage_count(stage)
+        if current_timestamp == -1 and not points:
             return []
 
-        res = [(self._epoch, self.value, self.count, self.precision)]
-        for (timestamp, value) in points:
-            epoch = timestamp // self.precision
-            current_point = res[-1]
-            current_epoch = current_point[0]
-            if current_epoch is None:
-                # no prior state => take first point
-                res[0] = (epoch, value, 1, self.precision)
-            elif current_epoch == epoch:
-                # point is in current epoch => aggregate:
-                #   1. get current value from last point in res
-                #   2. get current count from last point in res
-                #   3. compute aggregated value with new value
-                #   4. replace last point in res
-                # the last point in res now contains up-to-date information
+        if current_timestamp == -1:
+            # No prior stage information => take first point timestamp.
+            first_point = points[0]
+            first_epoch = first_point[0] // precision
+            first_timestamp = first_epoch * precision
+            current_timestamp = first_timestamp
+
+        expired = [(current_timestamp, current_value, current_count, precision)]
+
+        for timestamp, value in points:
+            epoch = timestamp // precision
+            current_point = expired[-1]
+            current_epoch = current_point[0] // precision
+            if current_epoch == epoch:
+                # Point is in current epoch => aggregate:
+                #   1. Get current value and and current count.
+                #   2. Compute aggregated value with new value.
+                #   3. Update stage information.
+                # The last point in expired now contains up-to-date information.
                 current_value = current_point[1]
                 current_count = current_point[2]
-                aggregated_value = self._aggregator.merge(current_value, current_count, value)
-                res[-1] = (current_epoch, aggregated_value, current_count + 1, self.precision)
+                aggregated_value = aggregator.merge(current_value, current_count, value)
+                expired[-1] = (epoch * precision, aggregated_value, current_count + 1, precision)
             elif current_epoch < epoch:
-                # point is in new epoch => add new epoch
-                res.append((epoch, value, 1, self.precision))
-        return [(r[0] * self.precision, r[1], r[2], r[3]) for r in res]
+                # Point is in new epoch => add new epoch.
+                expired.append((epoch * precision, value, 1, precision))
+        if expired:
+            current_point = expired[-1]
+            self._set_stage_timestamp(stage, current_point[0])
+            self._set_stage_value(stage, current_point[1])
+            self._set_stage_count(stage, current_point[2])
 
-    def update(self, points):
-        """Compute aggregated value and store it.
+        return expired
 
-        The points have to be sorted by increasing timestamps.
-
-        Args:
-          points: new points to be added into the current aggregate.
-
-        Returns:
-          Iterable of (timestamp, value, count, precision).
-        """
-        res = self.compute(points)
-        if res:
-            # update current state with last element of res
-            current_point = res[-1]
-            self._epoch = current_point[0] // self.precision
-            self.value = current_point[1]
-            self.count = current_point[2]
-        return res
-
-
-class MetricAggregates(object):
-    """Perform aggregation on the data of a given metric."""
-
-    __slots__ = (
-        "_stages",
-    )
-
-    def __init__(self, metric_metadata):
-        """Initialize a new MetricAggregator.
-
-        Args:
-          metric_metadata: MetricMetadata object.
-        """
-        self._stages = [StageAggregate(r.precision, metric_metadata.aggregator)
-                        for r in metric_metadata.retention]
-
-    def compute(self, points):
-        """Compute aggregated values but do not store them.
+    def update(self, metric_metadata, datapoints):
+        """"Compute aggregated values and store them.
 
         The points have to be sorted by increasing timestamps.
 
         Args:
-          points: new points to be added into the current aggregates.
+          metric_metadata: MetricMetadata object
+          datapoints: iterable of (timestamp, value).
 
         Returns:
-          Iterable of iterables of (timestamp, value, count, precision).
+          # TODO: change
+          The list of expired (timestamp, value) from the raw buffer.
         """
-        return [[p for p in s.compute(points)] for s in self._stages]
+        stages = metric_metadata.retention.stages
+        aggregator = metric_metadata.aggregator
+        raw_precision = stages[0].precision
+        expired_raw = self._update_raw(datapoints, raw_precision)
+        expired = []
+        for stage in xrange(len(stages)):
+            stage_precision = stages[stage].precision
+            expired.extend(self._update_stage(stage, stage_precision, aggregator, expired_raw))
+        return expired
 
-    def update(self, points):
-        """Compute aggregated values and store them.
+    def _get_stage_timestamp(self, stage):
+        """Get timestamp of stage in buffer.
 
-        The points have to be sorted by increasing timestamps.
+        Raw timestamp is at index 0.
+        Stage timestamps start at index 1.
 
         Args:
-          points: new points to be added into the current aggregates.
+          stage: stage whose timestamp to get.
 
         Returns:
-          Iterable of iterables of (timestamp, value, count, precision).
+          Timestamp of stage, in seconds.
         """
-        return [[p for p in s.update(points)] for s in self._stages]
+        return self._timestamps[1 + stage]
+
+    def _set_stage_timestamp(self, stage, timestamp):
+        """Set timestamp of stage in buffer.
+
+        Raw timestamp is at index 0.
+        Stage timestamps start at index 1.
+
+        Args:
+          stage: stage whose timestamp to set.
+          timestamp: timestamp to set stage to.
+        """
+        self._timestamps[1 + stage] = timestamp
+
+    def _get_stage_value(self, stage):
+        """Get value of stage in buffer.
+
+        Args:
+          stage: stage whose value to get.
+
+        Returns:
+          Value of stage.
+        """
+        return self._values[self._raw_capacity + stage]
+
+    def _set_stage_value(self, stage, value):
+        """Set value of stage in buffer.
+
+        Args:
+          stage: stage whose value to set.
+          value: value to set stage to.
+        """
+        self._values[self._raw_capacity + stage] = value
+
+    def _get_stage_count(self, stage):
+        """Get count of stage in buffer.
+
+        Args:
+          stage: stage whose count to get.
+
+        Returns:
+          Count of stage.
+        """
+        return self._counts[stage]
+
+    def _set_stage_count(self, stage, count):
+        """Set count of stage in buffer.
+
+        Args:
+          stage: stage whose count to set.
+          count: count to set stage to.
+        """
+        self._counts[stage] = count
