@@ -20,15 +20,6 @@ import operator
 import abc
 import netrc
 
-# Numpy is nice to have to get more precise stats but do
-# not depend on it because it can be a mess to install, especially
-# on travis.
-try:
-    import numpy
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-
 
 class Error(Exception):
     """Error."""
@@ -462,18 +453,11 @@ def _compute_pctls(measures):
 
     pctls = collections.OrderedDict()
 
-    if not HAS_NUMPY:
-        sorted_measures = sorted(measures)
-        for i in [50, 75, 90, 99, 99.9]:
-            # Don't even try to interpolate.
-            rank = int(i / 100. * (len(measures)-1))
-            pctls[i] = sorted_measures[rank]
-    else:
-        numpy_array = numpy.array(measures)
-        pctls[50] = numpy.percentile(numpy_array, 50, interpolation="higher")
-        pctls[90] = numpy.percentile(numpy_array, 90, interpolation="higher")
-        pctls[99] = numpy.percentile(numpy_array, 99, interpolation="higher")
-        pctls[99.9] = numpy.percentile(numpy_array, 99.9, interpolation="higher")
+    sorted_measures = sorted(measures)
+    for i in [50, 75, 90, 99, 99.9]:
+        # Don't even try to interpolate.
+        rank = int(i / 100. * (len(measures)))
+        pctls[i] = sorted_measures[rank]
 
     return pctls
 
