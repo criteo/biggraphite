@@ -466,11 +466,12 @@ def _compute_pctls(measures):
         sorted_measures = sorted(measures)
         for i in [50, 75, 90, 99, 99.9]:
             # Don't even try to interpolate.
-            rank = int(i / 100. * (len(measures)-1))
+            rank = int(i / 100. * (len(measures)))
             pctls[i] = sorted_measures[rank]
     else:
         numpy_array = numpy.array(measures)
         pctls[50] = numpy.percentile(numpy_array, 50, interpolation="higher")
+        pctls[75] = numpy.percentile(numpy_array, 75, interpolation="higher")
         pctls[90] = numpy.percentile(numpy_array, 90, interpolation="higher")
         pctls[99] = numpy.percentile(numpy_array, 99, interpolation="higher")
         pctls[99.9] = numpy.percentile(numpy_array, 99.9, interpolation="higher")

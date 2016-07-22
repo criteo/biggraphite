@@ -191,7 +191,7 @@ class TestClustersDiff(unittest.TestCase):
         mesures = [1, 2, 4, 8, 9, 6, 2, 4, 6, 1, 4, 5, 8, 4, 6, 7, 1, 3, 4, 8, 6, 3, 4, 5, 8, 7, 2]
         pctls = clusters_diff._compute_pctls(mesures)
 
-        self.assertEquals(pctls, {50: 4, 99: 9, 90: 8, 99.9: 9})
+        self.assertEquals(pctls, {50: 4, 75: 7, 90: 8, 99: 9, 99.9: 9})
 
     def test_compute_dissymmetries_pctls(self):
         """Sould correctly compute dissymmetries pctls."""
@@ -213,7 +213,7 @@ class TestClustersDiff(unittest.TestCase):
             self.assertEquals(dissymmetries[0].measures, [0, 0])
             self.assertEquals(dissymmetries[0].pctls,
                               collections.OrderedDict(
-                                [(50, 0.0), (90, 0.0), (99, 0.0), (99.9, 0.0)]))
+                                [(50, 0.0), (75, 0.0), (90, 0.0), (99, 0.0), (99.9, 0.0)]))
 
         args3 = [([diffable_target_1], [diffable_target_2])]
         for diffable_target_a, diffable_target_b in args3:
@@ -229,7 +229,7 @@ class TestClustersDiff(unittest.TestCase):
             self.assertEquals(dissymmetries[1].measures, [1, 1])
             self.assertEquals(dissymmetries[1].pctls,
                               collections.OrderedDict(
-                                [(50, 1.0), (90, 1.0), (99, 1.0), (99.9, 1.0)]))
+                                [(50, 1.0), (75, 1.0), (90, 1.0), (99, 1.0), (99.9, 1.0)]))
 
         args4 = [([diffable_target_1], []), ([], [diffable_target_1])]
         for diffable_target_a, diffable_target_b in args4:
@@ -240,7 +240,7 @@ class TestClustersDiff(unittest.TestCase):
             self.assertEquals(dissymmetries[0].measures, [1, 1])
             self.assertEquals(dissymmetries[0].pctls,
                               collections.OrderedDict(
-                                [(50, 1.0), (90, 1.0), (99, 1.0), (99.9, 1.0)]))
+                                [(50, 1.0), (75, 1.0), (90, 1.0), (99, 1.0), (99.9, 1.0)]))
 
     def test_outer_join_diffables(self):
         """Should correctly compute outer join on diffable name."""
@@ -278,7 +278,7 @@ class TestClustersDiff(unittest.TestCase):
             ({1: 106}, None), ({1: 109}, {1: 209})
             ]
 
-        self.assertEquals(formated_result, predicted_result)
+        self.assertEquals(sorted(formated_result), sorted(predicted_result))
 
 
 if __name__ == '__main__':
