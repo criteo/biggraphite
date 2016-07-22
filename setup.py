@@ -37,7 +37,7 @@ _INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
 
 setuptools.setup(
     name="biggraphite",
-    version="0.1",
+    version="0.2",
     maintainer="Criteo Graphite team",
     maintainer_email="github@criteo.com",
     description="Tools for tools for storing carbon data in Cassandra.",

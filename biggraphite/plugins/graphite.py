@@ -34,14 +34,6 @@ class Error(Exception):
     """Base class for all exceptions from this module."""
 
 
-def _round_down(rounded, divider):
-    return int(rounded) // divider * divider
-
-
-def _round_up(rounded, divider):
-    return int(rounded + divider - 1) // divider * divider
-
-
 class Reader(object):
     """As per the Graphite API, fetches points for and metadata for a given metric."""
 
@@ -60,7 +52,7 @@ class Reader(object):
         if self._metric and self._metric.retention:
             stage = self._metric.retention.find_stage_for_ts(searched=start_time, now=now)
 
-        now = _round_up(now, stage.precision)
+        now = stage.round_up(now)
 
         oldest_timestamp = now - stage.duration
         start_time = max(start_time, oldest_timestamp)

@@ -13,25 +13,9 @@ We group related timestamps (`_ROW_SIZE_MS`) in the same row described by `time_
  - The relative time offset is 4 bytes only when a timestamp would be 8.
 
 ### Expiry of data
-TTLs take space and are only applied on compaction. Tweaking compaction is tricky and that makes it hard to recover space in emergency by expiring data early.<br />
-An alternative would be to have one table per day of expiry, but for 10 years of retentions that would be about 3650 tables.<br />
-So what we do is that we round up retention policy to the next power of two and create a table per such retention policy.
-
-At any time we have 11 tables, corresponding to 1 TTL: 4 days, 8 days, 16 days, ..., 2048 days.
-We write and read a timestamp in the table that best fit. If we assume there is about the same amount of data week-over-week, we store **50% more than instant deletion**.
-
-**Example:**
-On the 28th of December 2015, the following 10 tables exist: "2016-01-01", "2016-01-09", "2016-01-25", "2016-02-24", ..., "2019-08-11".
-
-| TTL       |       |  E    | X     | P     | I     | R     | Y     |       |
-|--:	    |:-:	|:-:	|:-:	|:-:	|:-:	|:-:	|:-:	|:-:	|
-| **8d** 	|Jan 01 |Jan 09 |       |       |       |       |       |       |
-| **16d**	|Jan 09 |Jan 09 |Jan 25 |Jan 25 |       |       |       | *...* |
-| **32d**   |Jan 25 |Jan 25 |Jan 25 |Jan 25 |Feb 24 |Feb 24 |Feb 24 | *...* |
-| *...*     | *...* | *...* | *...* | *...* | *...* | *...* | *...* | *...* |
-| **2048d**	|2019   |2019   |2019   |2019   |2019   |2019   |2019   | *...* |
-
-So a point written on 2015-12-28 with a desired TTL of 30 days should expire on 2016-01-27 but instead will expire on 2016-02-24 .
+We implement TTLs using the [DateTieredCompactionStrategy](http://www.datastax.com/dev/blog/datetieredcompactionstrategy). Therefore we need a compaction configuration for each downsampling configuration.<br />
+As compaction configurations are per Cassandra table, we have one table per "stage" of retention policies.
+Eg: the policy "60 points with a resolution of 60 seconds, 24 points with a resolution of 1 hour" results in two tables: `datapoints_60p_60s` and `datapoints_24p_3600s`.
 
 ------
 

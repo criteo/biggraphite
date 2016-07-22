@@ -58,25 +58,25 @@ class InvalidGlobError(InvalidArgumentError):
 
 _COMPONENTS_MAX_LEN = 64
 _LAST_COMPONENT = "__END__"
-_SETUP_CQL_PATH_COMPONENTS = ", ".join(
+_METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
-_SETUP_CQL_METRICS = str(
+_METADATA_CREATION_CQL_METRICS = str(
     "CREATE TABLE IF NOT EXISTS metrics ("
     "  name text,"
     "  config map<text, text>,"
-    "  " + _SETUP_CQL_PATH_COMPONENTS + ","
+    "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
 )
-_SETUP_CQL_DIRECTORIES = str(
+_METADATA_CREATION_CQL_DIRECTORIES = str(
     "CREATE TABLE IF NOT EXISTS directories ("
     "  name text,"
-    "  " + _SETUP_CQL_PATH_COMPONENTS + ","
+    "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
 )
-_SETUP_CQL_PATH_INDEXES = [
+_METADATA_CREATION_CQL_PATH_INDEXES = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON %s (component_%d)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
@@ -86,32 +86,96 @@ _SETUP_CQL_PATH_INDEXES = [
     for t in 'metrics', 'directories'
     for n in range(_COMPONENTS_MAX_LEN)
 ]
+_METADATA_CREATION_CQL = [
+    _METADATA_CREATION_CQL_METRICS,
+    _METADATA_CREATION_CQL_DIRECTORIES,
+] + _METADATA_CREATION_CQL_PATH_INDEXES
+
+
 # TODO: Make row size proportional to the precision
 _ROW_SIZE_MS = 3600 * 1000
-_SETUP_CQL_DATAPOINTS = str(
-    "CREATE TABLE IF NOT EXISTS datapoints ("
+_DATAPOINTS_CREATION_CQL_TEMPLATE = str(
+    "CREATE TABLE IF NOT EXISTS %(table)s ("
     "  metric text,"              # Metric name.
-    # TODO: Remove time_step
-    "  time_step_ms int,"         # Time step (AKA granularity, resolution).
     "  time_start_ms bigint,"     # Lower bound for this row.
     "  time_offset_ms int,"       # time_start_ms + time_offset_ms = timestamp
     "  value double,"             # Value for the point.
     "  count int,"                # If value is sum, divide by count to get the avg.
-    "  PRIMARY KEY ((metric, time_step_ms, time_start_ms), time_offset_ms)"
+    "  PRIMARY KEY ((metric, time_start_ms), time_offset_ms)"
     ")"
     "  WITH CLUSTERING ORDER BY (time_offset_ms DESC)"
-    "  AND compaction={"
+    "  AND default_time_to_live = %(default_time_to_live)d"
+    "  AND compaction = {"
     "    'timestamp_resolution': 'MICROSECONDS',"
-    "    'max_sstable_age_days': '1',"
-    "    'base_time_seconds': '900',"
+    "    'base_time_seconds': '%(base_time_seconds)d',"
     "    'class': 'DateTieredCompactionStrategy'"
     "  };"
 )
-_SETUP_CQL = [
-    _SETUP_CQL_DATAPOINTS,
-    _SETUP_CQL_METRICS,
-    _SETUP_CQL_DIRECTORIES,
-] + _SETUP_CQL_PATH_INDEXES
+
+
+class _LazyPreparedStatements(object):
+    """On demand factory of prepared statements and tables.
+
+    As per design (CASSANDRA_DESIGN.md) we have one table per retention stage.
+    This creates tables and corresponding prepared statements once they are needed.
+    """
+
+    # We expect timestamp T to be written at T +/- _OUT_OF_ORDER_S
+    _OUT_OF_ORDER_S = 3600
+
+    def __init__(self, session):
+        self._session = session
+        self._stage_to_insert = {}
+        self._stage_to_select = {}
+
+    def _create_datapoints_table(self, stage):
+        # Idempotent.
+        statement_str = _DATAPOINTS_CREATION_CQL_TEMPLATE % {
+            "default_time_to_live": stage.duration + self._OUT_OF_ORDER_S,
+            "max_window_size_seconds": self._OUT_OF_ORDER_S,
+            "base_time_seconds": self._OUT_OF_ORDER_S,
+            "table": self._get_table_name(stage),
+        }
+        self._session.execute(statement_str)
+
+    @staticmethod
+    def _get_table_name(stage):
+        return "datapoints_{}p_{}s".format(stage.points, stage.precision)
+
+    def prepare_insert(self, stage, metric_name, time_start_ms, time_offset_ms, value, count):
+        statement = self._stage_to_insert.get(stage)
+        args = (metric_name, time_start_ms, time_offset_ms, value, count)
+        if statement:
+            return statement, args
+
+        self._create_datapoints_table(stage)
+        statement_str = (
+            "INSERT INTO %(table)s"
+            " (metric, time_start_ms, time_offset_ms, value, count)"
+            " VALUES (?, ?, ?, ?, ?);"
+        ) % {"table": self._get_table_name(stage)}
+        statement = self._session.prepare(statement_str)
+        statement.consistency_level = cassandra.ConsistencyLevel.ANY
+        self._stage_to_insert[stage] = statement
+        return statement, args
+
+    def prepare_select(self, stage, metric_name, row_start_ms, row_min_offset, row_max_offset):
+        statement = self._stage_to_select.get(stage)
+        args = (metric_name, row_start_ms, row_min_offset, row_max_offset)
+        if statement:
+            return statement, args
+
+        self._create_datapoints_table(stage)
+        statement_str = (
+            "SELECT time_start_ms, time_offset_ms, value, count FROM %(table)s"
+            " WHERE metric=? AND time_start_ms=?"
+            " AND time_offset_ms >= ? AND time_offset_ms < ? "
+            " ORDER BY time_offset_ms;"
+        ) % {"table": self._get_table_name(stage)}
+        statement = self._session.prepare(statement_str)
+        statement.consistency_level = cassandra.ConsistencyLevel.LOCAL_ONE
+        self._stage_to_select[stage] = statement
+        return statement, args
 
 
 class _CassandraAccessor(bg_accessor.Accessor):
@@ -150,11 +214,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__concurrency = concurrency
         self.__downsampler = _downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
+        self.__lazy_statements = None  # setup by connect()
         self.__default_timeout = default_timeout
         self.__insert_metrics_statement = None  # setup by connect()
-        self.__insert_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
-        self.__select_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
 
     def connect(self, skip_schema_upgrade=False):
@@ -171,19 +234,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__session.default_timeout = self.__default_timeout
         if not skip_schema_upgrade:
             self._upgrade_schema()
-        self.__insert_statement = self.__session.prepare(
-            "INSERT INTO datapoints "
-            "(metric, time_step_ms, time_start_ms, time_offset_ms, value, count)"
-            " VALUES (?, ?, ?, ?, ?, ?)"
-            # One week TODO: this is a stopgap until we implement table-based TTLs
-            " USING TTL 604800;"
-        )
-        self.__insert_statement.consistency_level = cassandra.ConsistencyLevel.ONE
-        self.__select_statement = self.__session.prepare(
-            "SELECT time_start_ms, time_offset_ms, value, count FROM datapoints"
-            " WHERE metric=? AND time_step_ms=? AND time_start_ms=?"
-            " AND time_offset_ms >= ? AND time_offset_ms < ? "
-            " ORDER BY time_offset_ms;")
+
+        self.__lazy_statements = _LazyPreparedStatements(self.__session)
+
+        # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
         self.__insert_metrics_statement = self.__session.prepare(
@@ -197,6 +251,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__select_metric_statement = self.__session.prepare(
             "SELECT config FROM metrics WHERE name = ?;"
         )
+
         self.is_connected = True
 
     def create_metric(self, metric):
@@ -247,9 +302,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def drop_all_metrics(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).drop_all_metrics()
-        self.__session.execute("TRUNCATE datapoints;")
-        self.__session.execute("TRUNCATE directories;")
-        self.__session.execute("TRUNCATE metrics;")
+        statement_str = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
+        tables = self.__session.execute(statement_str, (self.keyspace, ))
+        for t in tables:
+            self.__session.execute("TRUNCATE \"%s\";" % t)
 
     def fetch_points(self, metric, time_start, time_end, stage):
         """See bg_accessor.Accessor."""
@@ -291,15 +347,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 row_min_offset = time_start_ms - row_start_ms
             if row_start_ms == last_row:
                 row_max_offset = time_end_ms - row_start_ms
-            statement = (
-                self.__select_statement,
-                (
-                    metric_name,
-                    stage.precision_ms, row_start_ms,
-                    row_min_offset, row_max_offset
-                )
+            select = self.__lazy_statements.prepare_select(
+                stage=stage, metric_name=metric_name, row_start_ms=row_start_ms,
+                row_min_offset=row_min_offset, row_max_offset=row_max_offset,
             )
-            res.append(statement)
+            res.append(select)
 
         return res
 
@@ -368,42 +420,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         logging.debug("insert: [%s, %s]", metric.name, datapoints)
 
-        if self.__downsampler:
-            additional_points = self.__downsampler.feed(metric, datapoints)
-            if additional_points:
-                logging.debug("also: [%s, %s]", metric.name, additional_points)
-                datapoints = datapoints + additional_points
+        downsampled = self.__downsampler.feed(metric, datapoints)
 
         count_down = None
         if on_done:
-            count_down = _utils.CountDown(count=len(datapoints), on_zero=on_done)
+            count_down = _utils.CountDown(count=len(downsampled), on_zero=on_done)
 
-        for datapoint in datapoints:
-            if len(datapoint) == 4:
-                # Aggregated points have the following fields:
-                #   0: timestamp in seconds.
-                #   1: value.
-                #   2: count of aggregated points.
-                #   3: stage.
-                timestamp, value, count, stage = datapoint
-                count = int(count)
-                time_step_ms = stage.precision * 1000
-            else:
-                # Raw points have a default step of 1s.
-                timestamp, value = datapoint
-                count = 1
-                time_step_ms = 1000
-
+        for timestamp, value, count, stage in downsampled:
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _ROW_SIZE_MS
             time_start_ms = timestamp_ms - time_offset_ms
-            args = (
-                metric.name,
-                time_step_ms, time_start_ms, time_offset_ms,
-                value, count
-            )
 
-            future = self.__session.execute_async(self.__insert_statement, args)
+            statement, args = self.__lazy_statements.prepare_insert(
+                stage=stage, metric_name=metric.name, time_start_ms=time_start_ms,
+                time_offset_ms=time_offset_ms, value=value, count=count,
+            )
+            future = self.__session.execute_async(query=statement, parameters=args)
             if count_down:
                 future.add_callbacks(
                     count_down.on_cassandra_result,
@@ -428,7 +460,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return  # Already up to date.
         except Exception:
             pass
-        for cql in _SETUP_CQL:
+        for cql in _METADATA_CREATION_CQL:
             self.__session.execute(cql)
 
 
