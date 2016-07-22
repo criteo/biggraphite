@@ -293,7 +293,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithAccessor, self).setUp()
         self.accessor = bg_cassandra.connect(
-            self.KEYSPACE, self.contact_points, self.port, default_timeout=60,
+            self.KEYSPACE, self.contact_points, self.port, default_timeout=5*60,
         )
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
