@@ -257,10 +257,16 @@ class Stage(object):
         """A string like "${POINTS}*${PRECISION}s"."""
         return "{}*{}s".format(self.points, self.precision)
 
-    @property
-    def precision_ms(self):
-        """The duration of this stage in microseconds."""
-        return self.precision * 1000
+    def epoch(self, timestamp):
+        """Return time elapsed since Unix epoch in count of self.duration.
+
+        A "stage epoch" is a range of timestamps: [N*stage_duration, (N+1)*stage_duration[
+        This function returns N.
+
+        Args:
+          timestamp: A timestamp in seconds.
+        """
+        return int(timestamp // self.duration)
 
     @classmethod
     def from_string(cls, s):
@@ -274,16 +280,10 @@ class Stage(object):
             precision=int(groups['precision']),
         )
 
-    def epoch(self, timestamp):
-        """Return time elapsed since Unix epoch in count of self.duration.
-
-        A "stage epoch" is a range of timestamps: [N*stage_duration, (N+1)*stage_duration[
-        This function returns N.
-
-        Args:
-          timestamp: A timestamp in seconds.
-        """
-        return int(timestamp // self.duration)
+    @property
+    def precision_ms(self):
+        """The duration of this stage in microseconds."""
+        return self.precision * 1000
 
     def round_down(self, timestamp):
         """Round down a timestamp to a multiple of the precision."""
