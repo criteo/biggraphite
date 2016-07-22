@@ -21,8 +21,8 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 # patch: https://goo.gl/1gAcz1 .
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
-
 from carbon import exceptions as carbon_exceptions
+
 from biggraphite import graphite_utils
 from biggraphite import accessor
 from biggraphite import metadata_cache
@@ -41,9 +41,17 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """Database plugin for Carbon.
 
     The class definition registers the plugin thanks to TimeSeriesDatabase's metaclass.
+
+    It performs an asynchronous (non durable) write most of the time, except once
+    every _SYNC_EVERY_N_WRITE to give errors a chance to bubble up and bound the
+    number of points we may lose when the process terminates.
+    Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9 .
     """
 
     plugin_name = "biggraphite"
+
+    # See class pydoc for the rational.
+    _SYNC_EVERY_N_WRITE = 100
 
     def __init__(self, settings):
         try:
@@ -54,6 +62,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         storage_path = graphite_utils.storage_path_from_settings(settings)
         self._cache = metadata_cache.DiskCache(self._accessor, storage_path)
         self._cache.open()
+        self._sync_countdown = 0
 
         # TODO: we may want to use/implement these
         # settings.WHISPER_AUTOFLUSH:
@@ -66,7 +75,14 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         metric = self._cache.get_metric(metric_name=metric_name)
         # Round down timestamp because inner functions expect integers.
         datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
-        self._accessor.insert_points(metric=metric, datapoints=datapoints)
+
+        # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
+        if self._sync_countdown < 1:
+            self._accessor.insert_points(metric=metric, datapoints=datapoints)
+            self._sync_countdown = self._SYNC_EVERY_N_WRITE
+        else:
+            self._sync_countdown -= 1
+            self._accessor.insert_points_async(metric=metric, datapoints=datapoints)
 
     def exists(self, metric_name):
         # If exists returns "False" then "create" will be called.
