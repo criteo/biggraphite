@@ -172,7 +172,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__insert_statement = self.__session.prepare(
             "INSERT INTO datapoints "
             "(metric, time_step_ms, time_start_ms, time_offset_ms, value, count)"
-            " VALUES (?, ?, ?, ?, ?, ?);")
+            " VALUES (?, ?, ?, ?, ?, ?)"
+            # One week TODO: this is a stopgap until we implement table-based TTLs
+            " USING TTL 604800;"
+        )
         self.__insert_statement.consistency_level = cassandra.ConsistencyLevel.ONE
         self.__select_statement = self.__session.prepare(
             "SELECT time_start_ms, time_offset_ms, value, count FROM datapoints"
