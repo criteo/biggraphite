@@ -55,8 +55,8 @@ $ tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
 $ export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}
 ```
 
-If you're planning to run tests, you'll also need to mount /tmp as tmpfs unless
-you have a fast SSD.
+Cassandra tests generate a lot of I/O, so if you're planning to run tests, you'll also need
+to mount /tmp as tmpfs unless you have a fast SSD.
 
 ### Running tests
 
