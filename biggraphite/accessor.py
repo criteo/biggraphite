@@ -227,7 +227,7 @@ class Stage(object):
     Precision is the amount of time a point covers, measured in seconds.
     """
 
-    __slots__ = ("points", "precision", )
+    __slots__ = ("duration", "points", "precision", )
 
     # Parses the values of as_string into points and precision group
     _STR_RE = re.compile(r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s$")
@@ -236,6 +236,7 @@ class Stage(object):
         """Set attributes."""
         self.points = int(points)
         self.precision = int(precision)
+        self.duration = self.points * self.precision
 
     def __str__(self):
         return self.as_string
@@ -252,14 +253,14 @@ class Stage(object):
         return hash((self.points, self.precision))
 
     @property
-    def duration(self):
-        """The duration of this stage in seconds."""
-        return self.points * self.precision
-
-    @property
     def as_string(self):
         """A string like "${POINTS}*${PRECISION}s"."""
         return "{}*{}s".format(self.points, self.precision)
+
+    @property
+    def precision_ms(self):
+        """The duration of this stage in milliseconds."""
+        return self.precision * 1000
 
     @classmethod
     def from_string(cls, s):
@@ -282,7 +283,7 @@ class Stage(object):
         Args:
           timestamp: A timestamp in seconds.
         """
-        return int(timestamp / self.duration)
+        return int(timestamp // self.duration)
 
     def round_down(self, timestamp):
         """Round down a timestamp to a multiple of the precision."""
@@ -291,6 +292,17 @@ class Stage(object):
     def round_up(self, timestamp):
         """Round down a timestamp to a multiple of the precision."""
         return round_up(timestamp, self.precision)
+
+    def step(self, timestamp):
+        """Return time elapsed since Unix epoch in count of self.precision.
+
+        A "stage epoch" is a range of timestamps: [N*stage_precision, (N+1)*stage_precision[
+        This function returns N.
+
+        Args:
+          timestamp: A timestamp in seconds.
+        """
+        return int(timestamp // self.precision)
 
 
 class Retention(object):
@@ -363,6 +375,12 @@ class Retention(object):
         stages = [Stage(points=points, precision=precision)
                   for precision, points in l]
         return cls(stages)
+
+    def find_stage_for_ts(self, searched, now):
+        for stage in self.stages:
+            if searched > now - stage.duration:
+                return stage
+        return self.stages[-1]
 
 
 class MetricMetadata(object):
@@ -519,37 +537,36 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def fetch_points(self, metric, time_start, time_end, step):
+    def fetch_points(self, metric, time_start, time_end, stage):
         """Fetch points from time_start included to time_end excluded.
 
         Args:
           metric: The metric definition as per get_metric.
-          time_start: timestamp in second from the Epoch as an int, inclusive,
-            must be a multiple of step
-          time_end: timestamp in second from the Epoch as an int, exclusive,
-            must be a multiple of step
-          step: time delta in seconds as an int, must be > 0, must be one of
-            the resolution the metrics stores
+          time_start: timestamp in seconds from the Unix Epoch as an int, inclusive,
+            must be a multiple of stage.precision
+          time_end: timestamp in seconds from the Unix Epoch as an int, exclusive,
+            must be a multiple of stage.precision
+          stage: the retention stage at which to fetch data
 
         Yields:
           pairs of (timestamp, value) to indicate value is an aggregate for the range
-          [timestamp, timestep+step[
+          [timestamp, timestamp+stage.precision[
 
         Raises:
-          InvalidArgumentError: if time_start, time_end or step are not as per above
+          InvalidArgumentError: if time_start or time_end are not as per above
         """
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
-        if step < 1:
-            raise InvalidArgumentError("step (%d) is not positive" % step)
-        if time_start % step or time_start < 0:
+        if not isinstance(stage, Stage):
+            raise InvalidArgumentError("%s is not a Stage instance" % stage)
+        if time_start % stage.precision or time_start < 0:
             raise InvalidArgumentError(
-                "time_start (%d) is not a multiple of step (%d)" % (
-                    time_start, step))
-        if time_end % step or time_end < 0:
+                "time_start (%d) is not a multiple of the stage's precision (%s)" % (
+                    time_start, stage.as_string))
+        if time_end % stage.precision or time_end < 0:
             raise InvalidArgumentError(
-                "time_end (%d) is not a multiple of step (%d)" % (
-                    time_end, step))
+                "time_end (%d) is not a multiple of the stage's precision (%s)" % (
+                    time_end, stage.as_string))
 
     @abc.abstractmethod
     def get_metric(self, metric_name):
@@ -617,22 +634,22 @@ class PointGrouper(object):
     abstracted away if more datastores do client-side agregation.
     """
 
-    def __init__(self, metric, time_start_ms, time_end_ms, step_ms, query_results):
+    def __init__(self, metric, time_start_ms, time_end_ms, stage, query_results):
         """Constructor for PointGrouper.
 
         Args:
           metric: The metric for which to group values.
           time_start_ms: timestamp in second from the Epoch as an int,
-            inclusive,  must be a multiple of step
+            inclusive,  must be a multiple of stage.precision
           time_end_ms: timestamp in second from the Epoch as an int,
-            exclusive, must be a multiple of step
-          step_ms: time delta in seconds as an int, must be > 0
+            exclusive, must be a multiple of stage.precision
+          stage: the retention stage we are producing points for
           query_results: query results to fetch values from.
         """
         self.metric = metric
         self.time_start_ms = time_start_ms
         self.time_end_ms = time_end_ms
-        self.step_ms = step_ms
+        self.stage = stage
         self.query_results = query_results
 
         self.current_values = array.array("d")
@@ -679,7 +696,7 @@ class PointGrouper(object):
                 timestamp_ms = row[0] + row[1]
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms
-                timestamp_ms = round_down(timestamp_ms, self.step_ms)
+                timestamp_ms = round_down(timestamp_ms, self.stage.precision_ms)
 
                 if self.current_timestamp_ms != timestamp_ms:
                     ts, point = self.run_aggregator()

@@ -86,10 +86,12 @@ _SETUP_CQL_PATH_INDEXES = [
     for t in 'metrics', 'directories'
     for n in range(_COMPONENTS_MAX_LEN)
 ]
+# TODO: Make row size proportional to the precision
 _ROW_SIZE_MS = 3600 * 1000
 _SETUP_CQL_DATAPOINTS = str(
     "CREATE TABLE IF NOT EXISTS datapoints ("
     "  metric text,"              # Metric name.
+    # TODO: Remove time_step
     "  time_step_ms int,"         # Time step (AKA granularity, resolution).
     "  time_start_ms bigint,"     # Lower bound for this row.
     "  time_offset_ms int,"       # time_start_ms + time_offset_ms = timestamp
@@ -249,27 +251,21 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__session.execute("TRUNCATE directories;")
         self.__session.execute("TRUNCATE metrics;")
 
-    # TODO: Downsampling: Perform aggregation server-side.
-    def fetch_points(self, metric, time_start, time_end, step):
+    def fetch_points(self, metric, time_start, time_end, stage):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).fetch_points(
-            metric, time_start, time_end, step)
+            metric, time_start, time_end, stage)
 
         logging.debug(
-            "fetch: [%s, start=%d, end=%d, step=%d]",
-            metric.name, time_start, time_end, step)
+            "fetch: [%s, start=%d, end=%d, stage=%s]",
+            metric.name, time_start, time_end, stage)
 
-        step_ms = int(step) * 1000
-        # TODO: Downsampling: once we have a proper downsampler choose the
-        #   highest possible valid step included in the valid resolutions
-        #   for this metric.
-        raw_step_ms = 1000
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
         time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
 
         statements_and_args = self._fetch_points_make_selects(
-            metric.name, time_start_ms, time_end_ms, raw_step_ms)
+            metric.name, time_start_ms, time_end_ms, stage)
 
         query_results = c_concurrent.execute_concurrent(
             self.__session,
@@ -278,10 +274,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             results_generator=True,
         )
         return bg_accessor.PointGrouper(
-            metric, time_start_ms, time_end_ms, step_ms, query_results)
+            metric, time_start_ms, time_end_ms, stage, query_results)
 
     def _fetch_points_make_selects(self, metric_name, time_start_ms,
-                                   time_end_ms, step_ms):
+                                   time_end_ms, stage):
         # We fetch with ms precision, even though we only store with second
         # precision.
         first_row = bg_accessor.round_down(time_start_ms, _ROW_SIZE_MS)
@@ -299,7 +295,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self.__select_statement,
                 (
                     metric_name,
-                    step_ms, row_start_ms,
+                    stage.precision_ms, row_start_ms,
                     row_min_offset, row_max_offset
                 )
             )

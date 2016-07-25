@@ -74,7 +74,8 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(metric.carbon_xfilesfactor, xfilesfactor)
         self.assertEqual(metric.retention.as_string, "10*1s:10*2s")
 
-        points_again = list(self.accessor.fetch_points(metric, time_from, time_to, step=1))
+        points_again = list(self.accessor.fetch_points(
+            metric, time_from, time_to, metric.retention[0]))
         self.assertEqual(points[-high_precision_duration:], points_again)
 
     def _call_main(self):
