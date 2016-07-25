@@ -45,34 +45,33 @@ def _round_up(rounded, divider):
 class Reader(object):
     """As per the Graphite API, fetches points for and metadata for a given metric."""
 
-    __slots__ = ("_accessor", "_metric_name", "_metric", "_metadata_cache", )
+    __slots__ = ("_accessor", "_metadata_cache", "_metric", "_metric_name", )
 
     def __init__(self, accessor, metadata_cache, metric_name):
         """Create a new reader."""
         self._accessor = accessor
-        self._metric_name = metric_name
-        self._metric = None
         self._metadata_cache = metadata_cache
+        self._metric = None
+        self._metric_name = metric_name
 
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
-        # TODO: Downsampling: We do not support downsampling yet.
-        first_stage = bg_accessor.Stage(precision=1, points=60)
+        stage = bg_accessor.Stage(precision=1, points=60)
         if self._metric and self._metric.retention:
-            first_stage = self._metric.retention[0]
+            stage = self._metric.retention.find_stage_for_ts(searched=start_time, now=now)
 
-        now = _round_up(now, first_stage.precision)
+        now = _round_up(now, stage.precision)
 
-        oldest_timestamp = now - first_stage.duration
+        oldest_timestamp = now - stage.duration
         start_time = max(start_time, oldest_timestamp)
-        start_time = _round_down(start_time, first_stage.precision)
+        start_time = stage.round_down(start_time)
 
         end_time = min(now, end_time)
-        end_time = _round_up(end_time, first_stage.precision)
+        end_time = stage.round_up(end_time)
 
         if end_time < start_time:
             end_time = start_time
-        return start_time, end_time, first_stage.precision
+        return start_time, end_time, stage
 
     def __refresh_metric(self):
         if self._metric is None:
@@ -88,29 +87,29 @@ class Reader(object):
           now: Current timestamp as a float, defaults to time.time(), for tests.
 
         Returns:
-          A tuple made of (rounded start time, rounded end time, step as per retention), points
+          A tuple made of (rounded start time, rounded end time, stage precision), points
           Points is a list for which missing points are set to None.
         """
         self.__refresh_metric()
         if now is None:
             now = time.time()
 
-        # TODO: We do not support downsampling yet.
-        start_time, end_time, step = self.__get_time_info(start_time, end_time, now)
+        start_time, end_time, stage = self.__get_time_info(start_time, end_time, now)
 
         # This returns a generator which we can iterate on later.
-        ts_and_points = self._accessor.fetch_points(
-            self._metric, start_time, end_time, step)
+        ts_and_points = self._accessor.fetch_points(self._metric, start_time, end_time, stage)
+
+        start_step = stage.step(start_time)
 
         def read_points():
-            points_num = (end_time - start_time) // step
+            points_num = stage.step(end_time) - start_step
             # TODO: Consider wrapping an array (using NaN for None) for
             # speed&memory efficiency
             points = [None] * points_num
             for ts, point in ts_and_points:
-                index = int(ts - start_time) // step
+                index = stage.step(ts) - start_step
                 points[index] = point
-            return (start_time, end_time, step), points
+            return (start_time, end_time, stage.precision), points
 
         return readers.FetchInProgress(read_points)
 
@@ -128,8 +127,7 @@ class Reader(object):
             now = time.time()
         # Call __get_time_info with the widest conceivable range will make it be
         # shortened to the widest range available according to retention policy.
-        # TODO: Update when we support multiple retention policies.
-        start, end, unused_step = self.__get_time_info(0, now, now)
+        start, end, unused_stage = self.__get_time_info(0, now, now)
         return intervals.IntervalSet([intervals.Interval(start, end)])
 
 

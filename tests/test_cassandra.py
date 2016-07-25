@@ -39,12 +39,12 @@ assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
-    def fetch(self, *args, **kwargs):
+    def fetch(self, metric, *args, **kwargs):
         """Helper to fetch points as a list."""
-        # default kwargs for step.
-        if 'step' not in kwargs:
-            kwargs['step'] = 1
-        ret = self.accessor.fetch_points(*args, **kwargs)
+        # default kwargs for stage.
+        if 'stage' not in kwargs:
+            kwargs['stage'] = metric.retention[0]
+        ret = self.accessor.fetch_points(metric, *args, **kwargs)
         self.assertTrue(hasattr(ret, "__iter__"))
         return list(ret)
 
@@ -65,28 +65,15 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.addCleanup(self.accessor.drop_all_metrics)
 
-        fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END, step=1)
+        # TODO: Test fetch at different stages for a given metric.
+        fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END)
         # assertEqual is very slow when the diff is huge, so we give it a chance of
         # failing early to avoid imprecise test timeouts.
         self.assertEqual(_QUERY_RANGE, len(fetched))
         self.assertEqual(_USEFUL_POINTS[:10], fetched[:10])
         self.assertEqual(_USEFUL_POINTS[-10:], fetched[-10:])
         self.assertEqual(_USEFUL_POINTS, fetched)
-
-    def test_fetch_lower_res(self):
-        self.accessor.insert_points(_METRIC, _POINTS)
-        self.addCleanup(self.accessor.drop_all_metrics)
-
-        fetched_tenth = self.fetch(
-            _METRIC, _QUERY_START, _QUERY_END, step=_QUERY_RANGE / 10)
-        self.assertEqual(10, len(fetched_tenth))
-
-        fetched_median = self.fetch(
-            _METRIC, _QUERY_START, _QUERY_END, step=_QUERY_RANGE)
-        self.assertEqual(1, len(fetched_median))
-        median = statistics.median(v for t, v in _USEFUL_POINTS)
-        self.assertEqual(median, fetched_median[0][1])
-
+        
     @staticmethod
     def _remove_after_dot(string):
         if "." not in string:
