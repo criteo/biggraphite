@@ -380,11 +380,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         for datapoint in datapoints:
             if len(datapoint) == 4:
-                # Aggregated points (for example avg) can have a count field
-                # and have a specific time granularity.
-                timestamp, value, count, step = datapoint
+                # Aggregated points have the following fields:
+                #   0: timestamp in seconds.
+                #   1: value.
+                #   2: count of aggregated points.
+                #   3: stage.
+                timestamp, value, count, stage = datapoint
                 count = int(count)
-                time_step_ms = int(step) * 1000
+                time_step_ms = stage.round_down(timestamp) * 1000
             else:
                 # Raw points have a default step of 1s.
                 timestamp, value = datapoint
