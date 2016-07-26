@@ -148,20 +148,24 @@ class MetricAggregates(object):
                 self._values[point_epoch % self._raw_capacity] = value
         return expired
 
-    def _update_stage(self, stage, precision, aggregator, points):
+    def _update_stage(self, metric_metadata, stage, points):
         """Compute aggregated value for a stage and store it.
 
         The points have to be sorted by increasing timestamps.
 
         Args:
-          stage: stage to update with raw points.
-          precision: stage precision, in seconds.
-          aggregator: metric aggregator function.
+          metric_metadata: MetricMetadata object.
+          stage: index of stage to update with raw points.
           points: raw points to be added into the current stage aggregate.
 
         Returns:
-          Iterable of (timestamp, value, count, precision).
+          Iterable of (timestamp, value, count, stage).
         """
+        stages = metric_metadata.retention.stages
+        stage_object = stages[stage]
+        precision = stage_object.precision
+        aggregator = metric_metadata.aggregator
+
         current_timestamp = self._get_stage_timestamp(stage)
         current_value = self._get_stage_value(stage)
         current_count = self._get_stage_count(stage)
@@ -169,13 +173,13 @@ class MetricAggregates(object):
             return []
 
         if current_timestamp == -1:
-            # Raw buffer is epmty  => take first point timestamp.
+            # Raw buffer is empty  => take first point timestamp.
             first_point = points[0]
             first_epoch = first_point[0] // precision
             first_timestamp = first_epoch * precision
             current_timestamp = first_timestamp
 
-        expired = [(current_timestamp, current_value, current_count, precision)]
+        expired = [(current_timestamp, current_value, current_count, stage_object)]
 
         for timestamp, value in points:
             epoch = timestamp // precision
@@ -190,10 +194,10 @@ class MetricAggregates(object):
                 current_value = current_point[1]
                 current_count = current_point[2]
                 aggregated_value = aggregator.merge(current_value, current_count, value)
-                expired[-1] = (epoch * precision, aggregated_value, current_count + 1, precision)
+                expired[-1] = (epoch * precision, aggregated_value, current_count + 1, stage_object)
             elif current_epoch < epoch:
                 # Point is in new epoch => add new epoch.
-                expired.append((epoch * precision, value, 1, precision))
+                expired.append((epoch * precision, value, 1, stage_object))
         if expired:
             current_point = expired[-1]
             self._set_stage_timestamp(stage, current_point[0])
@@ -212,17 +216,14 @@ class MetricAggregates(object):
           datapoints: iterable of (timestamp, value).
 
         Returns:
-          # TODO: change
-          The list of expired (timestamp, value) from the raw buffer.
+          The list of expired (timestamp, value, count, stage) for all stages.
         """
         stages = metric_metadata.retention.stages
-        aggregator = metric_metadata.aggregator
         raw_precision = stages[0].precision
         expired_raw = self._update_raw(datapoints, raw_precision)
         expired = []
-        for stage in xrange(len(stages)):
-            stage_precision = stages[stage].precision
-            expired.extend(self._update_stage(stage, stage_precision, aggregator, expired_raw))
+        for stage in xrange(len(metric_metadata.retention.stages)):
+            expired.extend(self._update_stage(metric_metadata, stage, expired_raw))
         return expired
 
     @property
