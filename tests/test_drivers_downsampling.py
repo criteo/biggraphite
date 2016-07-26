@@ -18,7 +18,7 @@ from __future__ import print_function
 import unittest
 
 from biggraphite import accessor as bg_accessor
-from biggraphite.drivers import downsampling as bg_ds
+from biggraphite.drivers import _downsampling as bg_ds
 
 
 class TestDownsampler(unittest.TestCase):
