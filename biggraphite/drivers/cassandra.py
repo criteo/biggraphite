@@ -24,7 +24,7 @@ from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 
 from biggraphite import accessor as bg_accessor
-from biggraphite.drivers import downsampling
+from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 
 
@@ -148,7 +148,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.contact_points = contact_points
         self.port = port or self._DEFAULT_CASSANDRA_PORT
         self.__concurrency = concurrency
-        self.__downsampler = downsampling.Downsampler()
+        self.__downsampler = _downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
         self.__default_timeout = default_timeout
         self.__insert_metrics_statement = None  # setup by connect()
