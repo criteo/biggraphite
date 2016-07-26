@@ -33,6 +33,8 @@ class TestDownsampler(unittest.TestCase):
                                self.CAPACITY, self.PRECISION ** 2)
         retention_string = "%d*%ds:%d*%ds" % (capacity_precisions)
         retention = bg_accessor.Retention.from_string(retention_string)
+        self.stage_0 = retention.stages[0]
+        self.stage_1 = retention.stages[1]
         metric_metadata = bg_accessor.MetricMetadata(aggregator=aggregator, retention=retention)
         self.metric = bg_accessor.Metric(self.METRIC_NAME, metric_metadata)
         self.ds = bg_ds.Downsampler(self.CAPACITY)
@@ -47,8 +49,8 @@ class TestDownsampler(unittest.TestCase):
             (self.PRECISION * self.CAPACITY, 55555),
         ]
         expected = [
-            (0, 1, 1, self.PRECISION),
-            (0, 1, 1, self.PRECISION ** 2)
+            (0, 1, 1, self.stage_0),
+            (0, 1, 1, self.stage_1)
         ]
         result = self.ds.feed(self.metric, points)
         self.assertEqual(result, expected)
@@ -69,11 +71,11 @@ class TestDownsampler(unittest.TestCase):
             (0, -1)
         ]
         expected_stage_0 = [
-            (0, 1, 1, self.PRECISION),
-            (self.PRECISION, 2, 1, self.PRECISION)
+            (0, 1, 1, self.stage_0),
+            (self.PRECISION, 2, 1, self.stage_0)
         ]
         expected_stage_1 = [
-            (0, 3, 2, self.PRECISION ** 2)  # 3 = 1 + 2, sum of stage_0 values
+            (0, 3, 2, self.stage_1)  # 3 = 1 + 2, sum of stage_0 values
         ]
         expected = expected_stage_0 + expected_stage_1
         result = self.ds.feed(self.metric, points)
@@ -92,12 +94,12 @@ class TestDownsampler(unittest.TestCase):
             (self.PRECISION ** 2, 50)       # not evicted
         ]
         expected_stage_0 = [
-            (0, 9, 1, self.PRECISION),
-            (self.PRECISION, 10, 1, self.PRECISION),
-            (self.PRECISION * self.CAPACITY, 7, 1, self.PRECISION)
+            (0, 9, 1, self.stage_0),
+            (self.PRECISION, 10, 1, self.stage_0),
+            (self.PRECISION * self.CAPACITY, 7, 1, self.stage_0)
         ]
         expected_stage_1 = [
-            (0, 26, 3, self.PRECISION ** 2)  # 26 = 9 + 10 +7, sum of stage_0 values
+            (0, 26, 3, self.stage_1)  # 26 = 9 + 10 +7, sum of stage_0 values
         ]
         expected = expected_stage_0 + expected_stage_1
         result = self.ds.feed(self.metric, points)
