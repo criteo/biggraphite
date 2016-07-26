@@ -123,10 +123,6 @@ class TestRetention(unittest.TestCase):
             self.assertEqual(points, self._TEST.stages[i].points)
         self.assertEqual(self._TEST_STRING, self._TEST.as_string)
 
-    def test_empty(self):
-        r = bg_accessor.Retention.from_string("")
-        self.assertEqual((), r.stages)
-
     def test_operators(self):
         # Doesn't use assertEqual to make == and != are called
         r1 = self._TEST
@@ -137,14 +133,12 @@ class TestRetention(unittest.TestCase):
         self.assertFalse(r1 != r2)
         self.assertTrue(r1 == r2)
 
-        r3 = bg_accessor.Retention.from_string("")
+        r3 = bg_accessor.Retention.from_string(self._TEST_STRING + ":2*86400s")
         self.assertFalse(r1 == r3)
-
-        r4 = bg_accessor.Retention.from_string(self._TEST_STRING + ":2*86400s")
-        self.assertFalse(r1 == r4)
 
     def test_invalid(self):
         strings = [
+            "",  # Empty
             "60*60s:1*1234s",  # 1234 not multiple of 60
             "60*1s:15*2s",  # 60*1>15*2
         ]

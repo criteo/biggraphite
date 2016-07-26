@@ -204,9 +204,9 @@ class FakeAccessor(bg_accessor.Accessor):
         else:
             return None
 
-    def fetch_points(self, metric, time_start, time_end, step):
+    def fetch_points(self, metric, time_start, time_end, stage):
         """See the real Accessor for a description."""
-        super(FakeAccessor, self).fetch_points(metric, time_start, time_end, step)
+        super(FakeAccessor, self).fetch_points(metric, time_start, time_end, stage)
         points = self._metric_to_points[metric.name]
         rows = []
         for ts in points.irange(time_start, time_end):
@@ -215,10 +215,9 @@ class FakeAccessor(bg_accessor.Accessor):
             rows.append(row)
         query_results = [(True, rows)]
 
-        step_ms = int(step) * 1000
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
-        return bg_accessor.PointGrouper(metric, time_start_ms, time_end_ms, step_ms, query_results)
+        return bg_accessor.PointGrouper(metric, time_start_ms, time_end_ms, stage, query_results)
 
 
 class TestCaseWithTempDir(unittest.TestCase):
