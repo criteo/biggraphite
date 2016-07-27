@@ -23,6 +23,8 @@ import cassandra
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
+from cassandra import query as c_query
+from cassandra.io import asyncorereactor as c_asyncorereactor
 
 from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling
@@ -113,6 +115,13 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "    'timestamp_resolution': 'MICROSECONDS'"
     "  };"
 )
+
+
+class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
+    """A connection with a cap on the number of in-flight requests per host."""
+
+    # 300 is the minimum with protocol version 3, default is 65536
+    max_in_flight = 300
 
 
 class _LazyPreparedStatements(object):
@@ -254,6 +263,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__cluster = c_cluster.Cluster(
             self.contact_points, self.port, executor_threads=executor_threads,
         )
+        self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
+        self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU
         self.__session = self.__cluster.connect()
         if self.__default_timeout:
             self.__session.default_timeout = self.__default_timeout
