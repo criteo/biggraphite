@@ -78,7 +78,6 @@ class MetricAggregates(object):
           precision: precision of the raw buffer in seconds.
           capacity: number of slots in the raw buffer.
         """
-        # TODO: use stage in constructor
         stages = len(metric_metadata.retention.stages)
 
         # _raw_capacity: length of the raw buffer

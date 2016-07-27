@@ -410,9 +410,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).glob_directory_names(glob)
         return self.__glob_names("directories", glob)
 
-    # TODO: handle ranges and the like
-    # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
-    # TODO: Handled subdirectories for the graphite-web API
     def glob_metric_names(self, glob):
         """Return a sorted list of metric names matching this glob."""
         super(_CassandraAccessor, self).glob_metric_names(glob)
