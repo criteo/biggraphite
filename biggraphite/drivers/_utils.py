@@ -34,7 +34,13 @@ class CountDown(object):
     __slots__ = ("_canceled", "_count", "_lock", "_on_zero", )
 
     def __init__(self, count, on_zero):
-        """Record parameters."""
+        """Record parameters.
+
+        Args:
+          count: The integer that will be decremented, must be > 0
+          on_zero: called once count reaches zero, see decrement
+        """
+        assert count > 0
         self._canceled = False
         self._count = count
         self._lock = threading.Lock()
