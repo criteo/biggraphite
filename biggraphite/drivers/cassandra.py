@@ -63,7 +63,7 @@ _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
 _METADATA_CREATION_CQL_METRICS = str(
-    "CREATE TABLE IF NOT EXISTS metrics ("
+    "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics ("
     "  name text,"
     "  config map<text, text>,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
@@ -71,19 +71,19 @@ _METADATA_CREATION_CQL_METRICS = str(
     ");"
 )
 _METADATA_CREATION_CQL_DIRECTORIES = str(
-    "CREATE TABLE IF NOT EXISTS directories ("
+    "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".directories ("
     "  name text,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
 )
 _METADATA_CREATION_CQL_PATH_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON %s (component_%d)"
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (component_%(component)d)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
-    "  };" % (t, n)
+    "  };" % {"table": t, "component": n}
     for t in 'metrics', 'directories'
     for n in range(_COMPONENTS_MAX_LEN)
 ]
@@ -127,10 +127,11 @@ class _LazyPreparedStatements(object):
 
     _SECONDS_PER_DAY = 24 * 3600
 
-    def __init__(self, session):
+    def __init__(self, session, keyspace):
+        self._keyspace = keyspace
         self._session = session
-        self._stage_to_insert = {}
-        self._stage_to_select = {}
+        self.__stage_to_insert = {}
+        self.__stage_to_select = {}
 
     def _create_datapoints_table(self, stage):
         # Time after which data expire.
@@ -163,12 +164,11 @@ class _LazyPreparedStatements(object):
         # The statement is idempotent
         self._session.execute(statement_str)
 
-    @staticmethod
-    def _get_table_name(stage):
-        return "datapoints_{}p_{}s".format(stage.points, stage.precision)
+    def _get_table_name(self, stage):
+        return "\"{}\".\"datapoints_{}p_{}s\"".format(self._keyspace, stage.points, stage.precision)
 
     def prepare_insert(self, stage, metric_name, time_start_ms, time_offset_ms, value, count):
-        statement = self._stage_to_insert.get(stage)
+        statement = self.__stage_to_insert.get(stage)
         args = (metric_name, time_start_ms, time_offset_ms, value, count)
         if statement:
             return statement, args
@@ -181,11 +181,11 @@ class _LazyPreparedStatements(object):
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = cassandra.ConsistencyLevel.ANY
-        self._stage_to_insert[stage] = statement
+        self.__stage_to_insert[stage] = statement
         return statement, args
 
     def prepare_select(self, stage, metric_name, row_start_ms, row_min_offset, row_max_offset):
-        statement = self._stage_to_select.get(stage)
+        statement = self.__stage_to_select.get(stage)
         args = (metric_name, row_start_ms, row_min_offset, row_max_offset)
         if statement:
             return statement, args
@@ -199,7 +199,7 @@ class _LazyPreparedStatements(object):
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = cassandra.ConsistencyLevel.LOCAL_ONE
-        self._stage_to_select[stage] = statement
+        self.__stage_to_select[stage] = statement
         return statement, args
 
 
@@ -226,7 +226,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """Record parameters needed to connect.
 
         Args:
-          keyspace: Name of Cassandra keyspace dedicated to BigGraphite.
+          keyspace: Base names of Cassandra keyspaces dedicated to BigGraphite.
           contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
           port: The port to connect to, as an int.
           concurrency: How many worker threads to use.
@@ -234,6 +234,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
         self.keyspace = keyspace
+        self.keyspace_metadata = keyspace + "_metadata"
         self.contact_points = contact_points
         self.port = port or self._DEFAULT_CASSANDRA_PORT
         self.__concurrency = concurrency
@@ -254,27 +255,26 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.contact_points, self.port, executor_threads=executor_threads,
         )
         self.__session = self.__cluster.connect()
-        self.__session.set_keyspace(self.keyspace)
         if self.__default_timeout:
             self.__session.default_timeout = self.__default_timeout
         if not skip_schema_upgrade:
             self._upgrade_schema()
 
-        self.__lazy_statements = _LazyPreparedStatements(self.__session)
+        self.__lazy_statements = _LazyPreparedStatements(self.__session, self.keyspace)
 
         # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
         self.__insert_metrics_statement = self.__session.prepare(
-            "INSERT INTO metrics (name, config, %s) VALUES (?, ?, %s);"
-            % (components_names, components_marks)
+            "INSERT INTO \"%s\".metrics (name, config, %s) VALUES (?, ?, %s);"
+            % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__insert_directories_statement = self.__session.prepare(
-            "INSERT INTO directories (name, %s) VALUES (?, %s) IF NOT EXISTS;"
-            % (components_names, components_marks)
+            "INSERT INTO \"%s\".directories (name, %s) VALUES (?, %s) IF NOT EXISTS;"
+            % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__select_metric_statement = self.__session.prepare(
-            "SELECT config FROM metrics WHERE name = ?;"
+            "SELECT config FROM \"%s\".metrics WHERE name = ?;" % self.keyspace_metadata
         )
 
         self.is_connected = True
@@ -327,10 +327,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def drop_all_metrics(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).drop_all_metrics()
-        statement_str = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
-        tables = self.__session.execute(statement_str, (self.keyspace, ))
-        for t in tables:
-            self.__session.execute("TRUNCATE \"%s\";" % t)
+        for keyspace in self.keyspace, self.keyspace_metadata:
+            statement_str = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
+            tables = [r[0] for r in self.__session.execute(statement_str, (keyspace, ))]
+            for table in tables:
+                self.__session.execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
 
     def fetch_points(self, metric, time_start, time_end, stage):
         """See bg_accessor.Accessor."""
@@ -418,7 +419,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if s != "*"
         ]
         query = " ".join([
-            "SELECT name FROM %s WHERE" % table,
+            "SELECT name FROM \"%s\".\"%s\" WHERE" % (self.keyspace_metadata, table),
             " AND ".join(where),
             "LIMIT %d ALLOW FILTERING;" % (self.MAX_METRIC_PER_GLOB + 1),
         ])
@@ -486,14 +487,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         except Exception:
             pass
         for cql in _METADATA_CREATION_CQL:
-            self.__session.execute(cql)
+            self.__session.execute(cql % {"keyspace": self.keyspace_metadata})
 
 
 def connect(*args, **kwargs):
     """Return a bg_accessor.Accessor connected to Casssandra.
 
     Args:
-      keyspace: Name of Cassandra keyspace dedicated to BigGraphite.
+      keyspace: Base name of Cassandra keyspaces dedicated to BigGraphite.
       contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
       port: The port to connect to, as an int.
       concurrency: How many worker threads to use.

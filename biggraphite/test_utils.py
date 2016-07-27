@@ -64,10 +64,12 @@ def create_unreplicated_keyspace(contact_points, port, keyspace):
     """Create a keyspace, mostly used for tests."""
     cluster = c_cluster.Cluster(contact_points, port)
     session = cluster.connect()
-    session.execute(
-        "CREATE KEYSPACE %s "
-        " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1};" %
-        keyspace)
+    template = (
+        "CREATE KEYSPACE \"%s\" "
+        " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1};"
+    )
+    session.execute(template % keyspace)
+    session.execute(template % (keyspace + "_metadata"))
     session.shutdown()
     cluster.shutdown()
 
@@ -258,7 +260,7 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
 class TestCaseWithAccessor(TestCaseWithTempDir):
     """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
 
-    KEYSPACE = "test_keyspace"
+    KEYSPACE = "testkeyspace"
 
     @classmethod
     def setUpClass(cls):
