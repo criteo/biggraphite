@@ -35,6 +35,7 @@ class CountDown(object):
 
     def __init__(self, count, on_zero):
         """Record parameters."""
+        assert count > 0
         self._canceled = False
         self._count = count
         self._lock = threading.Lock()

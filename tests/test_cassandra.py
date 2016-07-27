@@ -59,6 +59,11 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             0,
         )
 
+    def test_insert_empty(self):
+        # We've had a regression where inserting empty list would freeze
+        # the process
+        self.accessor.insert_points(_METRIC, [])
+
     def test_insert_fetch(self):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.addCleanup(self.accessor.drop_all_metrics)

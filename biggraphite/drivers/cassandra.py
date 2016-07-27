@@ -458,6 +458,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         logging.debug("insert: [%s, %s]", metric.name, datapoints)
 
         downsampled = self.__downsampler.feed(metric, datapoints)
+        if not downsampled and on_done:
+            on_done(None)
+            return
 
         count_down = None
         if on_done:
