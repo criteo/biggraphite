@@ -17,8 +17,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-from biggraphite import accessor as bg_accessor
-
 import array
 import math
 
@@ -40,12 +38,12 @@ class Downsampler(object):
         self._capacity = capacity
         self._names_to_aggregates = {}
 
-    def feed(self, metric, datapoints):
+    def feed(self, metric, points):
         """Feed the downsampler and produce points.
 
         Arg:
           metric: Metric
-          datapoints: iterable of (timestamp, value)
+          points: iterable of (timestamp, value)
         Returns:
           Iterable of (timestamp, value, count, precision).
         """
@@ -55,11 +53,11 @@ class Downsampler(object):
             self._names_to_aggregates[metric.name] = metric_aggregates
 
         # Sort points by increasing timestamp, because put expects them in order.
-        return self._names_to_aggregates[metric.name].update(metric.metadata, sorted(datapoints))
+        return self._names_to_aggregates[metric.name].update(metric.metadata, sorted(points))
 
 
 class MetricAggregates(object):
-    """Perform aggregation on metric data points."""
+    """Perform aggregation on metric points."""
 
     DEFAULT_RAW_CAPACITY = 10
 
@@ -98,64 +96,137 @@ class MetricAggregates(object):
         # _counts: array of integer: stage counts from index 0
         self._counts = array.array("i", [0] * stages)
 
-    def _update_raw(self, datapoints, precision):
-        """"Put raw data points in raw buffer and pop expired raw data points.
+    def _get_expired_raw_points(self, points, retention):
+        """"Put raw data points in raw buffer and return expired raw points.
 
         Args:
-          datapoints: iterable of (timestamp, value).
-          precision: precision of the raw buffer in seconds.
+          points: iterable of (timestamp, value).
+          rentention: Retention object.
 
         Returns:
-          The list of (timestamp, value) expired from the raw buffer.
+          The list of (timestamp, value) of expired raw points:
         """
         if self._raw_timestamp == -1:
             # Raw buffer is empty.
-            if not datapoints:
+            if not points:
                 # No update => nothing to expire.
                 return []
             # Otherwise, update raw timestamp to first point.
-            first_datapoint = datapoints[0]
+            first_datapoint = points[0]
             first_timestamp = first_datapoint[0]
             self._raw_timestamp = first_timestamp
 
+        stage_0 = retention[0]
         expired = []
-        for timestamp, value in datapoints:
-            last_update_epoch = self._raw_timestamp // precision
-            point_epoch = timestamp // precision
-            if point_epoch > last_update_epoch:
+        for timestamp, value in points:
+            last_update_step = stage_0.step(self._raw_timestamp)
+            point_step = stage_0.step(timestamp)
+            if point_step > last_update_step:
                 # Point is more recent than most recent raw point => expire.
                 # If we add N points, we have to expire N points.
-                # Here, N = point_epoch - last_update_epoch.
-                expired_count = point_epoch - last_update_epoch
+                # Here, N = point_step - last_update_step.
+                expired_count = point_step - last_update_step
 
                 # However, N can be larger than the raw buffer capacity.
                 # But we only need to expire as many points as the raw buffer capacity.
                 expired_count = min(expired_count, self._raw_capacity)
 
                 # The first point to expire is the oldest.
-                start_epoch = last_update_epoch - (self._raw_capacity - 1)
-                end_epoch = start_epoch + expired_count
-                for epoch in xrange(start_epoch, end_epoch):
-                    index = epoch % self._raw_capacity
+                start_step = last_update_step - (self._raw_capacity - 1)
+                end_step = start_step + expired_count
+                for step in xrange(start_step, end_step):
+                    index = step % self._raw_capacity
                     if not math.isnan(self._values[index]):
-                        expired.append((epoch * precision, self._values[index]))
+                        expired.append((step * stage_0.precision, self._values[index]))
                     self._values[index] = _NaN
-                self._raw_timestamp = bg_accessor.round_down(timestamp, precision)
-                self._values[point_epoch % self._raw_capacity] = value
-            elif point_epoch > last_update_epoch - self._raw_capacity:
+                self._raw_timestamp = stage_0.round_down(timestamp)
+
+                self._values[point_step % self._raw_capacity] = value
+            elif point_step > last_update_step - self._raw_capacity:
                 # Point fits in the buffer => replace value in the raw buffer.
-                self._values[point_epoch % self._raw_capacity] = value
+                self._values[point_step % self._raw_capacity] = value
+
         return expired
 
-    def _update_stage(self, metric_metadata, stage_index, points):
-        """Compute aggregated value for a stage and store it.
+    def _get_non_expired_raw_points(self, retention):
+        """"Get current (non expired) raw points.
 
+        Args:
+          retention: Retention object.
+
+        Returns:
+          The list of (timestamp, value) of non-expired raw points.
+        """
+        if self._raw_timestamp == -1:
+            # Raw buffer is empty.
+            return []
+
+        result = []
+        stage_0 = retention[0]
+        start_step = stage_0.step(self._raw_timestamp) - (self._raw_capacity - 1)
+        end_step = start_step + self._raw_capacity
+        for step in xrange(start_step, end_step):
+            index = step % self._raw_capacity
+            if not math.isnan(self._values[index]):
+                result.append((step * stage_0.precision, self._values[index]))
+
+        return result
+
+    def _update_raw(self, retention, points):
+        """"Put raw points in raw buffer and return all raw points.
+
+        Args:
+          retention: Retention object.
+          points: iterable of (timestamp, value).
+
+        Returns:
+          A tuple of (expired, non expired) raw points.
+          Each element of the tuple is list of (timestamp, value) of raw points.
+        """
+        expired = self._get_expired_raw_points(points, retention)
+        non_expired = self._get_non_expired_raw_points(retention)
+        return (expired, non_expired)
+
+    def _coalesce(self, stage, metric_metadata, result, points):
+        """"Coalesce raw points into result.
+
+        Args:
+          stage: Stage object.
+          metric_metadata: MetricMetadata object.
+          result: iterable of (timestamp, value, count, stage) to modify.
+          points: iterable of (timestamp, value).
+        """
+        aggregator = metric_metadata.aggregator
+        for timestamp, value in points:
+            step = stage.step(timestamp)
+            current_point = result[-1]
+            current_step = stage.step(current_point[0])
+            if current_step == step:
+                # TODO: use a namedtuple.
+                # Point is in current step => aggregate:
+                #   1. Get current value and and current count.
+                #   2. Compute aggregated value with new value.
+                #   3. Update stage information.
+                # The last point in result now contains up-to-date information.
+                current_value = current_point[1]
+                current_count = current_point[2]
+                aggregated_value = aggregator.merge(current_value, current_count, value)
+                result[-1] = (step * stage.precision, aggregated_value, current_count + 1, stage)
+            elif current_step < step:
+                # Point is in new step => add new step.
+                result.append((step * stage.precision, value, 1, stage))
+
+    def _update_stage(self, stage_index, metric_metadata, expired_points, non_expired_points):
+        """Compute aggregated values for a stage and store them.
+
+        Only the expired points will be taken into account in the updated
         The points have to be sorted by increasing timestamps.
 
         Args:
-          metric_metadata: MetricMetadata object.
           stage_index: index of stage to update with raw points.
-          points: raw points to be added into the current stage aggregate.
+          metric_metadata: MetricMetadata object.
+          expired_points: expired raw points to be added to the current stage aggregate.
+          non_expired_points: non-expired raw points to be added to the current stage aggregate.
 
         Returns:
           Iterable of (timestamp, value, count, stage).
@@ -163,68 +234,59 @@ class MetricAggregates(object):
         stages = metric_metadata.retention.stages
         stage = stages[stage_index]
         precision = stage.precision
-        aggregator = metric_metadata.aggregator
 
         current_timestamp = self._get_stage_timestamp(stage_index)
         current_value = self._get_stage_value(stage_index)
         current_count = self._get_stage_count(stage_index)
-        if current_timestamp == -1 and not points:
-            return []
-
         if current_timestamp == -1:
+            if expired_points:
+                first_point = expired_points[0]
+            elif non_expired_points:
+                first_point = non_expired_points[0]
+            else:
+                return []
+
             # Raw buffer is empty  => take first point timestamp.
-            first_point = points[0]
-            first_epoch = first_point[0] // precision
-            first_timestamp = first_epoch * precision
+            first_step = stage.step(first_point[0])
+            first_timestamp = first_step * precision
             current_timestamp = first_timestamp
 
-        expired = [(current_timestamp, current_value, current_count, stage)]
+        result = [(current_timestamp, current_value, current_count, stage)]
 
-        for timestamp, value in points:
-            epoch = timestamp // precision
-            current_point = expired[-1]
-            current_epoch = current_point[0] // precision
-            if current_epoch == epoch:
-                # TODO: use a namedtuple.
-                # Point is in current epoch => aggregate:
-                #   1. Get current value and and current count.
-                #   2. Compute aggregated value with new value.
-                #   3. Update stage information.
-                # The last point in expired now contains up-to-date information.
-                current_value = current_point[1]
-                current_count = current_point[2]
-                aggregated_value = aggregator.merge(current_value, current_count, value)
-                expired[-1] = (epoch * precision, aggregated_value, current_count + 1, stage)
-            elif current_epoch < epoch:
-                # Point is in new epoch => add new epoch.
-                expired.append((epoch * precision, value, 1, stage))
-        if expired:
-            current_point = expired[-1]
-            self._set_stage_timestamp(stage_index, current_point[0])
-            self._set_stage_value(stage_index, current_point[1])
-            self._set_stage_count(stage_index, current_point[2])
+        self._coalesce(stage, metric_metadata, result, expired_points)
+        last_point = result[- 1]
+        self._set_stage_timestamp(stage_index, last_point[0])
+        self._set_stage_value(stage_index, last_point[1])
+        self._set_stage_count(stage_index, last_point[2])
 
-        return expired
+        self._coalesce(stage, metric_metadata, result, non_expired_points)
 
-    def update(self, metric_metadata, datapoints):
+        return result
+
+    def update(self, metric_metadata, points):
         """"Compute aggregated values and store them.
 
-        The points have to be sorted by increasing timestamps.
+        Only the expired points will be taken into account in the updated
+        The points have to be sorted by increasing timestamp.
 
         Args:
           metric_metadata: MetricMetadata object
-          datapoints: iterable of (timestamp, value).
+          points: iterable of (timestamp, value).
 
         Returns:
           The list of expired (timestamp, value, count, stage) for all stages.
         """
-        stages = metric_metadata.retention.stages
-        raw_precision = stages[0].precision
-        expired_raw = self._update_raw(datapoints, raw_precision)
-        expired = []
-        for stage in xrange(len(metric_metadata.retention.stages)):
-            expired.extend(self._update_stage(metric_metadata, stage, expired_raw))
-        return expired
+        retention = metric_metadata.retention
+        stages = retention.stages
+        (expired_raw, non_expired_raw) = self._update_raw(retention, points)
+        result = []
+        for stage_index in xrange(len(stages)):
+            result_stage = self._update_stage(stage_index,
+                                              metric_metadata,
+                                              expired_raw,
+                                              non_expired_raw)
+            result.extend(result_stage)
+        return result
 
     @property
     def _raw_timestamp(self):
@@ -236,68 +298,68 @@ class MetricAggregates(object):
         """Set timestamp of raw buffer."""
         self._timestamps[0] = value
 
-    def _get_stage_timestamp(self, stage):
+    def _get_stage_timestamp(self, stage_index):
         """Get timestamp of stage in buffer.
 
         Raw timestamp is at index 0.
         Stage timestamps start at index 1.
 
         Args:
-          stage: stage whose timestamp to get.
+          stage_index: stage whose timestamp to get.
 
         Returns:
           Timestamp of stage, in seconds.
         """
-        return self._timestamps[1 + stage]
+        return self._timestamps[1 + stage_index]
 
-    def _set_stage_timestamp(self, stage, timestamp):
+    def _set_stage_timestamp(self, stage_index, timestamp):
         """Set timestamp of stage in buffer.
 
         Raw timestamp is at index 0.
         Stage timestamps start at index 1.
 
         Args:
-          stage: stage whose timestamp to set.
+          stage_index: stage whose timestamp to set.
           timestamp: timestamp to set stage to.
         """
-        self._timestamps[1 + stage] = timestamp
+        self._timestamps[1 + stage_index] = timestamp
 
-    def _get_stage_value(self, stage):
+    def _get_stage_value(self, stage_index):
         """Get value of stage in buffer.
 
         Args:
-          stage: stage whose value to get.
+          stage_index: stage whose value to get.
 
         Returns:
           Value of stage.
         """
-        return self._values[self._raw_capacity + stage]
+        return self._values[self._raw_capacity + stage_index]
 
-    def _set_stage_value(self, stage, value):
+    def _set_stage_value(self, stage_index, value):
         """Set value of stage in buffer.
 
         Args:
-          stage: stage whose value to set.
+          stage_index: stage whose value to set.
           value: value to set stage to.
         """
-        self._values[self._raw_capacity + stage] = value
+        self._values[self._raw_capacity + stage_index] = value
 
-    def _get_stage_count(self, stage):
+    def _get_stage_count(self, stage_index):
         """Get count of stage in buffer.
 
         Args:
-          stage: stage whose count to get.
+          stage_index: stage whose count to get.
 
         Returns:
           Count of stage.
         """
-        return self._counts[stage]
+        return self._counts[stage_index]
 
-    def _set_stage_count(self, stage, count):
+    def _set_stage_count(self, stage_index, count):
         """Set count of stage in buffer.
 
         Args:
-          stage: stage whose count to set.
+          stage_index: stage whose count to set.
           count: count to set stage to.
         """
-        self._counts[stage] = count
+        self._counts[stage_index] = count

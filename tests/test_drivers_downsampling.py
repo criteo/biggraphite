@@ -39,14 +39,12 @@ class TestDownsampler(unittest.TestCase):
         self.metric = bg_accessor.Metric(self.METRIC_NAME, metric_metadata)
         self.ds = bg_ds.Downsampler(self.CAPACITY)
 
-    def test_simple(self):
-        """Simple test with few points."""
+    def test_feed_simple(self):
+        """Test feed with few points."""
         # 1. Put value 1 at timestamp 0.
-        # 2. Evict this value with a large timestamp that fits in the buffer.
-        # 3. Check that only the first point is used in the computation.
+        # 2. Check that it is used in the aggregates, even though it is not expired.
         points = [
-            (0, 1),
-            (self.PRECISION * self.CAPACITY, 55555),
+            (0, 1)
         ]
         expected = [
             (0, 1, 1, self.stage_0),
@@ -55,51 +53,67 @@ class TestDownsampler(unittest.TestCase):
         result = self.ds.feed(self.metric, points)
         self.assertEqual(result, expected)
 
-        # 1. Reset point with value 55555 (this should not evict anything).
-        # 2. Check that the aggregates are still the same.
-        points = [(self.PRECISION * self.CAPACITY, -1)]
+        # 1. Add point with value 9 at index 1 in raw buffer.
+        # 2. Check that the aggregates are updated using both points.
+        points = [
+            (0, 5),  # Overrides previous point.
+            (self.PRECISION, 9)
+        ]
+        expected = [
+            (0, 5, 1, self.stage_0),
+            (self.PRECISION, 9, 1, self.stage_0),
+            (0, 14, 2, self.stage_1)
+        ]
+        result = self.ds.feed(self.metric, points)
+        print(self.ds._names_to_aggregates[self.METRIC_NAME]._values)
+        print(result)
+        self.assertEqual(result, expected)
+
+    def test_feed_extended(self):
+        """Test feed with several points."""
+        # 1. Add point with value 15 which expires the point at index 0.
+        # 2. Check that the aggregates are updated using the three points.
+        points = [
+            (0, 1),  # Point at index 0.
+            (1, 2),  # Overrides previous point at index 0.
+            (self.PRECISION, 15),  # Point at index 1.
+            (self.PRECISION * self.CAPACITY, 25),  # Evicts the point at index 0.
+            (self.PRECISION * self.CAPACITY * 2, 150),  # Evicts all previous points.
+            (self.PRECISION ** 2 * self.CAPACITY, 1500),  # Bump stage 1 epoch.
+            (self.PRECISION ** 2 * self.CAPACITY, 1501)  # Replace previous point.
+        ]
+        expected_stage_0 = [
+            (0, 2, 1, self.stage_0),  # Point at index 0.
+            (self.PRECISION, 15, 1, self.stage_0),  # Point at index 1.
+            (self.PRECISION * self.CAPACITY, 25, 1, self.stage_0),
+            (self.PRECISION * self.CAPACITY * 2, 150, 1, self.stage_0),
+            (self.CAPACITY * self.PRECISION ** 2, 1501, 1, self.stage_0),
+        ]
+        expected_stage_1 = [
+            (0, 192, 4, self.stage_1),  # 192 = 2 + 15 + 25 + 150, sum of stage_0 values
+            (self.CAPACITY * self.PRECISION ** 2, 1501, 1, self.stage_1)
+        ]
+        expected = expected_stage_0 + expected_stage_1
         result = self.ds.feed(self.metric, points)
         self.assertEqual(result, expected)
 
     def test_out_of_order(self):
         """Test feeding points out of order."""
         points = [
-            (self.PRECISION ** 2 + 1, 42),  # not evicted
-            (self.PRECISION ** 2, 84),      # not evicted
-            (self.PRECISION - 1, 1),        # overrides (0, -1) once sorted
+            (self.PRECISION ** 2 + 1, 42),  # Overrides next point once sorted.
+            (self.PRECISION ** 2, 84),
+            (self.PRECISION - 1, 1),  # Overrides next point once sorted
             (self.PRECISION, 2),
-            (0, -1)
+            (0, -10)
         ]
         expected_stage_0 = [
             (0, 1, 1, self.stage_0),
-            (self.PRECISION, 2, 1, self.stage_0)
+            (self.PRECISION, 2, 1, self.stage_0),
+            (self.PRECISION ** 2, 42, 1, self.stage_0)
         ]
         expected_stage_1 = [
-            (0, 3, 2, self.stage_1)  # 3 = 1 + 2, sum of stage_0 values
-        ]
-        expected = expected_stage_0 + expected_stage_1
-        result = self.ds.feed(self.metric, points)
-        self.assertEqual(result, expected)
-
-    def test_extended(self):
-        """Check with several points."""
-        # Since we have some capacity in the buffer, the points with the largest
-        # timestamps should not be evicted
-        points = [
-            (0, 1),
-            (self.PRECISION - 1, 9),        # replaces previous point
-            (self.PRECISION, 10),
-            (self.PRECISION * self.CAPACITY, 7),
-            (self.PRECISION ** 2 - 1, 20),  # not evicted
-            (self.PRECISION ** 2, 50)       # not evicted
-        ]
-        expected_stage_0 = [
-            (0, 9, 1, self.stage_0),
-            (self.PRECISION, 10, 1, self.stage_0),
-            (self.PRECISION * self.CAPACITY, 7, 1, self.stage_0)
-        ]
-        expected_stage_1 = [
-            (0, 26, 3, self.stage_1)  # 26 = 9 + 10 +7, sum of stage_0 values
+            (0, 3, 2, self.stage_1),  # 3 = 1 + 2.
+            (self.PRECISION ** 2, 42, 1, self.stage_1)
         ]
         expected = expected_stage_0 + expected_stage_1
         result = self.ds.feed(self.metric, points)
