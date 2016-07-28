@@ -58,6 +58,21 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
 class InvalidGlobError(InvalidArgumentError):
     """The provided glob is invalid."""
 
+# HEURISTIC PARAMETERS
+# ====================
+# The following few constants are heuristics that are used to tune
+# the datatable.
+# TODO: Consider switching to TWCS after Cassandra 3.8
+# We expect timestamp T to be written at T +/- _OUT_OF_ORDER_S
+# As result we delay expiry and compaction by that much time
+_OUT_OF_ORDER_S = 15 * 60
+# We expect to use the last 200 points, as this is Grafana's default.
+# We round it up to a power of min_threshold=4.
+# As 256=4^4, we will be compacting up to 4 times a given point.
+_EXPECTED_POINTS_PER_READ = 256
+# As we disable commit log, we flush memory data to disk every so
+# often to make sure they are persisted.
+_FLUSH_MEMORY_EVERY_S = 15 * 60
 
 _COMPONENTS_MAX_LEN = 64
 _LAST_COMPONENT = "__END__"
@@ -111,7 +126,7 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "  AND compaction = {"
     "    'class': 'DateTieredCompactionStrategy',"
     "    'base_time_seconds': '%(base_time_seconds)d',"
-    "    'max_sstable_age_days': %(max_sstable_age_days)d,"
+    "    'max_window_size_seconds': %(max_window_size_seconds)d,"
     "    'timestamp_resolution': 'MICROSECONDS'"
     "  };"
 )
@@ -131,11 +146,6 @@ class _LazyPreparedStatements(object):
     This creates tables and corresponding prepared statements once they are needed.
     """
 
-    # We expect timestamp T to be written at T +/- _OUT_OF_ORDER_S
-    _OUT_OF_ORDER_S = 900
-
-    _SECONDS_PER_DAY = 24 * 3600
-
     def __init__(self, session, keyspace):
         self._keyspace = keyspace
         self._session = session
@@ -144,31 +154,28 @@ class _LazyPreparedStatements(object):
 
     def _create_datapoints_table(self, stage):
         # Time after which data expire.
-        time_to_live = stage.duration + self._OUT_OF_ORDER_S
+        time_to_live = stage.duration + _OUT_OF_ORDER_S
 
         # Time it takes to receive a step
-        arrival_time = stage.precision + self._OUT_OF_ORDER_S
+        arrival_time = stage.precision + _OUT_OF_ORDER_S
 
         # Estimate the age of the oldest data we still expect to read
-        # Generally, we expect to use the last 16 points. As min_threshold==4, and 4*4=16,
-        # data are compacted twice.
-        read_time = stage.precision * 16
-        # No point compacting data expiring today
-        read_time = min(read_time, time_to_live - self._SECONDS_PER_DAY)
-        # The last day is likely to be useful.
-        # This also handle the case were read_time was negative after the previous line
-        read_time = max(read_time, self._SECONDS_PER_DAY)
-        read_time_days = int(read_time + self._SECONDS_PER_DAY - 1) // self._SECONDS_PER_DAY
+        fresh_time = stage.precision * _EXPECTED_POINTS_PER_READ
+        # See http://www.datastax.com/dev/blog/datetieredcompactionstrategy
+        #  - If too small: Reads need to touch many sstables
+        #  - If too big: We pay compaction overhead for data that are never accessed anymore
+        #    and get huge sstables
+        # We set a minimum of arrival_time so that data are in order
+        max_window_size_seconds = max(fresh_time, arrival_time + 1)
 
         statement_str = _DATAPOINTS_CREATION_CQL_TEMPLATE % {
             "table": self._get_table_name(stage),
             "default_time_to_live": time_to_live,
             # When we start compacting
             "base_time_seconds": arrival_time,
-            # Max time span that we put together in one sstable.
-            #  - If too small: Reads need to touch many sstables
-            #  - If too big: We pay compaction overhead for data that are never accessed anymore
-            "max_sstable_age_days": read_time_days,
+            "max_window_size_seconds": max_window_size_seconds,
+            "memtable_flush_period_in_ms": _FLUSH_MEMORY_EVERY_S * 1000,
+            "comment": "{\"created_by\": \"biggraphite\", \"schema_version\": 0}",
         }
         # The statement is idempotent
         self._session.execute(statement_str)
@@ -410,9 +417,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).glob_directory_names(glob)
         return self.__glob_names("directories", glob)
 
-    # TODO: handle ranges and the like
-    # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
-    # TODO: Handled subdirectories for the graphite-web API
     def glob_metric_names(self, glob):
         """Return a sorted list of metric names matching this glob."""
         super(_CassandraAccessor, self).glob_metric_names(glob)
