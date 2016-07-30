@@ -85,6 +85,7 @@ class Aggregator(enum.Enum):
     total = "sum"
     average = "average"
     last = "last"
+    # TODO: Add avg_zero.
 
     def __init__(self, carbon_name):
         """Set attributes."""

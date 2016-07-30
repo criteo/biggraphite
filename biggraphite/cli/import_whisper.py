@@ -101,21 +101,23 @@ class _Worker(object):
             step = archive["secondsPerPoint"]
             archive_starts_at = 0
             expected_next_timestamp = 0
+            stage = bg_accessor.Stage(
+                precision=archive["secondsPerPoint"], points=archive["points"])
             for _ in range(archive["points"]):
-                timestamp, val = _POINT_STRUCT.unpack_from(buf, offset)
+                timestamp, value = _POINT_STRUCT.unpack_from(buf, offset)
                 # Detect holes in data. The heuristic is the following:
                 # - If a value is non-zero, it is assumed to be meaningful.
                 # - If it is a zero with a fresh timestamp relative to the last
                 #   time we saw meaningful data, it is assumed to be meaningful.
                 # So it unfortunately skips leading zeroes after a gap.
-                if timestamp != expected_next_timestamp and val == 0:
+                if timestamp != expected_next_timestamp and value == 0:
                     expected_next_timestamp += step
                     continue
                 else:
                     expected_next_timestamp = timestamp + step
                 archive_starts_at = min(timestamp, archive_starts_at)
                 if timestamp < prev_archive_starts_at:
-                    res.append((timestamp, val))
+                    res.append((timestamp, value, 1, stage))
                 offset += whisper.pointSize
             prev_archive_starts_at = archive_starts_at
         return res
