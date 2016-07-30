@@ -18,7 +18,7 @@ To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Mailing List](https://groups.google.com/forum/#!forum/biggraphite)
 
 # Backends
-There is only one supported backend for now: Cassandra, whose design is [described in DESIGN_CASSANDRA.md](DESIGN_CASSANDRA.md).
+There is only one supported backend for now: Cassandra, whose design is [described in CASSANDRA_DESIGN.md](CASSANDRA_DESIGN.md).
 
 # Code structure
 - `biggraphite.accessor` exposes the public API to store/retrieve metrics

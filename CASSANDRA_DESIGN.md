@@ -3,8 +3,25 @@ This document describes how we modeled a TSDB using Cassandra.
 
 ------
 
+## keyspace
+
+Two keyspaces are used, one for data and one for metadata. We recommend the
+following settings.
+
+```
+CREATE KEYSPACE biggraphite WITH replication = {
+  'class': 'SimpleStrategy',
+  'replication_factor': '2'
+} AND durable_writes = false;
+
+CREATE KEYSPACE biggraphite_metadata WITH replication = {
+  'class': 'SimpleStrategy',
+  'replication_factor': '3'
+} AND durable_writes = true;
+```
+
 ## data tables
-For the full SQL please see [cassandra.py](biggraphite/drivers/cassandra.py).
+For the full CQL please see [cassandra.py](biggraphite/drivers/cassandra.py).
 
 ### Primary key
 All rows in data table describe have time and metric UUID as their primary key, and values as columns.<br />
