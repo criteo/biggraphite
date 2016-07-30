@@ -154,7 +154,9 @@ class FakeAccessor(bg_accessor.Accessor):
         super(FakeAccessor, self).insert_points_async(metric, datapoints, on_done)
         assert metric.name in self._metric_to_metadata
         points = self._metric_to_points[metric.name]
-        for timestamp, value in datapoints:
+        for datapoint in datapoints:
+            timestamp = datapoint[0]
+            value = datapoint[1]
             points[timestamp] = value
         if on_done:
             on_done(None)

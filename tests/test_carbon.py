@@ -60,16 +60,16 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
             other_metric,
             retentions=[(1, 60)],
             xfilesfactor=0.5,
-            aggregation_method="avg",
+            aggregation_method="average",
         )
         self.assertTrue(self._plugin.exists(other_metric))
-        self.assertEqual("avg", self._plugin.getMetadata(other_metric, "aggregationMethod"))
+        self.assertEqual("average", self._plugin.getMetadata(other_metric, "aggregationMethod"))
 
     def test_nosuchmetric(self):
         other_metric = _TEST_METRIC + "-nosuchmetric"
         self.assertRaises(
             ValueError,
-            self._plugin.setMetadata, other_metric, "aggregationMethod", "avg")
+            self._plugin.setMetadata, other_metric, "aggregationMethod", "average")
         self.assertRaises(
             ValueError,
             self._plugin.getMetadata, other_metric, "aggregationMethod")
@@ -80,7 +80,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         # Setting a different value should fail
         self.assertRaises(
             ValueError,
-            self._plugin.setMetadata, _TEST_METRIC, "aggregationMethod", "avg")
+            self._plugin.setMetadata, _TEST_METRIC, "aggregationMethod", "average")
 
     def test_write(self):
         metric = bg_test_utils.make_metric(_TEST_METRIC)

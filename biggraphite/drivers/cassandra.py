@@ -454,23 +454,34 @@ class _CassandraAccessor(bg_accessor.Accessor):
         The datapoint argument is slightly different because it accepts
         another format for aggregated points:
            (timestamp in seconds, value as double,
-            count as int, step in seconds).
+            count as int, Stage).
         """
         super(_CassandraAccessor, self).insert_points_async(
             metric, datapoints, on_done)
 
         logging.debug("insert: [%s, %s]", metric.name, datapoints)
 
-        downsampled = self.__downsampler.feed(metric, datapoints)
-        if not downsampled and on_done:
+        raw_points = []
+        downsampled_points = []
+
+        # Separate raw and aggregated points.
+        for datapoint in datapoints:
+            if len(datapoint) == 4:
+                downsampled_points.append(datapoint)
+            else:
+                raw_points.append(datapoint)
+
+        downsampled_points += self.__downsampler.feed(metric, raw_points)
+        if not downsampled_points and on_done:
             on_done(None)
             return
 
         count_down = None
         if on_done:
-            count_down = _utils.CountDown(count=len(downsampled), on_zero=on_done)
+            count_down = _utils.CountDown(count=len(downsampled_points),
+                                          on_zero=on_done)
 
-        for timestamp, value, count, stage in downsampled:
+        for timestamp, value, count, stage in downsampled_points:
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _ROW_SIZE_MS
             time_start_ms = timestamp_ms - time_offset_ms
