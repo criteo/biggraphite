@@ -79,8 +79,9 @@ class Aggregator(enum.Enum):
     minimum = "min"
     maximum = "max"
     total = "sum"
-    average = "avg"
+    average = "average"
     last = "last"
+    # TODO: Add avg_zero.
 
     def __init__(self, carbon_name):
         """Set attributes."""
@@ -597,7 +598,7 @@ class Accessor(object):
 
         Args:
           metric: A Metric instance.
-          datapoints: An iterable of (timestamp in seconds, values as double)
+          datapoints: An iterable of (timestamp in seconds, value as double)
         """
         self._check_connected()
 
