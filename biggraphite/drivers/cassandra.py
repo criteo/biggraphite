@@ -428,18 +428,25 @@ class _CassandraAccessor(bg_accessor.Accessor):
             msg = "Metric globs can have a maximum of %d dots" % _COMPONENTS_MAX_LEN - 2
             raise bg_accessor.InvalidGlobError(msg)
 
-        where = [
+        where_parts = [
             "component_%d = %s" % (n, c_encoder.cql_quote(s))
             for n, s in enumerate(components)
             if s != "*"
         ]
-        query = " ".join([
-            "SELECT name FROM \"%s\".\"%s\" WHERE" % (self.keyspace_metadata, table),
-            " AND ".join(where),
-            "LIMIT %d ALLOW FILTERING;" % (self.MAX_METRIC_PER_GLOB + 1),
-        ])
+        if len(where_parts) == len(components):
+            # No wildcard, skip indexes
+            where = "name = " + c_encoder.cql_quote(glob)
+        else:
+            where = " AND ".join(where_parts)
+        query = (
+            "SELECT name FROM \"%(keyspace)s\".\"%(table)s\""
+            " WHERE %(where)s LIMIT %(limit)d ALLOW FILTERING;"
+        ) % {
+            "keyspace": self.keyspace_metadata, "table": table, "where": where,
+            "limit": self.MAX_METRIC_PER_GLOB + 1,
+        }
         try:
-            metrics_names = [r.name for r in self.__session.execute(query)]
+            metrics_names = [r[0] for r in self.__session.execute(query)]
         except Exception as e:
             raise RetryableCassandraError(e)
         if len(metrics_names) > self.MAX_METRIC_PER_GLOB:
