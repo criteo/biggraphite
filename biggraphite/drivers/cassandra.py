@@ -110,8 +110,6 @@ _METADATA_CREATION_CQL = [
 ] + _METADATA_CREATION_CQL_PATH_INDEXES
 
 
-# TODO: Make row size proportional to the precision
-_ROW_SIZE_MS = 3600 * 1000
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
     "  metric text,"              # Metric name.
@@ -130,6 +128,18 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "    'timestamp_resolution': 'MICROSECONDS'"
     "  };"
 )
+
+
+def _row_size_ms(stage):
+    """Number of milliseconds to put in one Cassandra row.
+
+    Args:
+      stage: The stage the table stores.
+
+    Returns:
+      An integer, the duration in milliseconds.
+    """
+    return stage.precision_ms * _EXPECTED_POINTS_PER_READ
 
 
 class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
@@ -224,8 +234,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     Please refer to bg_accessor.Accessor.
     """
-
-    _MAX_QUERY_RANGE_MS = 365 * 24 * _ROW_SIZE_MS
 
     # Current value is based on page settings, so that everything fits in a single Cassandra
     # reply with default settings.
@@ -362,7 +370,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
-        time_start_ms = max(time_end_ms - self._MAX_QUERY_RANGE_MS, time_start_ms)
+        time_start_ms = max(time_end_ms - stage.duration_ms, time_start_ms)
 
         statements_and_args = self._fetch_points_make_selects(
             metric.name, time_start_ms, time_end_ms, stage)
@@ -380,13 +388,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                                    time_end_ms, stage):
         # We fetch with ms precision, even though we only store with second
         # precision.
-        first_row = bg_accessor.round_down(time_start_ms, _ROW_SIZE_MS)
-        last_row = bg_accessor.round_down(time_end_ms, _ROW_SIZE_MS)
+        first_row = bg_accessor.round_down(time_start_ms, _row_size_ms(stage))
+        last_row = bg_accessor.round_down(time_end_ms, _row_size_ms(stage))
         res = []
         # xrange(a,b) does not contain b, so we use last_row+1
-        for row_start_ms in xrange(first_row, last_row + 1, _ROW_SIZE_MS):
+        for row_start_ms in xrange(first_row, last_row + 1, _row_size_ms(stage)):
             row_min_offset = -1  # Selects all
-            row_max_offset = _ROW_SIZE_MS + 1   # Selects all
+            row_max_offset = stage.duration_ms   # Selects all
             if row_start_ms == first_row:
                 row_min_offset = time_start_ms - row_start_ms
             if row_start_ms == last_row:
@@ -472,7 +480,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         for timestamp, value, count, stage in downsampled:
             timestamp_ms = int(timestamp) * 1000
-            time_offset_ms = timestamp_ms % _ROW_SIZE_MS
+            time_offset_ms = timestamp_ms % _row_size_ms(stage)
             time_start_ms = timestamp_ms - time_offset_ms
 
             statement, args = self.__lazy_statements.prepare_insert(
