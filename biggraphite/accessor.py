@@ -261,6 +261,11 @@ class Stage(object):
         """A string like "${POINTS}*${PRECISION}s"."""
         return "{}*{}s".format(self.points, self.precision)
 
+    @property
+    def duration_ms(self):
+        """The duration in milliseconds."""
+        return self.duration * 1000
+
     def epoch(self, timestamp):
         """Return time elapsed since Unix epoch in count of self.duration.
 
