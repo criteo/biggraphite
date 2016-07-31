@@ -88,7 +88,7 @@ class TestAggregator(unittest.TestCase):
 
     def test_config_names(self):
         self.assertEqual(
-            bg_accessor.Aggregator.from_carbon_name("avg"),
+            bg_accessor.Aggregator.from_carbon_name("average"),
             bg_accessor.Aggregator.average,
         )
         self.assertIsNone(bg_accessor.Aggregator.from_carbon_name(""))
