@@ -130,7 +130,7 @@ class _Worker(object):
         meta = self._read_metadata(metric_name, path)
         metric = bg_accessor.Metric(metric_name, meta)
         self._accessor.create_metric(metric)
-        self._accessor.insert_points(metric, points)
+        self._accessor.insert_downsampled_points(metric, points)
         return len(points)
 
 
