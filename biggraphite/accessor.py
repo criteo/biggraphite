@@ -74,12 +74,16 @@ def round_up(rounded, divider):
 
 @enum.unique
 class Aggregator(enum.Enum):
-    """Represents one of the known aggregations."""
+    """Represents one of the known aggregations.
+
+    Name is BigGraphite name, chosen to avoid conflicts with Python's builtins.
+    Value is Whisper name.
+    """
 
     minimum = "min"
     maximum = "max"
     total = "sum"
-    average = "avg"
+    average = "average"
     last = "last"
 
     def __init__(self, carbon_name):
