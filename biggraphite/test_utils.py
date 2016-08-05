@@ -159,6 +159,11 @@ class FakeAccessor(bg_accessor.Accessor):
         if on_done:
             on_done(None)
 
+    def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
+        """See the real Accessor for a description."""
+        datapoints = [(ts, value) for ts, value, count, stage in downsampled]
+        return self.insert_points_async(metric, datapoints, on_done)
+
     def drop_all_metrics(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(FakeAccessor, self).drop_all_metrics(*args, **kwargs)
