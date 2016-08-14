@@ -81,11 +81,12 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
     def _call_main(self):
         import_whisper.main([
             "--quiet",
-            "--keyspace", "keyspace",
-            "--port", "42",
+            "--cassandra_keyspace", "keyspace",
+            "--cassandra_port", "42",
+            "--cassandra_contact_points", "testhost1",
+            "--cassandra_contact_points", "testhost2",
             "--process", "1",
             self.tempdir,
-            "testhost1", "testhost2",
         ])
 
 

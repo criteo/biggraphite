@@ -238,7 +238,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     _DEFAULT_CASSANDRA_PORT = 9042
 
-    def __init__(self, keyspace, contact_points, port=None, concurrency=4, default_timeout=None):
+    def __init__(self, keyspace='biggraphite', contact_points=[],
+                 port=None, concurrency=4, default_timeout=None):
         """Record parameters needed to connect.
 
         Args:
@@ -515,8 +516,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__session.execute(cql % {"keyspace": self.keyspace_metadata})
 
 
-def connect(*args, **kwargs):
-    """Return a bg_accessor.Accessor connected to Casssandra.
+def build(*args, **kwargs):
+    """Return a bg_accessor.Accessor using Casssandra.
 
     Args:
       keyspace: Base name of Cassandra keyspaces dedicated to BigGraphite.
