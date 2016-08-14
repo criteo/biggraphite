@@ -27,7 +27,7 @@ import progressbar
 import whisper
 
 from biggraphite import accessor as bg_accessor
-from biggraphite.drivers import cassandra as bg_cassandra
+from biggraphite import utils as bg_utils
 
 _DEV_NULL = open(os.devnull, "w")
 
@@ -57,12 +57,9 @@ def metric_name_from_wsp(root_dir, wsp_path):
 class _Worker(object):
 
     def __init__(self, opts):
-        self._accessor = bg_cassandra.connect(
-            keyspace=opts.keyspace,
-            contact_points=opts.contact_points,
-            port=opts.port,
-            concurrency=opts.connections_per_process,
-        )
+        # TODO(c.chary): Create accessor_from_argv()
+        self._accessor = bg_utils.accessor_from_settings(
+            bg_utils.settings_from_args(opts))
         self._opts = opts
 
     @staticmethod
@@ -146,21 +143,13 @@ def _parse_opts(args):
     parser = argparse.ArgumentParser(description="Import whisper files into BigGraphite.")
     parser.add_argument("root_directory", metavar="WHISPER_DIR",
                         help="directory in which to find whisper files")
-    parser.add_argument("contact_points", metavar="HOST", nargs="+",
-                        help="hosts used for discovery")
     parser.add_argument("--quiet", action="store_const", default=False, const=True,
                         help="Show no output unless there are problems.")
-    parser.add_argument("--keyspace", metavar="NAME",
-                        help="Cassandra keyspace", default="biggraphite")
-    parser.add_argument("--statements_per_connection", metavar="N", type=int,
-                        help="number of concurrent statements per connection",
-                        default=50)
-    parser.add_argument("--port", metavar="PORT", type=int,
-                        help="the native port to connect to", default=9042)
-    parser.add_argument("--connections_per_process", metavar="N", type=int,
-                        help="number of connections per Cassandra host per process", default=4)
     parser.add_argument("--process", metavar="N", type=int,
-                        help="number of concurrent process", default=multiprocessing.cpu_count())
+                        help="number of concurrent process",
+                        default=multiprocessing.cpu_count())
+    bg_utils.add_argparse_arguments(parser)
+    # TODO(c.chary): move part of this in utils.py
     return parser.parse_args(args)
 
 

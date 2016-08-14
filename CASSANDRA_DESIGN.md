@@ -6,19 +6,8 @@ This document describes how we modeled a TSDB using Cassandra.
 ## keyspace
 
 Two keyspaces are used, one for data and one for metadata. We recommend the
-following settings.
+following settings: [schema.cql](share/schema.cql).
 
-```
-CREATE KEYSPACE biggraphite WITH replication = {
-  'class': 'SimpleStrategy',
-  'replication_factor': '2'
-} AND durable_writes = false;
-
-CREATE KEYSPACE biggraphite_metadata WITH replication = {
-  'class': 'SimpleStrategy',
-  'replication_factor': '3'
-} AND durable_writes = true;
-```
 
 ## data tables
 For the full CQL please see [cassandra.py](biggraphite/drivers/cassandra.py).

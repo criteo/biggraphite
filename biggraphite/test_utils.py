@@ -20,10 +20,7 @@ dependencies, instead one needs the elements of tests-requirements.txt .
 from __future__ import absolute_import
 from __future__ import print_function
 
-import collections
-import fnmatch
 import os
-import re
 import sys
 import tempfile
 import shutil
@@ -32,10 +29,10 @@ import logging
 
 from cassandra import cluster as c_cluster
 import mock
-import sortedcontainers
 
 from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import cassandra as bg_cassandra
+from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache as bg_metadata_cache
 
 
@@ -49,6 +46,7 @@ if HAS_CASSANDRA_HOME:
     class _SlowerTestingCassandra(testing_cassandra.Cassandra):
         """Just like testing_cassandra.Cassandra but waits 5 minutes for start."""
 
+        # For older versions.
         BOOT_TIMEOUT = 5 * 60
 
 
@@ -125,103 +123,6 @@ def make_metric(name, metadata=None, **kwargs):
     return bg_accessor.Metric(name, metadata)
 
 
-class FakeAccessor(bg_accessor.Accessor):
-    """A fake acessor that never connects and doubles as a fake MetadataCache."""
-
-    def __init__(self):
-        """Create a new FakeAccessor."""
-        super(FakeAccessor, self).__init__("fake")
-        self._metric_to_points = collections.defaultdict(sortedcontainers.SortedDict)
-        self._metric_to_metadata = {}
-        self._directory_names = sortedcontainers.SortedSet()
-
-    @property
-    def _metric_names(self):
-        return self._metric_to_metadata.keys()
-
-    def connect(self, *args, **kwargs):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).connect(*args, **kwargs)
-        self.is_connected = True
-
-    def shutdown(self, *args, **kwargs):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).shutdown(*args, **kwargs)
-        self.is_connected = False
-
-    def insert_points_async(self, metric, datapoints, on_done=None):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).insert_points_async(metric, datapoints, on_done)
-        assert metric.name in self._metric_to_metadata
-        points = self._metric_to_points[metric.name]
-        for timestamp, value in datapoints:
-            points[timestamp] = value
-        if on_done:
-            on_done(None)
-
-    def drop_all_metrics(self, *args, **kwargs):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).drop_all_metrics(*args, **kwargs)
-        self._metric_to_points.clear()
-        self._metric_to_metadata.clear()
-        self._directory_names.clear()
-
-    def create_metric(self, metric):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).create_metric(metric)
-        self._metric_to_metadata[metric.name] = metric.metadata
-        parts = metric.name.split(".")[:-1]
-        path = []
-        for part in parts:
-            path.append(part)
-            self._directory_names.add(".".join(path))
-
-    @staticmethod
-    def __glob_names(names, glob):
-        res = []
-        dots_count = glob.count(".")
-        glob_re = re.compile(fnmatch.translate(glob))
-        for name in names:
-            # "*" can match dots for fnmatch
-            if name.count(".") == dots_count and glob_re.match(name):
-                res.append(name)
-        return res
-
-    def glob_metric_names(self, glob):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).glob_metric_names(glob)
-        return self.__glob_names(self._metric_names, glob)
-
-    def glob_directory_names(self, glob):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).glob_directory_names(glob)
-        return self.__glob_names(self._directory_names, glob)
-
-    def get_metric(self, metric_name):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).get_metric(metric_name)
-        metadata = self._metric_to_metadata.get(metric_name)
-        if metadata:
-            return bg_accessor.Metric(metric_name, metadata)
-        else:
-            return None
-
-    def fetch_points(self, metric, time_start, time_end, stage):
-        """See the real Accessor for a description."""
-        super(FakeAccessor, self).fetch_points(metric, time_start, time_end, stage)
-        points = self._metric_to_points[metric.name]
-        rows = []
-        for ts in points.irange(time_start, time_end):
-            # A row is time_base_ms, time_offset_ms, value, count
-            row = (ts * 1000.0, 0, float(points[ts]), 1)
-            rows.append(row)
-        query_results = [(True, rows)]
-
-        time_start_ms = int(time_start) * 1000
-        time_end_ms = int(time_end) * 1000
-        return bg_accessor.PointGrouper(metric, time_start_ms, time_end_ms, stage, query_results)
-
-
 class TestCaseWithTempDir(unittest.TestCase):
     """A TestCase with a temporary directory."""
 
@@ -240,22 +141,24 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
     def setUp(self):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithFakeAccessor, self).setUp()
-        self.accessor = FakeAccessor()
+        self.accessor = bg_memory.build()
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
-        self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)
+        self.metadata_cache = bg_metadata_cache.DiskCache(
+            self.accessor, self.tempdir)
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 
     def fake_drivers(self):
-        """Hijack drivers' connect() functions to return self.accessor."""
-        patcher = mock.patch('biggraphite.drivers.cassandra.connect', return_value=self.accessor)
+        """Hijack drivers' build() functions to return self.accessor."""
+        patcher = mock.patch('biggraphite.drivers.cassandra.build',
+                             return_value=self.accessor)
         patcher.start()
         self.addCleanup(patcher.stop)
 
 
 @unittest.skipUnless(
-    HAS_CASSANDRA_HOME, "CASSANDRA_HOME must be set to a 3.5 install",
+    HAS_CASSANDRA_HOME, "CASSANDRA_HOME must be set to a >=3.5 install",
 )
 class TestCaseWithAccessor(TestCaseWithTempDir):
     """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
@@ -266,7 +169,10 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     def setUpClass(cls):
         """Create the test Cassandra Cluster as cls.cassandra."""
         super(TestCaseWithAccessor, cls).setUpClass()
-        cls.cassandra = _SlowerTestingCassandra(auto_start=False)
+        cls.cassandra = _SlowerTestingCassandra(
+            auto_start=False,
+            boot_timeout=_SlowerTestingCassandra.BOOT_TIMEOUT
+        )
         try:
             cls.cassandra.setup()
             cls.cassandra.start()
@@ -294,7 +200,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     def setUp(self):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithAccessor, self).setUp()
-        self.accessor = bg_cassandra.connect(
+        self.accessor = bg_cassandra.build(
             self.KEYSPACE, self.contact_points, self.port, default_timeout=60,
         )
         self.accessor.connect()
