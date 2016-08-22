@@ -14,9 +14,9 @@ For the full CQL please see [cassandra.py](biggraphite/drivers/cassandra.py).
 
 ### Primary key
 All rows in data table describe have time and metric UUID as their primary key, and values as columns.<br />
-We group related timestamps (`_row_size_ms`) in the same row described by `time_start_ms` and using `time_offset_ms` to describe  a delta from it. This saves space in two ways:
+We group related timestamps (`_row_size_ms`) in the same row described by `time_start_ms` and using `offset` to describe a delta from it. The unit of this delta is the precision of the current stage/table (`timestamp_ms = time_start_ms + offset * stage.precision_ms`). This saves space in two ways:
  - No need to repeat metric IDs on each row.
- - The relative time offset is 4 bytes only when a timestamp would be 8.
+ - The relative offset is 4 bytes only when a timestamp would be 8.
 
 ### Expiry of data
 We implement TTLs using the [DateTieredCompactionStrategy](http://www.datastax.com/dev/blog/datetieredcompactionstrategy). Therefore we need a compaction configuration for each downsampling configuration.<br />

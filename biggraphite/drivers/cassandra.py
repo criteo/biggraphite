@@ -114,12 +114,12 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
     "  metric text,"              # Metric name.
     "  time_start_ms bigint,"     # Lower bound for this row.
-    "  time_offset_ms int,"       # time_start_ms + time_offset_ms = timestamp
+    "  offset int,"               # time_start_ms + offset * precision = timestamp
     "  value double,"             # Value for the point.
     "  count int,"                # If value is sum, divide by count to get the avg.
-    "  PRIMARY KEY ((metric, time_start_ms), time_offset_ms)"
+    "  PRIMARY KEY ((metric, time_start_ms), offset)"
     ")"
-    "  WITH CLUSTERING ORDER BY (time_offset_ms DESC)"
+    "  WITH CLUSTERING ORDER BY (offset DESC)"
     "  AND default_time_to_live = %(default_time_to_live)d"
     "  AND compaction = {"
     "    'class': 'DateTieredCompactionStrategy',"
@@ -193,16 +193,16 @@ class _LazyPreparedStatements(object):
     def _get_table_name(self, stage):
         return "\"{}\".\"datapoints_{}p_{}s\"".format(self._keyspace, stage.points, stage.precision)
 
-    def prepare_insert(self, stage, metric_name, time_start_ms, time_offset_ms, value, count):
+    def prepare_insert(self, stage, metric_name, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
-        args = (metric_name, time_start_ms, time_offset_ms, value, count)
+        args = (metric_name, time_start_ms, offset, value, count)
         if statement:
             return statement, args
 
         self._create_datapoints_table(stage)
         statement_str = (
             "INSERT INTO %(table)s"
-            " (metric, time_start_ms, time_offset_ms, value, count)"
+            " (metric, time_start_ms, offset, value, count)"
             " VALUES (?, ?, ?, ?, ?);"
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
@@ -218,10 +218,10 @@ class _LazyPreparedStatements(object):
 
         self._create_datapoints_table(stage)
         statement_str = (
-            "SELECT time_start_ms, time_offset_ms, value, count FROM %(table)s"
+            "SELECT time_start_ms, offset, value, count FROM %(table)s"
             " WHERE metric=? AND time_start_ms=?"
-            " AND time_offset_ms >= ? AND time_offset_ms < ? "
-            " ORDER BY time_offset_ms;"
+            " AND offset >= ? AND offset < ? "
+            " ORDER BY offset;"
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = cassandra.ConsistencyLevel.LOCAL_ONE
@@ -394,12 +394,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
         res = []
         # xrange(a,b) does not contain b, so we use last_row+1
         for row_start_ms in xrange(first_row, last_row + 1, _row_size_ms(stage)):
-            row_min_offset = -1  # Selects all
-            row_max_offset = stage.duration_ms   # Selects all
+            row_min_offset_ms = -1  # Selects all FIXME
+            row_max_offset_ms = stage.duration_ms  # Selects all
             if row_start_ms == first_row:
-                row_min_offset = time_start_ms - row_start_ms
+                row_min_offset_ms = time_start_ms - row_start_ms
             if row_start_ms == last_row:
-                row_max_offset = time_end_ms - row_start_ms
+                row_max_offset_ms = time_end_ms - row_start_ms
+            row_min_offset = stage.step_ms(row_min_offset_ms)
+            row_max_offset = stage.step_ms(row_max_offset_ms)
+
             select = self.__lazy_statements.prepare_select(
                 stage=stage, metric_name=metric_name, row_start_ms=row_start_ms,
                 row_min_offset=row_min_offset, row_max_offset=row_max_offset,
@@ -488,10 +491,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _row_size_ms(stage)
             time_start_ms = timestamp_ms - time_offset_ms
+            offset = stage.step_ms(time_offset_ms)
 
             statement, args = self.__lazy_statements.prepare_insert(
                 stage=stage, metric_name=metric.name, time_start_ms=time_start_ms,
-                time_offset_ms=time_offset_ms, value=value, count=count,
+                offset=offset, value=value, count=count,
             )
             future = self.__session.execute_async(query=statement, parameters=args)
             if count_down:

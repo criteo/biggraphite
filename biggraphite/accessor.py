@@ -335,6 +335,17 @@ class Stage(object):
         """
         return int(timestamp // self.precision)
 
+    def step_ms(self, timestamp_ms):
+        """Return time elapsed since Unix epoch in count of self.precision_ms.
+
+        A "stage step" is a range of timestamps: [N*stage_precision, (N+1)*stage_precision[
+        This function returns N.
+
+        Args:
+          timestamp_ms: A timestamp in milliseconds.
+        """
+        return int(timestamp_ms // self.precision_ms)
+
 
 class Retention(object):
     """A retention policy, made of 0 or more Stages."""
@@ -745,7 +756,9 @@ class PointGrouper(object):
             if not successfull:
                 first_exc = rows_or_exception
             for row in rows_or_exception:
-                timestamp_ms = row[0] + row[1]
+                # row is (time_start_ms, offset, value, count)
+                timestamp_ms = row.time_start_ms + row.offset * self.stage.precision_ms
+
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms
                 timestamp_ms = round_down(timestamp_ms, self.stage.precision_ms)
@@ -757,8 +770,8 @@ class PointGrouper(object):
 
                     self.current_timestamp_ms = timestamp_ms
 
-                self.current_values.append(row[2])
-                self.current_counts.append(row[3])
+                self.current_values.append(row.value)
+                self.current_counts.append(row.count)
 
         ts, point = self.run_aggregator()
         if ts is not None:
