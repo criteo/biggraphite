@@ -14,7 +14,7 @@ For the full CQL please see [cassandra.py](biggraphite/drivers/cassandra.py).
 
 ### Primary key
 All rows in data table describe have time and metric UUID as their primary key, and values as columns.<br />
-We group related timestamps (`_ROW_SIZE_MS`) in the same row described by `time_start_ms` and using `time_offset_ms` to describe  a delta from it. This saves space in two ways:
+We group related timestamps (`_row_size_ms`) in the same row described by `time_start_ms` and using `time_offset_ms` to describe  a delta from it. This saves space in two ways:
  - No need to repeat metric IDs on each row.
  - The relative time offset is 4 bytes only when a timestamp would be 8.
 
