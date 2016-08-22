@@ -465,19 +465,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return metrics_names
 
     def insert_points_async(self, metric, datapoints, on_done=None):
-        """See bg_accessor.Accessor.
-
-        The datapoint argument is slightly different because it accepts
-        another format for aggregated points:
-           (timestamp in seconds, value as double,
-            count as int, step in seconds).
-        """
+        """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).insert_points_async(
             metric, datapoints, on_done)
 
         logging.debug("insert: [%s, %s]", metric.name, datapoints)
 
         downsampled = self.__downsampler.feed(metric, datapoints)
+        return self.insert_downsampled_points_async(metric, downsampled, on_done)
+
+    def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
+        """See bg_accessor.Accessor."""
         if not downsampled and on_done:
             on_done(None)
             return

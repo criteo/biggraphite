@@ -45,6 +45,27 @@ _UTF8_CODEC = codecs.getencoder('utf8')
 _NAN = float("nan")
 
 
+def _wait_async_call(async_function, *args, **kwargs):
+    """Call async_function and synchronously wait for it to be done.
+
+    Args:
+      async_function: Function taking a on_done(e=None:Exception) callback.
+      *args: Passed down to async_function
+      **kwargs: Passed down to async_function
+    """
+    event = threading.Event()
+    exception_box = [None]
+
+    def on_done(exception):
+        exception_box[0] = exception
+        event.set()
+
+    async_function(*args, on_done=on_done, **kwargs)
+    event.wait()
+    if exception_box[0]:
+        raise exception_box[0]
+
+
 def encode_metric_name(name):
     """Encode name as utf-8, raise UnicodeError if it can't.
 
@@ -85,6 +106,7 @@ class Aggregator(enum.Enum):
     total = "sum"
     average = "average"
     last = "last"
+    # TODO: Add avg_zero.
 
     def __init__(self, carbon_name):
         """Set attributes."""
@@ -609,19 +631,7 @@ class Accessor(object):
           datapoints: An iterable of (timestamp in seconds, values as double)
         """
         self._check_connected()
-
-        event = threading.Event()
-        exception_box = [None]
-
-        def on_done(exception):
-            exception_box[0] = exception
-
-            event.set()
-
-        self.insert_points_async(metric, datapoints, on_done)
-        event.wait()
-        if exception_box[0]:
-            raise exception_box[0]
+        _wait_async_call(self.insert_points_async, metric=metric, datapoints=datapoints)
 
     @abc.abstractmethod
     def insert_points_async(self, metric, datapoints, on_done=None):
@@ -629,7 +639,31 @@ class Accessor(object):
 
         Args:
           metric: The metric definition as per get_metric.
-          datapoints: An iterable of (timestamp in seconds, values as double)
+          downsampled: An iterable of (timestamp in seconds, values as double)
+          on_done(e: Exception): called on done, with an exception or None if succesfull
+        """
+        if not isinstance(metric, Metric):
+            raise InvalidArgumentError("%s is not a Metric instance" % metric)
+        self._check_connected()
+
+    def insert_downsampled_points(self, metric, downsampled):
+        """Insert points for a given metric.
+
+        Args:
+          metric: The metric definition as per get_metric.
+          downsampled: An iterable of (timestamp in seconds, values as double, count as int, stage)
+        """
+        self._check_connected()
+        _wait_async_call(
+            self.insert_downsampled_points_async, metric=metric, downsampled=downsampled)
+
+    @abc.abstractmethod
+    def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
+        """Insert points for a given metric.
+
+        Args:
+          metric: The metric definition as per get_metric.
+          downsampled: An iterable of (timestamp in seconds, values as double, count as int, stage)
           on_done(e: Exception): called on done, with an exception or None if succesfull
         """
         if not isinstance(metric, Metric):
