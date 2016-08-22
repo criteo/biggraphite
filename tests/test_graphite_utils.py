@@ -23,31 +23,6 @@ from biggraphite import graphite_utils as bg_gu
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
 
-    def _check_settings_exception(self, settings):
-        self.assertRaises(bg_gu.ConfigError, bg_gu.accessor_from_settings, settings)
-
-    def test_carbon_settings(self):
-        from carbon import conf as carbon_conf
-        lacks_contact_points = carbon_conf.Settings()
-        lacks_contact_points["BG_KEYSPACE"] = "keyspace"
-
-        lacks_keyspace = carbon_conf.Settings()
-        lacks_keyspace["BG_CONTACT_POINTS"] = "localhost"
-
-        for s in lacks_contact_points, lacks_keyspace:
-            self._check_settings_exception(s)
-
-    def test_django_settings(self):
-        import types
-        lacks_contact_points = types.ModuleType("lacks_contact_points")
-        lacks_contact_points.BG_KEYSPACE = "keyspace"
-
-        lacks_keyspace = types.ModuleType("lacks_keyspace")
-        lacks_keyspace.BG_CONTACT_POINTS = "localhost"
-
-        for s in lacks_contact_points, lacks_keyspace:
-            self._check_settings_exception(s)
-
     def test_is_graphite_glob(self):
         self.assertTrue(bg_gu._is_graphite_glob("a*"))
         self.assertTrue(bg_gu._is_graphite_glob("a.b*"))

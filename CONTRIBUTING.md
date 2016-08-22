@@ -77,13 +77,6 @@ $ python -m unittest discover --failfast --verbose --catch
 Assuming you have a working dev environment, here is how to run a test instance
 of Graphite Web reading metrics from Cassandra:
 
-```bash
-$ pip install -e .
-$ export DJANGO_SETTINGS_MODULE=graphite.settings
-$ django-admin migrate
-$ django-admin migrate --run-syncdb
-```
-
 Edit ${BG_VENV}/lib/python2.7/site-packages/graphite/local_settings.py and put
 
 ```python
@@ -92,13 +85,26 @@ DEBUG = True
 LOG_DIR = '/tmp'
 STORAGE_DIR = '/tmp'
 STORAGE_FINDERS = ['biggraphite.plugins.graphite.Finder']
-BG_KEYSPACE = 'biggraphite'
-BG_CONTACT_POINTS = '<MY_CASSANDRA_NODES>'
+BG_CASSANDRA_KEYSPACE = 'biggraphite'
+BG_CASSANDRA_CONTACT_POINTS = '127.0.0.1'
 WEBAPP_DIR = "%s/webapp/" % os.environ['BG_VENV']
 ```
 
-Start Graphite Web
+Optionally start a Cassandra node if you don't already have one
+running on your machine:
 
 ```bash
+$ ${CASSANDRA_HOME}/bin/cassandra
+# Create the keyspace.
+$ ${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
+```
+
+Then finally start Graphite Web.
+
+```bash
+$ pip install -e .
+$ export DJANGO_SETTINGS_MODULE=graphite.settings
+$ django-admin migrate
+$ django-admin migrate --run-syncdb
 $ run-graphite-devel-server.py ${BG_VENV}
 ```

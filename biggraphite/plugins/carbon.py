@@ -23,19 +23,13 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 from carbon import database
 from carbon import exceptions as carbon_exceptions
 
-from biggraphite import graphite_utils
+from biggraphite import utils as bg_utils
 from biggraphite import accessor
 from biggraphite import metadata_cache
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102
 
-
-_DEFAULT_PORT = 9042
-
-
-# TODO: Add a cache for metadata. lmdb is a reasonable candidate so that the
-# cache is shared by all processes and is backed by mmap'd memory.
 
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """Database plugin for Carbon.
@@ -55,11 +49,11 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def __init__(self, settings):
         try:
-            self._accessor = graphite_utils.accessor_from_settings(settings)
+            self._accessor = bg_utils.accessor_from_settings(settings)
             self._accessor.connect()
-        except graphite_utils.ConfigError as e:
+            storage_path = bg_utils.storage_path_from_settings(settings)
+        except bg_utils.ConfigError as e:
             raise carbon_exceptions.CarbonConfigException(e)
-        storage_path = graphite_utils.storage_path_from_settings(settings)
         self._cache = metadata_cache.DiskCache(self._accessor, storage_path)
         self._cache.open()
         self._sync_countdown = 0

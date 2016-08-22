@@ -15,65 +15,11 @@
 """Graphite utility module."""
 
 import fnmatch
-from os import path as os_path
 import re
 
-from biggraphite.drivers import cassandra as bg_cassandra
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
 _GRAPHITE_GLOB_RE = re.compile(r"^[^*?{}\[\]]+$")
-
-
-class Error(Exception):
-    """Base class for all exceptions from this module."""
-
-
-class ConfigError(Error):
-    """Configuration problems."""
-
-
-def _get_setting(settings, name, optional=False):
-    # Only way we found to support both Carbon & Django settings
-    try:
-        res = getattr(settings, name)
-    except:
-        res = None
-    if not res and not optional:
-        raise ConfigError("%s missing in configuration" % name)
-    return res
-
-
-def accessor_from_settings(settings):
-    """Get Accessor from configuration.
-
-    Args:
-      settings: either carbon_conf.Settings or a Django-like settings object
-
-    Returns:
-      Cassandra accessor (not connected)
-    """
-    keyspace = _get_setting(settings, "BG_KEYSPACE")
-    contact_points_str = _get_setting(settings, "BG_CONTACT_POINTS")
-    port = _get_setting(settings, "BG_PORT", optional=True)
-    if port is not None:
-        port = int(port)
-    contact_points = [s.strip() for s in contact_points_str.split(",")]
-    return bg_cassandra.connect(keyspace, contact_points, port)
-
-
-def storage_path_from_settings(settings):
-    """Get storage path from configuration.
-
-    Args:
-      settings: either carbon_conf.Settings or a Django-like settings object
-
-    Returns:
-      An absolute path.
-    """
-    path = _get_setting(settings, "STORAGE_DIR")
-    if not os_path.exists(path):
-        raise ConfigError("STORAGE_DIR is set to an unexisting directory: '%s'" % path)
-    return os_path.abspath(path)
 
 
 def _is_graphite_glob(metric_component):
