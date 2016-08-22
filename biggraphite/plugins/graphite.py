@@ -22,9 +22,10 @@ from graphite import node
 from graphite import readers
 
 
-from biggraphite import graphite_utils
 from biggraphite import accessor as bg_accessor
+from biggraphite import graphite_utils
 from biggraphite import metadata_cache as bg_metadata_cache
+from biggraphite import utils as bg_utils
 
 
 _CONFIG_NAME = "biggraphite"
@@ -137,8 +138,8 @@ class Finder(object):
             self._accessor = accessor
         else:
             from django.conf import settings as django_settings
-            storage_path = graphite_utils.storage_path_from_settings(django_settings)
-            self._accessor = graphite_utils.accessor_from_settings(django_settings)
+            storage_path = bg_utils.storage_path_from_settings(django_settings)
+            self._accessor = bg_utils.accessor_from_settings(django_settings)
             self._accessor.connect()
         if metadata_cache:
             self._metadata_cache = metadata_cache
