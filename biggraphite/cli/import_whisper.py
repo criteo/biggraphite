@@ -151,7 +151,6 @@ def _parse_opts(args):
                         help="number of concurrent process",
                         default=multiprocessing.cpu_count())
     bg_utils.add_argparse_arguments(parser)
-    # TODO(c.chary): move part of this in utils.py
     return parser.parse_args(args)
 
 
