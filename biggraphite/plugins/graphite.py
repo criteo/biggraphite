@@ -134,18 +134,26 @@ class Finder(object):
           directories: Ignored (here only for compatibility)
           accessor: Accessor for injection (e.g. for testing, not used by Graphite)
         """
-        if accessor:
-            self._accessor = accessor
-        else:
+        self._accessor = accessor
+        self._metadata_cache = metadata_cache
+
+    def accessor(self):
+        if not self._accessor:
             from django.conf import settings as django_settings
             storage_path = bg_utils.storage_path_from_settings(django_settings)
             self._accessor = bg_utils.accessor_from_settings(django_settings)
             self._accessor.connect()
-        if metadata_cache:
-            self._metadata_cache = metadata_cache
-        else:
-            self._metadata_cache = bg_metadata_cache.DiskCache(self._accessor, storage_path)
-            self._metadata_cache.open()
+        return self._accessor
+
+    def cache(self):
+        if not self._cache:
+            try:
+                storage_path = bg_utils.storage_path_from_settings(self._settings)
+                self._cache = metadata_cache.DiskCache(self.accessor(), storage_path)
+                self._cache.open()
+            except bg_utils.ConfigError as e:
+                raise carbon_exceptions.CarbonConfigException(e)
+        return self._cache
 
     def find_nodes(self, query):
         """Find nodes matching a query."""
