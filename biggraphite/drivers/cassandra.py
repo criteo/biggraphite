@@ -224,7 +224,7 @@ class _LazyPreparedStatements(object):
             " ORDER BY offset;"
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
-        statement.consistency_level = cassandra.ConsistencyLevel.LOCAL_ONE
+        statement.consistency_level = cassandra.ConsistencyLevel.ONE
         self.__stage_to_select[stage] = statement
         return statement, args
 
