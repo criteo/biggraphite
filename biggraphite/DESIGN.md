@@ -8,8 +8,8 @@ BigGraphite is a storage layer for timeseries data. It integrates as a plugin to
 - `biggraphite.metadata_cache` implements a machine-local cache using [LMDB](https://lmdb.readthedocs.io)
    so that one does not need a round-trip for each call to `accessor`.
 - `biggraphite.plugins.*` implements integration with Carbon and Graphite
-- `biggraphite.backends.*` implements the storage backends (eg: Cassandra-specific code)
+- `biggraphite.drivers.*` implements the storage backends (eg: Cassandra-specific code)
 
-## Backends
+## Drivers
 
 There is only one supported backend for now: Cassandra.

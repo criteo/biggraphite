@@ -29,6 +29,9 @@ from biggraphite.drivers import _downsampling
 class _MemoryAccessor(bg_accessor.Accessor):
     """A memory acessor that doubles as a memory MetadataCache."""
 
+    Row = collections.namedtuple(
+        'Row', ['time_start_ms', 'offset', 'value', 'count'])
+
     def __init__(self):
         """Create a new MemoryAccessor."""
         super(_MemoryAccessor, self).__init__("memory")
@@ -128,7 +131,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         rows = []
         for ts in points.irange(time_start, time_end):
             # A row is time_base_ms, time_offset_ms, value, count
-            row = (ts * 1000.0, 0, float(points[ts]), 1)
+            row = self.Row(ts * 1000.0, 0, float(points[ts]), 1)
             rows.append(row)
         query_results = [(True, rows)]
 
