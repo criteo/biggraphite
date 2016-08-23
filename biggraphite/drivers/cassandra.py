@@ -375,7 +375,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         statements_and_args = self._fetch_points_make_selects(
             metric.name, time_start_ms, time_end_ms, stage)
-
         query_results = c_concurrent.execute_concurrent(
             self.__session,
             statements_and_args,
