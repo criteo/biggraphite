@@ -309,22 +309,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         components = self._components_from_name(metric.name)
         queries = []
 
-        # Check if parent dir exists. This is one round-trip but worthwile since otherwise
-        # creating each parent directory requires a round-trip and the vast majority of
-        # metrics have siblings.
+        # Check if parent dir exists. This is one round-trip but worthwile since
+        # otherwise creating each parent directory requires a round-trip and the
+        # vast majority of metrics have siblings.
         parent_dir = metric.name.rpartition(".")[0]
         if parent_dir and not self.glob_directory_names(parent_dir):
-            # Create parent directories
-            directory_path = []
-            for component in components[:-2]:  # -1 for _LAST_COMPONENT, -1 for metric
-                directory_path.append(component)
-                directory_name = ".".join(directory_path)
-                directory_components = directory_path + [_LAST_COMPONENT]
-                directory_padding = [None] * (_COMPONENTS_MAX_LEN - len(directory_components))
-                queries.append((
-                    self.__insert_directories_statement,
-                    [directory_name] + directory_components + directory_padding,
-                ))
+            queries.extend(self._create_parent_dirs_queries(components))
 
         # Finally, create the metric
         padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
@@ -341,6 +331,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # We can still end up with empty directories, which will need a reaper job to clean them.
         for statement, args in queries:
             self.__session.execute(statement, args)
+
+    def _create_parent_dirs_queries(self, components):
+        queries = []
+        directory_path = []
+        for component in components[:-2]:  # -1 for _LAST_COMPONENT, -1 for metric
+            directory_path.append(component)
+            directory_name = ".".join(directory_path)
+            directory_components = directory_path + [_LAST_COMPONENT]
+            directory_padding = [None] * (_COMPONENTS_MAX_LEN - len(directory_components))
+            queries.append((
+                self.__insert_directories_statement,
+                [directory_name] + directory_components + directory_padding,
+            ))
+        return queries
 
     @staticmethod
     def _components_from_name(metric_name):
@@ -406,6 +410,24 @@ class _CassandraAccessor(bg_accessor.Accessor):
             res.append(select)
 
         return res
+
+    def has_metric(self, metric_name):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).has_metric(metric_name)
+        encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
+        result = list(self.__session.execute(
+            self.__select_metric_statement, (encoded_metric_name, )))
+        if not result:
+            return False
+
+        # Small trick here: we also check that the parent directory
+        # exists because that's what we check to create the directory
+        # hierarchy.
+        parent_dir = metric.name.rpartition(".")[0]
+        if parent_dir and not self.glob_directory_names(parent_dir):
+            return False
+
+        return True
 
     def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
@@ -500,6 +522,27 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_failure,
                 )
 
+    def repair(self):
+        """See bg_accessor.Accessor."""
+        # Step 1: Create missing parent directories.
+        statement_str = (
+            "SELECT name FROM \"%s\".directories WHERE component_0 = 'carbon' ALLOW FILTERING;" %
+            self.keyspace_metadata)
+        statement = self.__session.prepare(statement_str)
+        statement.consistency_level = cassandra.ConsistencyLevel.QUORUM
+        statement.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        statement.request_timeout = 60
+        result = self.__session.execute(statement)
+
+        for row in result:
+            parent_dir = row.name.rpartition(".")[0]
+            if parent_dir and not self.glob_directory_names(parent_dir):
+                logging.warning("Creating missing parent dir '%s'" % parent_dir)
+                components = self._components_from_name(row.name)
+                queries = self._create_parent_dirs_queries(components)
+                for statement, args in queries:
+                    self.__session.execute(statement, args)
+
     def shutdown(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).shutdown()
@@ -514,7 +557,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _upgrade_schema(self):
         # Currently no change, so only upgrade operation is to setup
         try:
-            self.__session.execute("SELECT name FROM directories LIMIT 1;")
+            self.__session.execute(
+                "SELECT name FROM \"%s\".directories LIMIT 1;" %
+                self.keyspace_metadata
+            )
             return  # Already up to date.
         except Exception:
             pass

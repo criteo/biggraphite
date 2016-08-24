@@ -162,6 +162,8 @@ def add_argparse_arguments(parser):
     parser.add_argument("--cassandra_timeout", metavar="TIMEOUT", type=int,
                         help="Cassandra query timeout in seconds.",
                         default=DEFAULT_CASSANDRA_TIMEOUT)
+    parser.add_argument("--storage_path", metavar="PATH",
+                        help="Storage path (cache, etc..)")
 
 
 def settings_from_args(args):
