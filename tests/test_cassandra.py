@@ -131,7 +131,9 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         }
         metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
 
+        self.assertEquals(self.accessor.has_metric(metric.name), False)
         self.accessor.create_metric(metric)
+        self.assertEquals(self.accessor.has_metric(metric.name), True)
         metric_again = self.accessor.get_metric(metric.name)
         self.assertEqual(metric.name, metric_again.name)
         for k, v in meta_dict.iteritems():
