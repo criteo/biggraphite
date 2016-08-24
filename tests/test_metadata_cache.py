@@ -50,9 +50,15 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_instance_cache(self):
         """Check that we do cache JSON instances."""
+        name = _TEST_METRIC.name
+        self.assertEquals(self.metadata_cache.has_metric(name), False)
+        self.assertEquals(self.metadata_cache.get_metric(name), None)
+
         self.metadata_cache.create_metric(_TEST_METRIC)
-        first = self.metadata_cache.get_metric(_TEST_METRIC.name)
-        second = self.metadata_cache.get_metric(_TEST_METRIC.name)
+        self.assertEquals(self.metadata_cache.has_metric(name), True)
+
+        first = self.metadata_cache.get_metric(name)
+        second = self.metadata_cache.get_metric(name)
         self.assertIs(first.metadata, second.metadata)
 
     def test_unicode(self):

@@ -48,14 +48,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     _SYNC_EVERY_N_WRITE = 100
 
     def __init__(self, settings):
-        try:
-            self._accessor = bg_utils.accessor_from_settings(settings)
-            self._accessor.connect()
-            storage_path = bg_utils.storage_path_from_settings(settings)
-        except bg_utils.ConfigError as e:
-            raise carbon_exceptions.CarbonConfigException(e)
-        self._cache = metadata_cache.DiskCache(self._accessor, storage_path)
-        self._cache.open()
+        self._cache = None
+        self._accessor = None
+        self._settings = settings
         self._sync_countdown = 0
 
         # TODO: we may want to use/implement these
@@ -64,24 +59,43 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # settings.WHISPER_FALLOCATE_CREATE:
         # settings.WHISPER_LOCK_WRITES:
 
+    def accessor(self):
+        if not self._accessor:
+            try:
+                self._accessor = bg_utils.accessor_from_settings(self._settings)
+                self._accessor.connect()
+            except bg_utils.ConfigError as e:
+                raise carbon_exceptions.CarbonConfigException(e)
+        return self._accessor
+
+    def cache(self):
+        if not self._cache:
+            try:
+                storage_path = bg_utils.storage_path_from_settings(self._settings)
+                self._cache = metadata_cache.DiskCache(self.accessor(), storage_path)
+                self._cache.open()
+            except bg_utils.ConfigError as e:
+                raise carbon_exceptions.CarbonConfigException(e)
+        return self._cache
+
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
-        metric = self._cache.get_metric(metric_name=metric_name)
+        metric = self.cache().get_metric(metric_name=metric_name)
         # Round down timestamp because inner functions expect integers.
         datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
 
         # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
         if self._sync_countdown < 1:
-            self._accessor.insert_points(metric=metric, datapoints=datapoints)
+            self.accessor().insert_points(metric=metric, datapoints=datapoints)
             self._sync_countdown = self._SYNC_EVERY_N_WRITE
         else:
             self._sync_countdown -= 1
-            self._accessor.insert_points_async(metric=metric, datapoints=datapoints)
+            self.accessor().insert_points_async(metric=metric, datapoints=datapoints)
 
     def exists(self, metric_name):
         # If exists returns "False" then "create" will be called.
         # New metrics are also throttled by some settings.
-        return bool(self._cache.get_metric(metric_name=metric_name))
+        return bool(self.cache().has_metric(metric_name))
 
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
         metadata = accessor.MetricMetadata(
@@ -90,13 +104,13 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             carbon_xfilesfactor=xfilesfactor,
         )
         metric = accessor.Metric(metric_name, metadata)
-        self._cache.create_metric(metric)
+        self.cache().create_metric(metric)
 
     def getMetadata(self, metric_name, key):
         if key != "aggregationMethod":
             msg = "%s[%s]: Unsupported metadata" % (metric_name, key)
             raise ValueError(msg)
-        metadata = self._cache.get_metric(metric_name=metric_name)
+        metadata = self.cache().get_metric(metric_name=metric_name)
         if not metadata:
             raise ValueError("%s: No such metric" % metric_name)
         assert metadata.aggregator.carbon_name
@@ -116,4 +130,4 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def getFilesystemPath(self, metric_name):
         # Only used for logging.
-        return "/".join(("//biggraphite", self._accessor.backend_name, metric_name))
+        return "/".join(("//biggraphite", self.accessor().backend_name, metric_name))

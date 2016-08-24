@@ -46,8 +46,9 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         )
 
     def test_empty_settings(self):
+        database = bg_carbon.BigGraphiteDatabase(carbon_conf.Settings())
         self.assertRaises(carbon_exceptions.CarbonConfigException,
-                          bg_carbon.BigGraphiteDatabase, carbon_conf.Settings())
+                          database.cache)
 
     def test_get_fs_path(self):
         path = self._plugin.getFilesystemPath(_TEST_METRIC)
