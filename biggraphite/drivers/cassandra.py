@@ -169,8 +169,9 @@ class _LazyPreparedStatements(object):
         # Time it takes to receive a step
         arrival_time = stage.precision + _OUT_OF_ORDER_S
 
-        # Estimate the age of the oldest data we still expect to read
+        # Estimate the age of the oldest data we still expect to read.
         fresh_time = stage.precision * _EXPECTED_POINTS_PER_READ
+
         # See http://www.datastax.com/dev/blog/datetieredcompactionstrategy
         #  - If too small: Reads need to touch many sstables
         #  - If too big: We pay compaction overhead for data that are never accessed anymore
@@ -240,9 +241,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
     # TODO: Mesure actual number of metrics for existing queries and estimate a more
     # reasonable limit.
     MAX_METRIC_PER_GLOB = 5000
-    # This is taken from the default Cassandra binding that runs 0 concurrent inserts
-    # with 2 threads.
-    _REQUESTS_PER_THREAD = 50.0
 
     _DEFAULT_CASSANDRA_PORT = 9042
 
@@ -274,10 +272,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def connect(self, skip_schema_upgrade=False):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).connect(skip_schema_upgrade=skip_schema_upgrade)
-        executor_threads = bg_accessor.round_up(
-            self.__concurrency, self._REQUESTS_PER_THREAD) / self._REQUESTS_PER_THREAD
         self.__cluster = c_cluster.Cluster(
-            self.contact_points, self.port, executor_threads=executor_threads,
+            self.contact_points, self.port,
+            executor_threads=self.__concurrency,
         )
         self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
         self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU

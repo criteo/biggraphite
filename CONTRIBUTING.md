@@ -77,6 +77,36 @@ $ python -m unittest discover --failfast --verbose --catch
 Assuming you have a working dev environment, here is how to run a test instance
 of Graphite Web reading metrics from Cassandra:
 
+#### Cassandra
+
+Optionally start a Cassandra node if you don't already have one
+running on your machine:
+
+```bash
+$ ${CASSANDRA_HOME}/bin/cassandra
+# Create the keyspace.
+$ ${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
+```
+
+#### Carbon
+
+Write the following carbon.conf file:
+
+```text
+[cache]
+BG_CASSANDRA_KEYSPACE = biggraphite
+BG_CASSANDRA_CONTACT_POINTS = 127.0.0.0.1
+DATABASE = whisper
+```
+
+```bash
+$ touch storage-schemas.conf
+$ bg-carbon-cache --debug --nodaemon --conf=carbon.conf starts
+$ echo "local.random.diceroll 4 `date +%s`" | nc -q0 localhost 2003
+```
+
+#### Graphite Web
+
 Edit ${BG_VENV}/lib/python2.7/site-packages/graphite/local_settings.py and put
 
 ```python
@@ -90,15 +120,6 @@ BG_CASSANDRA_CONTACT_POINTS = '127.0.0.1'
 WEBAPP_DIR = "%s/webapp/" % os.environ['BG_VENV']
 ```
 
-Optionally start a Cassandra node if you don't already have one
-running on your machine:
-
-```bash
-$ ${CASSANDRA_HOME}/bin/cassandra
-# Create the keyspace.
-$ ${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
-```
-
 Then finally start Graphite Web.
 
 ```bash
@@ -108,3 +129,4 @@ $ django-admin migrate
 $ django-admin migrate --run-syncdb
 $ run-graphite-devel-server.py ${BG_VENV}
 ```
+
