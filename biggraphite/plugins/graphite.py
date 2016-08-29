@@ -134,25 +134,31 @@ class Finder(object):
           directories: Ignored (here only for compatibility)
           accessor: Accessor for injection (e.g. for testing, not used by Graphite)
         """
-        if accessor:
-            self._accessor = accessor
-        else:
+        self._accessor = accessor
+        self._cache = metadata_cache
+
+    def accessor(self):
+        """Return an accessor."""
+        if not self._accessor:
             from django.conf import settings as django_settings
-            storage_path = bg_utils.storage_path_from_settings(django_settings)
             self._accessor = bg_utils.accessor_from_settings(django_settings)
             self._accessor.connect()
-        if metadata_cache:
-            self._metadata_cache = metadata_cache
-        else:
-            self._metadata_cache = bg_metadata_cache.DiskCache(self._accessor, storage_path)
-            self._metadata_cache.open()
+        return self._accessor
+
+    def cache(self):
+        """Return a metadata cache."""
+        if not self._cache:
+            storage_path = bg_utils.storage_path_from_settings(self._settings)
+            self._cache = bg_metadata_cache.DiskCache(self.accessor(), storage_path)
+            self._cache.open()
+        return self._cache
 
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: handle directories constructor argument/property
         metric_names, directories = graphite_utils.glob(self._accessor, query.pattern)
         for metric_name in metric_names:
-            reader = Reader(self._accessor, self._metadata_cache, metric_name)
+            reader = Reader(self.accessor(), self.cache(), metric_name)
             yield node.LeafNode(metric_name, reader)
 
         for directory in directories:

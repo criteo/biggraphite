@@ -120,8 +120,20 @@ class DiskCache(object):
         Args:
           metric: The metric definition.
         """
-        self.__accessor.create_metric(metric)
+        with self.__accessor_lock:
+            self.__accessor.create_metric(metric)
         self._cache(metric.name, metric.metadata)
+
+    def has_metric(self, metric_name):
+        """Check if a metric exists."""
+        with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
+            found = bool(txn.get(metric_name))
+        if not found:
+            # Slow path, use get_metric implementation to handle misses. This
+            # is fine because the metrics are generally being created just after
+            # this function returns False.
+            found = bool(self.get_metric(metric_name))
+        return found
 
     def get_metric(self, metric_name):
         """Return a Metric for this metric_name, None if no such metric."""
