@@ -29,6 +29,7 @@ import os
 from os import path as os_path
 import sys
 import threading
+import logging
 
 import lmdb
 
@@ -70,8 +71,11 @@ class DiskCache(object):
         # and over.
         self.__json_cache_lock = threading.Lock()
         self.__json_cache = {}
-        self.__metric_to_metadata_db = None
         self.__path = os_path.join(path, "biggraphite", "cache", "version1")
+        self.__databases = {
+            "metric_to_meta": None
+        }
+        self.__metric_to_metadata_db = None
 
     def open(self):
         """Allocate ressources used by the cache.
@@ -103,7 +107,13 @@ class DiskCache(object):
             # so setting a high number doesn't cost much even if thread count is low.
             max_spare_txns=128,
         )
-        self.__metric_to_metadata_db = self.__env.open_db("metric_to_meta")
+
+        databases = {}
+        for name in self.__databases:
+            databases[name] = self.__env.open_db(name)
+        self.__databases = databases
+
+        self.__metric_to_metadata_db = databases["metric_to_meta"]
 
     def close(self):
         """Free resources allocated by open().
@@ -126,20 +136,23 @@ class DiskCache(object):
 
     def has_metric(self, metric_name):
         """Check if a metric exists."""
+        encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            found = bool(txn.get(metric_name))
+            found = bool(txn.get(encoded_metric_name))
         if not found:
-            # Slow path, use get_metric implementation to handle misses. This
-            # is fine because the metrics are generally being created just after
-            # this function returns False.
-            found = bool(self.get_metric(metric_name))
+            with self.__accessor_lock:
+                found = self.__accessor.has_metric(metric_name)
+            if found:
+                # The metric was found in the database but not cached, let's
+                # cache it now.
+                self.get_metric(metric_name)
         return found
 
     def get_metric(self, metric_name):
         """Return a Metric for this metric_name, None if no such metric."""
-        metric_name = bg_accessor.encode_metric_name(metric_name)
+        encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            metadata_str = txn.get(metric_name)
+            metadata_str = txn.get(encoded_metric_name)
         if metadata_str:
             # on disk cache hit
             self.hit_count += 1
@@ -159,6 +172,29 @@ class DiskCache(object):
             return bg_accessor.Metric(metric_name, metadata)
         else:
             return None
+
+    def stat(self):
+        """Count number of cached entries."""
+        ret = {}
+        ret[''] = self.__env.stat(),
+        for name, database in self.__databases.iteritems():
+            with self.__env.begin(database, write=False) as txn:
+                ret[name] = txn.stat(database)
+        return ret
+
+    def repair(self):
+        """Remove spurious entries from the cache."""
+        # TODO: add support for start_key and end_key.
+        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
+            cursor = txn.cursor()
+            for key, value in cursor:
+                metadata = self.__accessor.get_metric(key)
+                metadata_json = metadata.as_json() if metadata else None
+                if value != metadata_json:
+                    logging.warning(
+                        "Removing invalid key '%s': expected: %s cached: %s" % (
+                            key, metadata_json, value))
+                    txn.delete(key=key)
 
     def _cache(self, metric_name, metadata):
         """If metadata add it to the cache."""

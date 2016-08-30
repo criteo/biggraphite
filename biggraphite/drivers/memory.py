@@ -55,6 +55,10 @@ class _MemoryAccessor(bg_accessor.Accessor):
         super(_MemoryAccessor, self).shutdown(*args, **kwargs)
         self.is_connected = False
 
+    def repair(self, *args, **kwargs):
+        """See the real Accessor for a description."""
+        pass
+
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).insert_points_async(
@@ -113,6 +117,11 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).glob_directory_names(glob)
         return self.__glob_names(self._directory_names, glob)
+
+    def has_metric(self, metric_name):
+        """See bg_accessor.Accessor."""
+        super(_MemoryAccessor, self).has_metric(metric_name)
+        return self.get_metric(metric_name) is not None
 
     def get_metric(self, metric_name):
         """See the real Accessor for a description."""

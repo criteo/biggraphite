@@ -620,6 +620,11 @@ class Accessor(object):
                     time_end, stage.as_string))
 
     @abc.abstractmethod
+    def has_metric(self, metric_name):
+        """Return a True if this metric exists, else return False."""
+        self._check_connected()
+
+    @abc.abstractmethod
     def get_metric(self, metric_name):
         """Return a MetricMetadata for this metric_name, None if no such metric."""
         self._check_connected()
@@ -679,6 +684,14 @@ class Accessor(object):
         """
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
+        self._check_connected()
+
+    @abc.abstractmethod
+    def repair(self):
+        """Repair potential corruptions in the database.
+
+        This operation can potentially be very slow.
+        """
         self._check_connected()
 
     @abc.abstractmethod
