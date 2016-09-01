@@ -18,6 +18,7 @@ import unittest
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
+from biggraphite.drivers import cassandra as bg_cassandra
 
 _METRIC = bg_test_utils.make_metric("test.metric")
 
@@ -82,6 +83,94 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         if "." not in string:
             return string
         return string[:string.rindex(".")]
+
+    def test_create_databapoints_table_dtcs(self):
+        """Validate that we can create table."""
+        orig_cs = bg_cassandra._COMPACTION_STRATEGY
+        bg_cassandra._COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
+
+        self._reset_keyspace(self.session, self.KEYSPACE)
+
+        # We create a fake metric to create the table. This also validate
+        # that breaking changes aren't introduced to the schema.
+        self.accessor.create_metric(_METRIC)
+        self.accessor.insert_points(_METRIC, _POINTS)
+
+        self.cluster.refresh_schema_metadata()
+
+        keyspace = None
+        for name, keyspace in self.cluster.metadata.keyspaces.items():
+            if name == self.accessor.keyspace:
+                break
+
+        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s']
+        options = datapoints_86400p_1s.options
+        self.assertEquals(
+            options['compaction']['class'],
+            'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy')
+        self.assertEquals(options['compaction']['base_time_seconds'], '901')
+        self.assertEquals(options['compaction']['max_window_size_seconds'], '2000')
+        self.assertEquals(options['default_time_to_live'], 87300)
+
+        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s']
+        options = datapoints_10080_60s.options
+        self.assertEquals(
+            options['compaction']['class'],
+            'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy')
+        self.assertEquals(options['compaction']['base_time_seconds'], '960')
+        self.assertEquals(options['compaction']['max_window_size_seconds'], '120000')
+        self.assertEquals(options['default_time_to_live'], 605700)
+
+        bg_cassandra._COMPACTION_STRATEGY = orig_cs
+
+    def test_create_databapoints_table_twcs(self):
+        """Validate that we can create table."""
+        from distutils import version
+
+        min_version = version.LooseVersion('3.8')
+        for host in self.cluster.metadata.all_hosts():
+            host_version = version.LooseVersion(host.release_version)
+            if host_version < min_version:
+                print('Skipping TWCS test, incompatible version "%s"'
+                      % host.release_version)
+                return
+
+        orig_cs = bg_cassandra._COMPACTION_STRATEGY
+        bg_cassandra._COMPACTION_STRATEGY = "TimeWindowCompactionStrategy"
+
+        self._reset_keyspace(self.session, self.KEYSPACE)
+
+        # We create a fake metric to create the table. This also validate
+        # that breaking changes aren't introduced to the schema.
+        self.accessor.create_metric(_METRIC)
+        self.accessor.insert_points(_METRIC, _POINTS)
+
+        self.cluster.refresh_schema_metadata()
+
+        keyspace = None
+        for name, keyspace in self.cluster.metadata.keyspaces.items():
+            if name == self.accessor.keyspace:
+                break
+
+        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s']
+        options = datapoints_86400p_1s.options
+        self.assertEquals(
+            options['compaction']['class'],
+            'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
+        self.assertEquals(options['compaction']['compaction_window_unit'], 'HOURS')
+        self.assertEquals(options['compaction']['compaction_window_size'], '1')
+        self.assertEquals(options['default_time_to_live'], 87300)
+
+        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s']
+        options = datapoints_10080_60s.options
+        self.assertEquals(
+            options['compaction']['class'],
+            'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
+        self.assertEquals(options['compaction']['compaction_window_unit'], 'DAYS')
+        self.assertEquals(options['compaction']['compaction_window_size'], '1')
+        self.assertEquals(options['default_time_to_live'], 605700)
+
+        bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
     def test_glob_metrics(self):
         for name in "a", "a.a", "a.b", "a.a.a", "x.y.z":
