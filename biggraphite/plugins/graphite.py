@@ -148,7 +148,9 @@ class Finder(object):
     def cache(self):
         """Return a metadata cache."""
         if not self._cache:
-            storage_path = bg_utils.storage_path_from_settings(self._settings)
+            # TODO: Allow to use Django's cache.
+            from django.conf import settings as django_settings
+            storage_path = bg_utils.storage_path_from_settings(django_settings)
             self._cache = bg_metadata_cache.DiskCache(self.accessor(), storage_path)
             self._cache.open()
         return self._cache
@@ -156,7 +158,7 @@ class Finder(object):
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: handle directories constructor argument/property
-        metric_names, directories = graphite_utils.glob(self._accessor, query.pattern)
+        metric_names, directories = graphite_utils.glob(self.accessor(), query.pattern)
         for metric_name in metric_names:
             reader = Reader(self.accessor(), self.cache(), metric_name)
             yield node.LeafNode(metric_name, reader)
