@@ -31,6 +31,11 @@ from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 
 
+MINUTE = 60
+HOUR = 60 * MINUTE
+DAY = 24 * HOUR
+
+
 class Error(bg_accessor.Error):
     """Base class for all exceptions from this module."""
 
@@ -62,17 +67,23 @@ class InvalidGlobError(InvalidArgumentError):
 # ====================
 # The following few constants are heuristics that are used to tune
 # the datatable.
-# TODO: Consider switching to TWCS after Cassandra 3.8
 # We expect timestamp T to be written at T +/- _OUT_OF_ORDER_S
 # As result we delay expiry and compaction by that much time
-_OUT_OF_ORDER_S = 15 * 60
-# We expect to use the last 1296 points (~24h with a resolution of one minute).
-# We round it up to a power of min_threshold=4.
-# As 1296=6^4, we will be compacting up to 4 times a given point.
-_EXPECTED_POINTS_PER_READ = 1296
+_OUT_OF_ORDER_S = 15 * MINUTE
+# We expect to use this >>1440 points per read(~24h with a resolution of one minute).
+# We round it up to a nicer value.
+_EXPECTED_POINTS_PER_READ = 2000
+# The API has a resolution of 1 sec. We don't want partitions to contain
+# less than 6 hour of data (= 21600 points in the worst case).
+_MIN_PARTITION_SIZE_MS = 6 * HOUR
+# We also don't want partitions to be too big. The official limit is 100k.
+_MAX_PARTITION_SIZE = 25000
 # As we disable commit log, we flush memory data to disk every so
 # often to make sure they are persisted.
-_FLUSH_MEMORY_EVERY_S = 15 * 60
+_FLUSH_MEMORY_EVERY_S = 15 * MINUTE
+# Can one of "DateTieredCompactionStrategy" or "TimeWindowCompactionStrategy".
+# Support for TWCS is still experimental and require Cassandra >=3.8.
+_COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
 
 _COMPONENTS_MAX_LEN = 64
 _LAST_COMPONENT = "__END__"
@@ -122,12 +133,22 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "  WITH CLUSTERING ORDER BY (offset DESC)"
     "  AND default_time_to_live = %(default_time_to_live)d"
     "  AND compaction = {"
-    "    'class': 'DateTieredCompactionStrategy',"
-    "    'base_time_seconds': '%(base_time_seconds)d',"
-    "    'max_window_size_seconds': %(max_window_size_seconds)d,"
-    "    'timestamp_resolution': 'MICROSECONDS'"
+    "    'class': '%(compaction_strategy)s',"
+    "    'timestamp_resolution': 'MICROSECONDS',"
+    "    %(compaction_options)s"
     "  };"
 )
+
+_DATAPOINTS_CREATION_CQL_CS_TEMPLATE = {
+    "DateTieredCompactionStrategy":  str(
+        "    'base_time_seconds': '%(base_time_seconds)d',"
+        "    'max_window_size_seconds': %(max_window_size_seconds)d"
+    ),
+    "TimeWindowCompactionStrategy": str(
+        "    'compaction_window_unit': '%(compaction_window_unit)s',"
+        "    'compaction_window_size': %(compaction_window_size)d"
+    )
+}
 
 
 def _row_size_ms(stage):
@@ -139,7 +160,13 @@ def _row_size_ms(stage):
     Returns:
       An integer, the duration in milliseconds.
     """
-    return stage.precision_ms * _EXPECTED_POINTS_PER_READ
+    return min(
+        stage.precision_ms * _MAX_PARTITION_SIZE,
+        max(
+            stage.precision_ms * _EXPECTED_POINTS_PER_READ,
+            _MIN_PARTITION_SIZE_MS
+        )
+    )
 
 
 class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
@@ -166,28 +193,62 @@ class _LazyPreparedStatements(object):
         # Time after which data expire.
         time_to_live = stage.duration + _OUT_OF_ORDER_S
 
-        # Time it takes to receive a step
-        arrival_time = stage.precision + _OUT_OF_ORDER_S
-
         # Estimate the age of the oldest data we still expect to read.
         fresh_time = stage.precision * _EXPECTED_POINTS_PER_READ
 
-        # See http://www.datastax.com/dev/blog/datetieredcompactionstrategy
-        #  - If too small: Reads need to touch many sstables
-        #  - If too big: We pay compaction overhead for data that are never accessed anymore
-        #    and get huge sstables
-        # We set a minimum of arrival_time so that data are in order
-        max_window_size_seconds = max(fresh_time, arrival_time + 1)
+        cs_template = _DATAPOINTS_CREATION_CQL_CS_TEMPLATE.get(_COMPACTION_STRATEGY)
+        if not cs_template:
+            raise InvalidArgumentError(
+                "Unknown compaction strategy '%s'" % _COMPACTION_STRATEGY)
+        cs_kwargs = {}
 
-        statement_str = _DATAPOINTS_CREATION_CQL_TEMPLATE % {
+        if _COMPACTION_STRATEGY == "DateTieredCompactionStrategy":
+            # Time it takes to receive a step
+            arrival_time = stage.precision + _OUT_OF_ORDER_S
+
+            # See http://www.datastax.com/dev/blog/datetieredcompactionstrategy
+            #  - If too small: Reads need to touch many sstables
+            #  - If too big: We pay compaction overhead for data that are
+            #    never accessed anymore and get huge sstables
+            # We set a minimum of arrival_time so that data are in order
+            max_window_size_seconds = max(fresh_time, arrival_time + 1)
+
+            cs_kwargs["base_time_seconds"] = arrival_time
+            cs_kwargs["max_window_size_seconds"] = max_window_size_seconds
+        elif _COMPACTION_STRATEGY == "TimeWindowCompactionStrategy":
+            # TODO(c.chary): Tweak this once we have an actual 3.9 setup.
+
+            window_size = max(
+                # Documentation says that we should no more than 50 buckets.
+                time_to_live / 50,
+                # But we don't want multiple sstables per hour.
+                HOUR,
+                # Also try to optimize for reads
+                fresh_time
+            )
+
+            # Make it readable.
+            if window_size > DAY:
+                unit = 'DAYS'
+                window_size /= DAY
+            else:
+                unit = 'HOURS'
+                window_size /= HOUR
+
+            cs_kwargs["compaction_window_unit"] = unit
+            cs_kwargs["compaction_window_size"] = max(1, window_size)
+
+        compaction_options = cs_template % cs_kwargs
+        kwargs = {
             "table": self._get_table_name(stage),
             "default_time_to_live": time_to_live,
-            # When we start compacting
-            "base_time_seconds": arrival_time,
-            "max_window_size_seconds": max_window_size_seconds,
             "memtable_flush_period_in_ms": _FLUSH_MEMORY_EVERY_S * 1000,
             "comment": "{\"created_by\": \"biggraphite\", \"schema_version\": 0}",
+            "compaction_strategy": _COMPACTION_STRATEGY,
+            "compaction_options": compaction_options,
         }
+
+        statement_str = _DATAPOINTS_CREATION_CQL_TEMPLATE % kwargs
         # The statement is idempotent
         self._session.execute(statement_str)
 

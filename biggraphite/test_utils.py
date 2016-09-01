@@ -58,18 +58,21 @@ def setup_logging():
     logger.addHandler(stream_handler)
 
 
-def create_unreplicated_keyspace(contact_points, port, keyspace):
+def create_unreplicated_keyspace(session, keyspace):
     """Create a keyspace, mostly used for tests."""
-    cluster = c_cluster.Cluster(contact_points, port)
-    session = cluster.connect()
     template = (
         "CREATE KEYSPACE \"%s\" "
         " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1};"
     )
     session.execute(template % keyspace)
-    session.execute(template % (keyspace + "_metadata"))
-    session.shutdown()
-    cluster.shutdown()
+
+
+def drop_keyspace(session, keyspace):
+    """Drop a keyspace, mostly used for tests."""
+    template = (
+        "DROP KEYSPACE IF EXISTS \"%s\";"
+    )
+    session.execute(template % keyspace)
 
 
 def prepare_graphite():
@@ -189,12 +192,19 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         cls.contact_points = [s.split(":")[0]
                               for s in cls.cassandra.server_list()]
         cls.port = cls.cassandra.cassandra_yaml["native_transport_port"]
-        create_unreplicated_keyspace(cls.contact_points, cls.port, cls.KEYSPACE)
+
+        # Make it easy to do raw queries to Cassandra.
+        cls.cluster = c_cluster.Cluster(cls.contact_points, cls.port)
+        cls.session = cls.cluster.connect()
+        cls._reset_keyspace(cls.session, cls.KEYSPACE)
+        cls._reset_keyspace(cls.session, cls.KEYSPACE + "_metadata")
 
     @classmethod
     def tearDownClass(cls):
         """Stop the test Cassandra Cluster."""
         super(TestCaseWithAccessor, cls).tearDownClass()
+        cls.session.shutdown()
+        cls.cluster.shutdown()
         cls.cassandra.stop()
 
     def setUp(self):
@@ -209,6 +219,11 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
+
+    @classmethod
+    def _reset_keyspace(cls, session, keyspace):
+        drop_keyspace(session, keyspace)
+        create_unreplicated_keyspace(session, keyspace)
 
     def __drop_all_metrics(self):
         self.accessor.connect()
