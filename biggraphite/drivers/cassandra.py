@@ -244,8 +244,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     _DEFAULT_CASSANDRA_PORT = 9042
 
-    def __init__(self, keyspace='biggraphite', contact_points=[],
-                 port=None, concurrency=4, default_timeout=None):
+    def __init__(self, keyspace='biggraphite', contact_points=[], port=None,
+                 concurrency=4, default_timeout=None, compression=False):
         """Record parameters needed to connect.
 
         Args:
@@ -253,6 +253,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
           contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
           port: The port to connect to, as an int.
           concurrency: How many worker threads to use.
+          default_timeout: Default timeout for operations in seconds.
+          compression: One of False, True, "lz4", "snappy"
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -261,6 +263,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.contact_points = contact_points
         self.port = port or self._DEFAULT_CASSANDRA_PORT
         self.__concurrency = concurrency
+        self.__compression = compression
         self.__downsampler = _downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
@@ -275,6 +278,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__cluster = c_cluster.Cluster(
             self.contact_points, self.port,
             executor_threads=self.__concurrency,
+            compression=self.__compression,
         )
         self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
         self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU
