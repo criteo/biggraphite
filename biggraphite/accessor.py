@@ -450,7 +450,7 @@ class MetricMetadata(object):
     )
 
     _DEFAULT_AGGREGATOR = Aggregator.average
-    _DEFAULT_RETENTION = Retention.from_string("86400*1s:2000*60s")
+    _DEFAULT_RETENTION = Retention.from_string("86400*1s:10080*60s")
     _DEFAULT_XFILESFACTOR = 0.5
 
     def __init__(self, aggregator=None, retention=None, carbon_xfilesfactor=None):

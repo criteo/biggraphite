@@ -62,6 +62,12 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
     def test_cassandra_accessor(self):
         settings = {'BG_DRIVER': 'cassandra'}
         settings["BG_CASSANDRA_CONTACT_POINTS"] = "localhost"
+        settings["BG_CASSANDRA_COMPRESSION"] = True
+        settings["BG_CASSANDRA_TIMEOUT"] = 5
+        accessor = bg_utils.accessor_from_settings(settings)
+        self.assertNotEquals(accessor, None)
+
+        settings["BG_CASSANDRA_COMPRESSION"] = False
         accessor = bg_utils.accessor_from_settings(settings)
         self.assertNotEquals(accessor, None)
 
