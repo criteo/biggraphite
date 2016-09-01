@@ -27,6 +27,7 @@ DEFAULT_CASSANDRA_CONTACT_POINTS = "127.0.0.1"
 DEFAULT_CASSANDRA_PORT = 9042
 DEFAULT_CASSANDRA_TIMEOUT = 10.0
 DEFAULT_CASSANDRA_CONNECTIONS = 4
+DEFAULT_CASSANDRA_COMPRESSION = False
 
 
 class Error(Exception):
@@ -90,12 +91,24 @@ def cassandra_accessor_from_settings(settings):
     Returns:
       Cassandra accessor (not connected)
     """
+    def _compression_values(value):
+        # value is either a bool or a str.
+        if value == 'True':
+            return value
+        elif value == 'False':
+            return value
+        elif type(value) is bool:
+            return value
+        else:
+            return str(value)
+
     options = (
         ("keyspace", "BG_CASSANDRA_KEYSPACE", str, True),
         ("contact_points", "BG_CASSANDRA_CONTACT_POINTS", list_from_str, False),
         ("port", "BG_CASSANDRA_PORT", int, True),
         ("concurrency", "BG_CASSANDRA_CONNECTIONS", int, True),
         ("default_timeout", "BG_CASSANDRA_TIMEOUT", int, True),
+        ("compression", "BG_CASSANDRA_COMPRESSION", _compression_values, False),
     )
     kwargs = {}
     for name, up_name, func, optional in options:
@@ -162,6 +175,9 @@ def add_argparse_arguments(parser):
     parser.add_argument("--cassandra_timeout", metavar="TIMEOUT", type=int,
                         help="Cassandra query timeout in seconds.",
                         default=DEFAULT_CASSANDRA_TIMEOUT)
+    parser.add_argument("--cassandra_compression", metavar="COMPRESSION", type=str,
+                        help="Cassandra network compression.",
+                        default=DEFAULT_CASSANDRA_COMPRESSION)
     parser.add_argument("--storage_path", metavar="PATH",
                         help="Storage path (cache, etc..)")
 
@@ -182,6 +198,7 @@ def settings_from_args(args):
         'BG_CASSANDRA_PORT': args.cassandra_port,
         'BG_CASSANDRA_CONNECTIONS': args.cassandra_connections,
         'BG_CASSANDRA_TIMEOUT': args.cassandra_timeout,
+        'BG_CASSANDRA_COMPRESSION': args.cassandra_compression,
     }
 
 
