@@ -267,6 +267,11 @@ class Stage(object):
     def __str__(self):
         return self.as_string
 
+    def __repr__(self):
+        return '<{0}.{1}({3}) object at {2}>'.format(
+            self.__module__, type(self).__name__, hex(id(self)),
+            self.as_string)
+
     def __eq__(self, other):
         if not isinstance(other, Stage):
             return False

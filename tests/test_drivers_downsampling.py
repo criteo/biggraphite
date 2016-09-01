@@ -44,7 +44,7 @@ class TestDownsampler(unittest.TestCase):
         # 1. Put value 1 at timestamp 0.
         # 2. Check that it is used in the aggregates, even though it is not expired.
         points = [
-            (0, 1)
+            (0, 1),
         ]
         expected = [
             (0, 1, 1, self.stage_0),
@@ -54,10 +54,9 @@ class TestDownsampler(unittest.TestCase):
         self.assertEqual(result, expected)
 
         # 1. Feed no point, and check that nothing is thrown.
-        # 2. Check that the result is still the same.
         points = []
         result = self.ds.feed(self.metric, points)
-        self.assertEqual(result, expected)
+        self.assertEqual(result, [])
 
         # 1. Add point with value 3 that overrides the previous point.
         # 2. Check the result takes into account the override.
@@ -69,7 +68,7 @@ class TestDownsampler(unittest.TestCase):
         result = self.ds.feed(self.metric, points)
         self.assertEqual(result, expected)
 
-        # 1. Add point with value 9 at index 1 in raw buffer.
+        # 1. Add point with value 9 at index 1 in stage0 buffer.
         # 2. Check that the aggregates are updated using both points.
         points = [
             (0, 5),  # Overrides previous point.
@@ -84,10 +83,22 @@ class TestDownsampler(unittest.TestCase):
         self.assertEqual(result, expected)
 
         # 1. Feed no point, and check that nothing is thrown.
-        # 2. Check that the result is still the same.
         points = []
         result = self.ds.feed(self.metric, points)
-        self.assertEqual(result, expected)
+        self.assertEqual(result, [])
+
+        # Fix unit tests
+
+    def test_feed_multiple(self):
+        """Test feed with one point per minute for 30 minutes."""
+        for i in xrange(30):
+            result = self.ds.feed(self.metric, [(1, i)])
+            # We should generate only one metric per retention.
+            self.assertEquals(len(result), 2)
+
+        for i in xrange(30):
+            result = self.ds.feed(self.metric, [(0, i)])
+            self.assertEquals(len(result), 2)
 
     def test_feed_extended(self):
         """Test feed with several points."""
