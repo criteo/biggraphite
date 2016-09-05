@@ -24,6 +24,7 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
+from cassandra import policies as c_policies
 from cassandra.io import asyncorereactor as c_asyncorereactor
 
 from biggraphite import accessor as bg_accessor
@@ -325,6 +326,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.port = port or self._DEFAULT_CASSANDRA_PORT
         self.__concurrency = concurrency
         self.__compression = compression
+        # For some reason this isn't enabled yet for pypy, even if it seems to
+        # be working properly.
+        # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188
+        self.__load_balancing_policy = (
+            c_policies.TokenAwarePolicy(c_policies.DCAwareRoundRobinPolicy()))
         self.__downsampler = _downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
@@ -340,6 +346,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.contact_points, self.port,
             executor_threads=self.__concurrency,
             compression=self.__compression,
+            load_balancing_policy=self.__load_balancing_policy,
         )
         self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
         self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU
