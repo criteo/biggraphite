@@ -84,8 +84,9 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
             "--cassandra_keyspace", "keyspace",
             "--cassandra_port", "42",
             "--cassandra_contact_points", "testhost1",
-            "--cassandra_contact_points", "testhost2",
+            "--ignored_stages", "10*2s",
             "--process", "1",
+            "--",
             self.tempdir,
         ])
 
