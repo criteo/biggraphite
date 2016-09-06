@@ -69,15 +69,15 @@ class _Worker(object):
             bg_accessor.Stage(precision=a["secondsPerPoint"], points=a["points"])
             for a in info["archives"]
         ])
-        aggregator = bg_accessor.Aggregator.from_carbon_name(info["aggregationMethod"])
+        aggregator = bg_accessor.Aggregator.from_carbon_name(
+            info["aggregationMethod"])
         return bg_accessor.MetricMetadata(
             aggregator=aggregator,
             retention=retentions,
             carbon_xfilesfactor=info["xFilesFactor"],
         )
 
-    @staticmethod
-    def _read_points(path):
+    def _read_points(self, path):
         """Return a list of (timestamp, value)."""
         info = whisper.info(path)
         res = []
@@ -92,7 +92,6 @@ class _Worker(object):
         # As archives are from most precise to least precise, we track the oldest
         # point we've found in more precise archives and ignore the newer ones.
         prev_archive_starts_at = float("inf")
-
         for archive in archives:
             offset = archive["offset"]
             step = archive["secondsPerPoint"]
@@ -100,6 +99,8 @@ class _Worker(object):
             expected_next_timestamp = 0
             stage = bg_accessor.Stage(
                 precision=archive["secondsPerPoint"], points=archive["points"])
+            if stage in self._opts.ignored_stages:
+                continue
             for _ in range(archive["points"]):
                 timestamp, value = _POINT_STRUCT.unpack_from(buf, offset)
                 # Detect holes in data. The heuristic is the following:
@@ -116,17 +117,24 @@ class _Worker(object):
                 if timestamp < prev_archive_starts_at:
                     res.append((timestamp, value, 1, stage))
                 offset += whisper.pointSize
+
             prev_archive_starts_at = archive_starts_at
+
         return res
 
     def import_whisper(self, path):
         if not self._accessor.is_connected:
             self._accessor.connect()
+
         metric_name = metric_name_from_wsp(self._opts.root_directory, path)
-        points = self._read_points(path)
         meta = self._read_metadata(metric_name, path)
         metric = bg_accessor.Metric(metric_name, meta)
         self._accessor.create_metric(metric)
+
+        if self._opts.no_data:
+            return 0
+
+        points = self._read_points(path)
         self._accessor.insert_downsampled_points(metric, points)
         return len(points)
 
@@ -142,7 +150,8 @@ def _import_whisper(*args, **kwargs):
 
 
 def _parse_opts(args):
-    parser = argparse.ArgumentParser(description="Import whisper files into BigGraphite.")
+    parser = argparse.ArgumentParser(
+        description="Import whisper files into BigGraphite.")
     parser.add_argument("root_directory", metavar="WHISPER_DIR",
                         help="directory in which to find whisper files")
     parser.add_argument("--quiet", action="store_const", default=False, const=True,
@@ -150,8 +159,18 @@ def _parse_opts(args):
     parser.add_argument("--process", metavar="N", type=int,
                         help="number of concurrent process",
                         default=multiprocessing.cpu_count())
+    parser.add_argument("--no-data", action="store_true",
+                        help="Do not import data, only metadata.")
+    parser.add_argument("--ignored_stages", nargs="*",
+                        help="Do not import data for these stages.",
+                        default=[])
     bg_utils.add_argparse_arguments(parser)
-    return parser.parse_args(args)
+    opts = parser.parse_args(args)
+    opts.ignored_stages = [
+        bg_accessor.Stage.from_string(s)
+        for s in opts.ignored_stages
+    ]
+    return opts
 
 
 def main(args=None):

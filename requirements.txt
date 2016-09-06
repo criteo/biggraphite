@@ -1,7 +1,7 @@
 cassandra-driver
 enum34
 lmdb
-progressbar2==3.9.3
+progressbar2
 sortedcontainers
 statistics
 whisper
