@@ -18,6 +18,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import logging
+import uuid
 
 import cassandra
 from cassandra import cluster as c_cluster
@@ -94,6 +95,7 @@ _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
 _METADATA_CREATION_CQL_METRICS = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics ("
     "  name text,"
+    "  id uuid,"
     "  config map<text, text>,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
@@ -124,7 +126,7 @@ _METADATA_CREATION_CQL = [
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
-    "  metric text,"              # Metric name.
+    "  metric uuid,"              # Metric UUID.
     "  time_start_ms bigint,"     # Lower bound for this row.
     "  offset int,"               # time_start_ms + offset * precision = timestamp
     "  value double,"             # Value for the point.
@@ -256,9 +258,9 @@ class _LazyPreparedStatements(object):
     def _get_table_name(self, stage):
         return "\"{}\".\"datapoints_{}p_{}s\"".format(self._keyspace, stage.points, stage.precision)
 
-    def prepare_insert(self, stage, metric_name, time_start_ms, offset, value, count):
+    def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
-        args = (metric_name, time_start_ms, offset, value, count)
+        args = (metric_id, time_start_ms, offset, value, count)
         if statement:
             return statement, args
 
@@ -273,9 +275,9 @@ class _LazyPreparedStatements(object):
         self.__stage_to_insert[stage] = statement
         return statement, args
 
-    def prepare_select(self, stage, metric_name, row_start_ms, row_min_offset, row_max_offset):
+    def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
         statement = self.__stage_to_select.get(stage)
-        args = (metric_name, row_start_ms, row_min_offset, row_max_offset)
+        args = (metric_id, row_start_ms, row_min_offset, row_max_offset)
         if statement:
             return statement, args
 
@@ -305,6 +307,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
     MAX_METRIC_PER_GLOB = 5000
 
     _DEFAULT_CASSANDRA_PORT = 9042
+
+    _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
     def __init__(self, keyspace='biggraphite', contact_points=[], port=None,
                  concurrency=4, default_timeout=None, compression=False):
@@ -362,7 +366,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
         self.__insert_metrics_statement = self.__session.prepare(
-            "INSERT INTO \"%s\".metrics (name, config, %s) VALUES (?, ?, %s);"
+            "INSERT INTO \"%s\".metrics (name, id, config, %s) VALUES (?, ?, ?, %s);"
             % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__insert_directories_statement = self.__session.prepare(
@@ -370,10 +374,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
             % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__select_metric_statement = self.__session.prepare(
-            "SELECT config FROM \"%s\".metrics WHERE name = ?;" % self.keyspace_metadata
+            "SELECT id, config FROM \"%s\".metrics WHERE name = ?;" % self.keyspace_metadata
         )
 
         self.is_connected = True
+
+    def make_metric(self, name, metadata):
+        """See bg_accessor.Accessor."""
+        encoded_name = bg_accessor.encode_metric_name(name)
+        id = uuid.uuid5(self._UUID_NAMESPACE, encoded_name)
+        return bg_accessor.Metric(name, id, metadata)
 
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""
@@ -390,10 +400,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         # Finally, create the metric
         padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
-        metric_metadata_dict = metric.metadata.as_string_dict()
+        metadata_dict = metric.metadata.as_string_dict()
         queries.append((
             self.__insert_metrics_statement,
-            [metric.name, metric_metadata_dict] + components + padding,
+            [metric.name, metric.id, metadata_dict] + components + padding,
         ))
 
         # We have to run queries in sequence as:
@@ -447,7 +457,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         time_start_ms = max(time_end_ms - stage.duration_ms, time_start_ms)
 
         statements_and_args = self._fetch_points_make_selects(
-            metric.name, time_start_ms, time_end_ms, stage)
+            metric.id, time_start_ms, time_end_ms, stage)
         query_results = c_concurrent.execute_concurrent(
             self.__session,
             statements_and_args,
@@ -457,7 +467,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return bg_accessor.PointGrouper(
             metric, time_start_ms, time_end_ms, stage, query_results)
 
-    def _fetch_points_make_selects(self, metric_name, time_start_ms,
+    def _fetch_points_make_selects(self, metric_id, time_start_ms,
                                    time_end_ms, stage):
         # We fetch with ms precision, even though we only store with second
         # precision.
@@ -476,7 +486,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             row_max_offset = stage.step_ms(row_max_offset_ms)
 
             select = self.__lazy_statements.prepare_select(
-                stage=stage, metric_name=metric_name, row_start_ms=row_start_ms,
+                stage=stage, metric_id=metric_id, row_start_ms=row_start_ms,
                 row_min_offset=row_min_offset, row_max_offset=row_max_offset,
             )
             res.append(select)
@@ -510,9 +520,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         if not result:
             return None
-        config = result[0][0]
-        return bg_accessor.Metric(
-            metric_name, bg_accessor.MetricMetadata.from_string_dict(config))
+        id = result[0][0]
+        config = result[0][1]
+        metadata = bg_accessor.MetricMetadata.from_string_dict(config)
+        return bg_accessor.Metric(metric_name, id, metadata)
 
     def glob_directory_names(self, glob):
         """Return a sorted list of metric directories matching this glob."""
@@ -584,7 +595,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             offset = stage.step_ms(time_offset_ms)
 
             statement, args = self.__lazy_statements.prepare_insert(
-                stage=stage, metric_name=metric.name, time_start_ms=time_start_ms,
+                stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
                 offset=offset, value=value, count=count,
             )
             future = self.__session.execute_async(query=statement, parameters=args)

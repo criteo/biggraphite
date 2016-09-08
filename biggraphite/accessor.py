@@ -446,7 +446,9 @@ class MetricMetadata(object):
     """
 
     __slots__ = (
-        "aggregator", "retention", "carbon_xfilesfactor",
+        "aggregator",
+        "retention",
+        "carbon_xfilesfactor",
     )
 
     _DEFAULT_AGGREGATOR = Aggregator.average
@@ -506,14 +508,20 @@ class Metric(object):
     Not meant to be mutated.
     """
 
-    __slots__ = ("name", "metadata")
+    __slots__ = (
+        "name",
+        "id",
+        "metadata"
+    )
 
-    def __init__(self, name, metadata):
+    def __init__(self, name, id, metadata):
         """Record its arguments."""
         super(Metric, self).__init__()
-        assert metadata, "Metric: metadata is None"
         assert name, "Metric: name is None"
+        assert id, "Metric: id is None"
+        assert metadata, "Metric: metadata is None"
         self.name = encode_metric_name(name)
+        self.id = id
         self.metadata = metadata
 
     def __getattr__(self, name):
@@ -571,13 +579,13 @@ class Accessor(object):
 
     @abc.abstractmethod
     def create_metric(self, metric):
-        """Create a metric from its definition as Metric.
+        """Create a metric from its definition as a Metric object.
 
         Parent directories are implicitly created.
         This can be expensive, it is worthwile to first check if the metric exists.
 
         Args:
-          metric: The metric definition.
+          metric: definition as a Metric object.
         """
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
@@ -631,8 +639,19 @@ class Accessor(object):
 
     @abc.abstractmethod
     def get_metric(self, metric_name):
-        """Return a MetricMetadata for this metric_name, None if no such metric."""
+        """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
+
+    @abc.abstractmethod
+    def make_metric(self, name, metadata):
+        """Create a Metric object from its definition as name and metadata.
+
+        Args:
+          name: metric name.
+          metadadata: metric metadata.
+
+        Returns: a Metric object with a valid id.
+        """
 
     @abc.abstractmethod
     def glob_metric_names(self, glob):

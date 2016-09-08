@@ -126,9 +126,9 @@ class _Worker(object):
         if not self._accessor.is_connected:
             self._accessor.connect()
 
-        metric_name = metric_name_from_wsp(self._opts.root_directory, path)
-        meta = self._read_metadata(metric_name, path)
-        metric = bg_accessor.Metric(metric_name, meta)
+        name = metric_name_from_wsp(self._opts.root_directory, path)
+        metadata = self._read_metadata(name, path)
+        metric = self._accessor.make_metric(name, metadata)
         self._accessor.create_metric(metric)
 
         if self._opts.no_data:
