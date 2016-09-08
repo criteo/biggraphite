@@ -15,6 +15,8 @@
 """Adapter between BigGraphite and Carbon."""
 from __future__ import absolute_import  # Otherwise carbon is this module.
 
+import uuid
+
 # Version 0.9.15 (the one from PIP) does not have the "database" module.
 # To make use of the plugin with carbon, you will need a version that has
 # upstream commit 3d260b0f663b5577bc3a0fc3f0741802109a28c4 or apply this
@@ -98,12 +100,13 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         return bool(self.cache().has_metric(metric_name))
 
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
+        id = uuid.uuid4()
         metadata = accessor.MetricMetadata(
             aggregator=accessor.Aggregator.from_carbon_name(aggregation_method),
             retention=accessor.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
-        metric = accessor.Metric(metric_name, metadata)
+        metric = accessor.Metric(metric_name, id, metadata)
         self.cache().create_metric(metric)
 
     def getMetadata(self, metric_name, key):

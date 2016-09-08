@@ -44,6 +44,7 @@ _UTF8_CODEC = codecs.getencoder('utf8')
 
 _NAN = float("nan")
 
+_ID_SEPARATOR = '|'
 
 def _wait_async_call(async_function, *args, **kwargs):
     """Call async_function and synchronously wait for it to be done.
@@ -446,7 +447,9 @@ class MetricMetadata(object):
     """
 
     __slots__ = (
-        "aggregator", "retention", "carbon_xfilesfactor",
+        "aggregator",
+        "retention",
+        "carbon_xfilesfactor",
     )
 
     _DEFAULT_AGGREGATOR = Aggregator.average
@@ -506,14 +509,20 @@ class Metric(object):
     Not meant to be mutated.
     """
 
-    __slots__ = ("name", "metadata")
+    __slots__ = (
+        "name",
+        "id",
+        "metadata"
+    )
 
-    def __init__(self, name, metadata):
+    def __init__(self, name, id, metadata):
         """Record its arguments."""
         super(Metric, self).__init__()
-        assert metadata, "Metric: metadata is None"
         assert name, "Metric: name is None"
+        assert id, "Metric: id is None"
+        assert metadata, "Metric: metadata is None"
         self.name = encode_metric_name(name)
+        self.id = id
         self.metadata = metadata
 
     def __getattr__(self, name):
@@ -524,6 +533,10 @@ class Metric(object):
         res.extend(self.__slots__)
         res.sort()
         return res
+
+    def as_json(self):
+        """Serialize Metric into a JSON string for serialization."""
+        return str(self.id) + _ID_SEPARATOR + self.metadata.as_json()
 
 
 class Accessor(object):
@@ -631,7 +644,7 @@ class Accessor(object):
 
     @abc.abstractmethod
     def get_metric(self, metric_name):
-        """Return a MetricMetadata for this metric_name, None if no such metric."""
+        """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
 
     @abc.abstractmethod

@@ -22,6 +22,7 @@ from multiprocessing import dummy as multiprocessing_dummy
 import os
 import struct
 import sys
+import uuid
 
 import progressbar
 import whisper
@@ -126,9 +127,10 @@ class _Worker(object):
         if not self._accessor.is_connected:
             self._accessor.connect()
 
-        metric_name = metric_name_from_wsp(self._opts.root_directory, path)
-        meta = self._read_metadata(metric_name, path)
-        metric = bg_accessor.Metric(metric_name, meta)
+        name = metric_name_from_wsp(self._opts.root_directory, path)
+        id = uuid.uuid4()
+        metadata = self._read_metadata(name, path)
+        metric = bg_accessor.Metric(name, id, metadata)
         self._accessor.create_metric(metric)
 
         if self._opts.no_data:
