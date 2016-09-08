@@ -16,6 +16,7 @@
 from __future__ import print_function
 
 import unittest
+import uuid
 
 from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling as bg_ds
@@ -35,8 +36,9 @@ class TestDownsampler(unittest.TestCase):
         retention = bg_accessor.Retention.from_string(retention_string)
         self.stage_0 = retention.stages[0]
         self.stage_1 = retention.stages[1]
+        id = uuid.uuid4()
         metric_metadata = bg_accessor.MetricMetadata(aggregator=aggregator, retention=retention)
-        self.metric = bg_accessor.Metric(self.METRIC_NAME, metric_metadata)
+        self.metric = bg_accessor.Metric(self.METRIC_NAME, id, metric_metadata)
         self.ds = bg_ds.Downsampler(self.CAPACITY)
 
     def test_feed_simple(self):

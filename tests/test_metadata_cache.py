@@ -83,7 +83,7 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         metric_name = "a.b.fake"
         metric = bg_test_utils.make_metric(metric_name)
 
-        self.metadata_cache._cache(metric_name, metric.metadata)
+        self.metadata_cache._cache(metric)
         self.metadata_cache.repair()
         self.metadata_cache.get_metric(metric_name)
         # repair() will remove it, and the get will produce a miss.

@@ -19,6 +19,7 @@ from __future__ import print_function
 import collections
 import fnmatch
 import re
+import uuid
 
 import sortedcontainers
 
@@ -32,18 +33,20 @@ class _MemoryAccessor(bg_accessor.Accessor):
     Row = collections.namedtuple(
         'Row', ['time_start_ms', 'offset', 'value', 'count'])
 
+    _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
+
     def __init__(self):
         """Create a new MemoryAccessor."""
         super(_MemoryAccessor, self).__init__("memory")
         self._metric_to_points = collections.defaultdict(
             sortedcontainers.SortedDict)
-        self._metric_to_metadata = {}
+        self._name_to_metric = {}
         self._directory_names = sortedcontainers.SortedSet()
         self.__downsampler = _downsampling.Downsampler()
 
     @property
     def _metric_names(self):
-        return self._metric_to_metadata.keys()
+        return self._name_to_metric.keys()
 
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -63,7 +66,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).insert_points_async(
             metric, datapoints, on_done)
-        assert metric.name in self._metric_to_metadata
+        assert metric.name in self._name_to_metric
         points = self._metric_to_points[metric.name]
         # TODO(c.chary): uncomment that when the downsampler has been
         #   fixed. Currently it waits a few iteration before emitting points.
@@ -85,13 +88,18 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).drop_all_metrics(*args, **kwargs)
         self._metric_to_points.clear()
-        self._metric_to_metadata.clear()
+        self._name_to_metric.clear()
         self._directory_names.clear()
+
+    def make_metric(self, name, metadata):
+        """See bg_accessor.Accessor."""
+        id = uuid.uuid5(self._UUID_NAMESPACE, name)
+        return bg_accessor.Metric(name, id, metadata)
 
     def create_metric(self, metric):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).create_metric(metric)
-        self._metric_to_metadata[metric.name] = metric.metadata
+        self._name_to_metric[metric.name] = metric
         parts = metric.name.split(".")[:-1]
         path = []
         for part in parts:
@@ -126,11 +134,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
     def get_metric(self, metric_name):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).get_metric(metric_name)
-        metadata = self._metric_to_metadata.get(metric_name)
-        if metadata:
-            return bg_accessor.Metric(metric_name, metadata)
-        else:
-            return None
+        return self._name_to_metric.get(metric_name)
 
     def fetch_points(self, metric, time_start, time_end, stage):
         """See the real Accessor for a description."""

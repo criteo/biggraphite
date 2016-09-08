@@ -59,6 +59,8 @@ class DiskCache(object):
     # 4096 is safe: https://twitter.com/armon/status/534867803426533376
     _MAX_READERS = 2048
 
+    _METRIC_SEPARATOR = '|'
+
     def __init__(self, accessor, path):
         """Create a new DiskCache."""
         self.hit_count = 0
@@ -71,7 +73,7 @@ class DiskCache(object):
         # and over.
         self.__json_cache_lock = threading.Lock()
         self.__json_cache = {}
-        self.__path = os_path.join(path, "biggraphite", "cache", "version1")
+        self.__path = os_path.join(path, "biggraphite", "cache", "version0")
         self.__databases = {
             "metric_to_meta": None
         }
@@ -124,15 +126,15 @@ class DiskCache(object):
             self.__env.close()
             self.__env = None
 
-    def create_metric(self, metric):
-        """Create a metric definition from a Metric.
+    def make_metric(self, name, metadata):
+        """Create a metric object from a name and metadata."""
+        return self.__accessor.make_metric(name, metadata)
 
-        Args:
-          metric: The metric definition.
-        """
+    def create_metric(self, metric):
+        """Create a metric definition from a Metric."""
         with self.__accessor_lock:
             self.__accessor.create_metric(metric)
-        self._cache(metric.name, metric.metadata)
+        self._cache(metric)
 
     def has_metric(self, metric_name):
         """Check if a metric exists."""
@@ -148,30 +150,46 @@ class DiskCache(object):
                 self.get_metric(metric_name)
         return found
 
-    def get_metric(self, metric_name):
-        """Return a Metric for this metric_name, None if no such metric."""
+    def _get_metric_from_cache(self, metric_name):
+        """Return a Metric from a the cache, None if no such metric."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            metadata_str = txn.get(encoded_metric_name)
-        if metadata_str:
-            # on disk cache hit
+            id_metadata = txn.get(encoded_metric_name)
+
+        if id_metadata:
+            split = id_metadata.split(self._METRIC_SEPARATOR, 1)
+            if len(split) == 2:
+                # get id and metadata string
+                # TODO: optimization: id is a UUID (known length)
+                id, metadata_str = split
+                with self.__json_cache_lock:
+                    metadata = self.__json_cache.get(metadata_str)
+                    if not metadata:
+                        metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
+                        self.__json_cache[metadata_str] = metadata
+                    return bg_accessor.Metric(metric_name, id, metadata)
+            else:
+                # invalid string => evict from cache
+                with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
+                    txn.delete(key=encoded_metric_name)
+
+        return None
+
+    def get_metric(self, metric_name):
+        """Return a Metric for this metric_name, None if no such metric."""
+        metric = self._get_metric_from_cache(metric_name)
+
+        if metric:
+            # valid string => on disk cache hit
             self.hit_count += 1
-            with self.__json_cache_lock:
-                metadata = self.__json_cache.get(metadata_str)
-                if not metadata:
-                    metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
-                    self.__json_cache[metadata_str] = metadata
         else:
-            # on disk cache miss
+            # invalid string or on disk cache miss
             self.miss_count += 1
             with self.__accessor_lock:
-                metadata = self.__accessor.get_metric(metric_name)
-            self._cache(metric_name, metadata)
+                metric = self.__accessor.get_metric(metric_name)
+                self._cache(metric)
 
-        if metadata:
-            return bg_accessor.Metric(metric_name, metadata)
-        else:
-            return None
+        return metric
 
     def stat(self):
         """Count number of cached entries."""
@@ -182,25 +200,42 @@ class DiskCache(object):
                 ret[name] = txn.stat(database)
         return ret
 
+    def get_value(self, metric):
+        """Get cache value for a metric.
+
+        The cache value is a combination of:
+          - id
+          - _METRIC_SEPARATOR
+          - metadata
+        """
+        return str(metric.id) + self._METRIC_SEPARATOR + metric.metadata.as_json()
+
     def repair(self):
         """Remove spurious entries from the cache."""
         # TODO: add support for start_key and end_key.
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
             cursor = txn.cursor()
             for key, value in cursor:
-                metadata = self.__accessor.get_metric(key)
-                metadata_json = metadata.as_json() if metadata else None
-                if value != metadata_json:
+                metric = self.__accessor.get_metric(key)
+                expected_value = self.get_value(metric) if metric else None
+                if value != expected_value:
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
-                            key, metadata_json, value))
+                            key, expected_value, value))
                     txn.delete(key=key)
 
-    def _cache(self, metric_name, metadata):
-        """If metadata add it to the cache."""
-        if not metadata:
+    def _cache(self, metric):
+        """If metric is valid, add it to the cache.
+
+        The metric is stored in the cache as follows:
+          - its id, which is a UUID.
+          - vertical bar (pipe) separator.
+          - its metadata JSON representation.
+        """
+        if not metric:
             # Do not cache absent metrics, they will probably soon be created.
             return None
-        metadata_json = metadata.as_json()
+        key = metric.name
+        value = self.get_value(metric)
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            txn.put(metric_name, metadata_json, dupdata=False, overwrite=True)
+            txn.put(key, value, dupdata=False, overwrite=True)
