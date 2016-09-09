@@ -143,6 +143,7 @@ class MultiDatabase(database.TimeSeriesDatabase):
     """
 
     def __init__(self, dbs):
+        assert len(dbs) > 1
         self._dbs = dbs
 
     def write(self, metric_name, datapoints):
@@ -150,10 +151,10 @@ class MultiDatabase(database.TimeSeriesDatabase):
             db.write(metric_name, datapoints)
 
     def exists(self, metric_name):
-        exists = False
         for db in self._dbs:
-            exists |= db.exists(metric_name)
-        return exists
+            if not db.exists(metric_name):
+                return False
+        return True
 
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
         for db in self._dbs:
