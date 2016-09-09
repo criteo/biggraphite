@@ -27,6 +27,29 @@ class CommandRepair(command.BaseCommand):
     NAME = "repair"
     HELP = "Run some repairs."
 
+    def add_arguments(self, parser):
+        """Add custom arguments."""
+        parser.add_argument(
+            "--start-key",
+            help="Start key.",
+        )
+        parser.add_argument(
+            "--end-key",
+            help="End key.",
+        )
+        parser.add_argument(
+            "--shard",
+            help="Shard number.",
+            type=int,
+            default=0,
+        )
+        parser.add_argument(
+            "--nshards",
+            help="Number of shards.",
+            type=int,
+            default=1,
+        )
+
     def run(self, accessor, opts):
         """Run some repairs.
 
@@ -34,14 +57,20 @@ class CommandRepair(command.BaseCommand):
         """
         accessor.connect()
 
+        # TODO: use multiprocessing + progressbar here. Probably remove some
+        # of the current arguments and generate them instead based on a number
+        # of processes to do a full scan.
+
         if opts.storage_path:
             cache = metadata_cache.DiskCache(accessor, opts.storage_path)
-            # TODO: Once repair() has support for start_key and end_key it will be
-            # easier to parallelise this command.
             cache.open()
-            cache.repair()
+            cache.repair(shard=opts.shard, nshards=opts.nshards,
+                         start_key=opts.start_key,
+                         end_key=opts.end_key)
         else:
             logging.warning(
                 'Skipping disk cache repair because storage_path is empty')
 
-        accessor.repair()
+        accessor.repair(shard=opts.shard, nshards=opts.nshards,
+                        start_key=opts.start_key,
+                        end_key=opts.end_key)

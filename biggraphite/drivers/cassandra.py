@@ -21,6 +21,7 @@ import logging
 import uuid
 
 import cassandra
+from cassandra import murmur3
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
@@ -605,26 +606,59 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_failure,
                 )
 
-    def repair(self):
-        """See bg_accessor.Accessor."""
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+        """See bg_accessor.Accessor.
+
+        Slight change for start_key and end_key, they are intrepreted as
+        tokens directly.
+        """
+        super(_CassandraAccessor, self).repair()
+
+        partitioner = self.__cluster.metadata.partitioner
+        if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
+            logging.warn("Partitioner '%s' not supported for repairs" % partitioner)
+            return
+
+        start_token = murmur3.INT64_MIN
+        stop_token = murmur3.INT64_MAX
+
+        if nshards > 1:
+            tokens = murmur3.INT64_MAX - murmur3.INT64_MIN
+            my_tokens = tokens / nshards
+            start_token += my_tokens * shard
+            stop_token = start_token + my_tokens
+
+        if start_key is not None:
+            start_token = int(start_key)
+        if end_key is not None:
+            end_key = int(end_key)
+
         # Step 1: Create missing parent directories.
         statement_str = (
-            "SELECT name FROM \"%s\".directories WHERE component_0 = 'carbon' ALLOW FILTERING;" %
+            "SELECT name, token(name) FROM \"%s\".directories "
+            "WHERE token(name) > ? LIMIT 1;" %
             self.keyspace_metadata)
         statement = self.__session.prepare(statement_str)
         statement.consistency_level = cassandra.ConsistencyLevel.QUORUM
         statement.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         statement.request_timeout = 60
-        result = self.__session.execute(statement)
 
-        for row in result:
-            parent_dir = row.name.rpartition(".")[0]
-            if parent_dir and not self.glob_directory_names(parent_dir):
-                logging.warning("Creating missing parent dir '%s'" % parent_dir)
-                components = self._components_from_name(row.name)
-                queries = self._create_parent_dirs_queries(components)
-                for statement, args in queries:
-                    self.__session.execute(statement, args)
+        token = start_token
+        while token < stop_token:
+            args = (token,)
+            result = self.__session.execute(statement, args)
+
+            if len(result.current_rows) == 0:
+                break
+            for row in result:
+                parent_dir = row.name.rpartition(".")[0]
+                if parent_dir and not self.glob_directory_names(parent_dir):
+                    logging.warning("Creating missing parent dir '%s'" % parent_dir)
+                    components = self._components_from_name(row.name)
+                    queries = self._create_parent_dirs_queries(components)
+                    for statement, args in queries:
+                        self.__session.execute(statement, args)
+                token = row.system_token_name
 
     def shutdown(self):
         """See bg_accessor.Accessor."""
@@ -639,14 +673,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _upgrade_schema(self):
         # Currently no change, so only upgrade operation is to setup
-        try:
-            self.__session.execute(
-                "SELECT name FROM \"%s\".directories LIMIT 1;" %
-                self.keyspace_metadata
-            )
-            return  # Already up to date.
-        except Exception:
-            pass
+        self.__cluster.refresh_schema_metadata()
+        keyspaces = self.__cluster.metadata.keyspaces.keys()
+        for keyspace in [self.keyspace, self.keyspace_metadata]:
+            if keyspace not in keyspaces:
+                raise CassandraError("Missing keyspace '%s'." % keyspace)
+
+        tables = self.__cluster.metadata.keyspaces[self.keyspace_metadata].tables
+        if 'metrics' in tables and 'directories' in tables:
+            return
+
         for cql in _METADATA_CREATION_CQL:
             self.__session.execute(cql % {"keyspace": self.keyspace_metadata})
 
