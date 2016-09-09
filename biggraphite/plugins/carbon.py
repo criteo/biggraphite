@@ -139,7 +139,7 @@ class MultiDatabase(database.TimeSeriesDatabase):
     The class definition registers the plugin thanks to TimeSeriesDatabase's
     metaclass.
 
-    This class allow to use multiple existing database plugin at the same time.
+    This class allows using multiple existing database plugins at the same time.
     """
 
     def __init__(self, dbs):
