@@ -62,8 +62,8 @@ to mount /tmp as tmpfs unless you have a fast SSD.
 
 You can use `tox` to run tests:
 ```bash
-    pip install tox
-    tox
+$ pip install tox
+$ tox
 ```
 
 You can also simply use unittest.discover if you have a working dev environment (see previous paragraph).
@@ -95,8 +95,8 @@ Write the following carbon.conf file:
 ```text
 [cache]
 BG_CASSANDRA_KEYSPACE = biggraphite
-BG_CASSANDRA_CONTACT_POINTS = 127.0.0.0.1
-DATABASE = whisper
+BG_CASSANDRA_CONTACT_POINTS = 127.0.0.1
+DATABASE = biggraphite
 ```
 
 ```bash
@@ -129,4 +129,3 @@ $ django-admin migrate
 $ django-admin migrate --run-syncdb
 $ run-graphite-devel-server.py ${BG_VENV}
 ```
-

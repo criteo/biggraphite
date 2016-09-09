@@ -131,3 +131,64 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def getFilesystemPath(self, metric_name):
         # Only used for logging.
         return "/".join(("//biggraphite", self.accessor().backend_name, metric_name))
+
+
+class MultiDatabase(database.TimeSeriesDatabase):
+    """Multi Database plugin for Carbon.
+
+    The class definition registers the plugin thanks to TimeSeriesDatabase's
+    metaclass.
+
+    This class allow to use multiple existing database plugin at the same time.
+    """
+
+    def __init__(self, dbs):
+        self._dbs = dbs
+
+    def write(self, metric_name, datapoints):
+        for db in self._dbs:
+            db.write(metric_name, datapoints)
+
+    def exists(self, metric_name):
+        exists = False
+        for db in self._dbs:
+            exists |= db.exists(metric_name)
+        return exists
+
+    def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
+        for db in self._dbs:
+            if db.exists(metric_name):
+                continue
+            db.create(
+                metric_name, retentions, xfilesfactor, aggregation_method)
+
+    def getMetadata(self, metric_name, key):
+        return self._dbs[0].getMetadata(metric_name, key)
+
+    def setMetadata(self, metric_name, key, value):
+        self._dbs[0].setMetadata(metric_name, key, value)
+
+    def getFilesystemPath(self, metric_name):
+        return metric_name
+
+
+if hasattr(database, 'WhisperDatabase'):
+    class WhisperAndBigGraphiteDatabase(MultiDatabase):
+        """Whisper then BigGraphite."""
+
+        plugin_name = "whisper+biggraphite"
+
+        def __init__(self, settings):
+            self._biggraphite = BigGraphiteDatabase(settings)
+            self._whisper = database.WhisperDatabase(settings)
+            MultiDatabase.__init__(self, [self._whisper, self._biggraphite])
+
+    class BigGraphiteAndWhisperDatabase(MultiDatabase):
+        """BigGraphite then Whisper."""
+
+        plugin_name = "biggraphite+whisper"
+
+        def __init__(self, settings):
+            self._biggraphite = BigGraphiteDatabase(settings)
+            self._whisper = database.WhisperDatabase(settings)
+            MultiDatabase.__init__(self, [self._biggraphite, self._whisper])
