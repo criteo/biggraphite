@@ -94,6 +94,7 @@ class DiskCache(object):
         map_size = 1024*1024*1024  # 1G on 32 bits systems
         if sys.maxsize > 2**32:
             map_size *= 16  # 16G on 64 bits systems
+        logging.info('Opening cache %s' % self.__path)
         self.__env = lmdb.open(
             self.__path,
             map_size=map_size,
@@ -222,12 +223,33 @@ class DiskCache(object):
         """
         return str(metric.id) + self._METRIC_SEPARATOR + metric.metadata.as_json()
 
-    def repair(self):
-        """Remove spurious entries from the cache."""
-        # TODO: add support for start_key and end_key.
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+        """Remove spurious entries from the cache.
+
+        During the repair the keyspace is split in nshards and
+        this function will only take car of 1/n th of the data
+        as specified by shard. This allows the caller to parallelize
+        the repair if needed.
+
+        Args:
+          start_key: string, start at key >= start_key.
+          end_key: string, stop at key < end_key.
+          shard: int, shard to repair.
+          nshards: int, number of shards.
+        """
+        i = 0
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
             cursor = txn.cursor()
+            if start_key is not None:
+                if not cursor.set_range(start_key):
+                    return
             for key, value in cursor:
+                i += 1
+                if end_key is not None and key >= end_key:
+                    break
+                if nshards > 1 and (i % nshards) != shard:
+                    continue
+
                 metric = self.__accessor.get_metric(key)
                 expected_value = self.get_value(metric) if metric else None
                 if value != expected_value:
