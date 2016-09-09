@@ -103,7 +103,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             retention=accessor.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
-        metric = accessor.Metric(metric_name, metadata)
+        metric = self.cache().make_metric(metric_name, metadata)
         self.cache().create_metric(metric)
 
     def getMetadata(self, metric_name, key):
