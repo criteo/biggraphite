@@ -711,11 +711,25 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def repair(self):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Repair potential corruptions in the database.
 
         This operation can potentially be very slow.
+
+        During the repair the keyspace is split in nshards and
+        this function will only take car of 1/n th of the data
+        as specified by shard. This allows the caller to parallelize
+        the repair if needed.
+
+        Args:
+          start_key: string, start at key >= start_key.
+          end_key: string, stop at key == end_key.
+          shard: int, shard to repair.
+          nshards: int, number of shards.
         """
+        assert shard >= 0
+        assert nshards > 0
+        assert shard < nshards
         self._check_connected()
 
     @abc.abstractmethod
