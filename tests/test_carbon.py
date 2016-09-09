@@ -19,6 +19,7 @@ bg_test_utils.prepare_graphite_imports()  # noqa
 
 import unittest
 
+from carbon import database
 from carbon import conf as carbon_conf
 from carbon import exceptions as carbon_exceptions
 
@@ -92,6 +93,45 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self._plugin.write(metric.name, points)
         actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
+
+
+class TestMultiDatabase(bg_test_utils.TestCaseWithFakeAccessor):
+
+    def setUp(self):
+        super(TestMultiDatabase, self).setUp()
+        self.fake_drivers()
+        settings = carbon_conf.Settings()
+        settings["BG_CASSANDRA_CONTACT_POINTS"] = "host1,host2"
+        settings["BG_CASSANDRA_KEYSPACE"] = self.KEYSPACE
+        settings["STORAGE_DIR"] = self.tempdir
+        settings["LOCAL_DATA_DIR"] = self.tempdir
+        self._settings = settings
+
+    def _test_plugin(self, klass):
+        plugin = klass(self._settings)
+        self.assertFalse(plugin.exists(_TEST_METRIC))
+        plugin.create(
+            _TEST_METRIC,
+            retentions=[(1, 60)],
+            xfilesfactor=0.5,
+            aggregation_method="sum",
+        )
+        self.assertTrue(plugin.exists(_TEST_METRIC))
+        plugin.write(_TEST_METRIC, [(1, 1), (2, 2)])
+        self.assertEquals(
+            plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
+
+    def test_whisper_and_biggraphite(self):
+        self._test_plugin(bg_carbon.WhisperAndBigGraphiteDatabase)
+
+    def test_biggraphite_and_whisper(self):
+        self._test_plugin(bg_carbon.BigGraphiteAndWhisperDatabase)
+
+    def test_plugin_registration(self):
+        plugins = database.TimeSeriesDatabase.plugins.keys()
+        self.assertTrue('whisper+biggraphite' in plugins)
+        self.assertTrue('biggraphite+whisper' in plugins)
+        self.assertTrue('biggraphite' in plugins)
 
 
 if __name__ == "__main__":
