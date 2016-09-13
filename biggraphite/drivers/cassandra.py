@@ -32,6 +32,11 @@ from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 
+# The offset is a Cassandra int (4 bytes) and is shifted by two bytes.
+# We want to use the lower two bytes to have multiple writers for the same metric,
+# and use these bytes for multiplexing.
+# This is possible because we have less than 50K cells per partition.
+_OFFSET_SHIFT = 16
 
 MINUTE = 60
 HOUR = 60 * MINUTE
@@ -126,11 +131,11 @@ _METADATA_CREATION_CQL = [
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
-    "  metric uuid,"              # Metric UUID.
-    "  time_start_ms bigint,"     # Lower bound for this row.
-    "  offset int,"               # time_start_ms + offset * precision = timestamp
-    "  value double,"             # Value for the point.
-    "  count int,"                # If value is sum, divide by count to get the avg.
+    "  metric uuid,"           # Metric UUID.
+    "  time_start_ms bigint,"  # Lower bound for this row.
+    "  offset int,"            # time_start_ms + (offset >> _OFFSET_SHIFT) * precision = timestamp
+    "  value double,"          # Value for the point.
+    "  count int,"             # If value is sum, divide by count to get the avg.
     "  PRIMARY KEY ((metric, time_start_ms), offset)"
     ")"
     "  WITH CLUSTERING ORDER BY (offset DESC)"
@@ -260,6 +265,7 @@ class _LazyPreparedStatements(object):
 
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
+        offset <<= _OFFSET_SHIFT
         args = (metric_id, time_start_ms, offset, value, count)
         if statement:
             return statement, args
@@ -277,6 +283,8 @@ class _LazyPreparedStatements(object):
 
     def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
         statement = self.__stage_to_select.get(stage)
+        row_min_offset <<= _OFFSET_SHIFT
+        row_max_offset <<= _OFFSET_SHIFT
         args = (metric_id, row_start_ms, row_min_offset, row_max_offset)
         if statement:
             return statement, args
@@ -443,6 +451,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for table in tables:
                 self.__session.execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
 
+    def demangle_query_results(self, query_results):
+        """Process query results to work with them."""
+        for success, result in query_results:
+            if success:
+                result = [
+                    row._replace(offset=row.offset >> _OFFSET_SHIFT)
+                    for row in result]
+            yield success, result
+
     def fetch_points(self, metric, time_start, time_end, stage):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).fetch_points(
@@ -464,6 +481,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             concurrency=self.__concurrency,
             results_generator=True,
         )
+        query_results = self.demangle_query_results(query_results)
         return bg_accessor.PointGrouper(
             metric, time_start_ms, time_end_ms, stage, query_results)
 
@@ -471,13 +489,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
                                    time_end_ms, stage):
         # We fetch with ms precision, even though we only store with second
         # precision.
-        first_row = bg_accessor.round_down(time_start_ms, _row_size_ms(stage))
-        last_row = bg_accessor.round_down(time_end_ms, _row_size_ms(stage))
+        row_size_ms_stage = _row_size_ms(stage)
+        first_row = bg_accessor.round_down(time_start_ms, row_size_ms_stage)
+        last_row = bg_accessor.round_down(time_end_ms, row_size_ms_stage)
         res = []
         # xrange(a,b) does not contain b, so we use last_row+1
-        for row_start_ms in xrange(first_row, last_row + 1, _row_size_ms(stage)):
-            row_min_offset_ms = -1  # Selects all FIXME
-            row_max_offset_ms = stage.duration_ms  # Selects all
+        for row_start_ms in xrange(first_row, last_row + 1, row_size_ms_stage):
+            # adjust min/max offsets to select everything
+            row_min_offset_ms = 0
+            row_max_offset_ms = row_size_ms_stage
             if row_start_ms == first_row:
                 row_min_offset_ms = time_start_ms - row_start_ms
             if row_start_ms == last_row:
