@@ -734,7 +734,13 @@ class PointGrouper(object):
     abstracted away if more datastores do client-side agregation.
     """
 
-    def __init__(self, metric, time_start_ms, time_end_ms, stage, query_results):
+    def __init__(self,
+                 metric,
+                 time_start_ms,
+                 time_end_ms,
+                 stage,
+                 query_results,
+                 offset_bit_shift=0):
         """Constructor for PointGrouper.
 
         Args:
@@ -751,6 +757,7 @@ class PointGrouper(object):
         self.time_end_ms = time_end_ms
         self.stage = stage
         self.query_results = query_results
+        self.offset_bit_shift = offset_bit_shift
 
         self.current_values = array.array("d")
         self.current_counts = array.array("l")
@@ -794,7 +801,8 @@ class PointGrouper(object):
                 first_exc = rows_or_exception
             for row in rows_or_exception:
                 # row is (time_start_ms, offset, value, count)
-                timestamp_ms = row.time_start_ms + row.offset * self.stage.precision_ms
+                offset = (int(row.offset) >> self.offset_bit_shift)
+                timestamp_ms = row.time_start_ms + offset * self.stage.precision_ms
 
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms

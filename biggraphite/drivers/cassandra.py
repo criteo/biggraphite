@@ -32,6 +32,8 @@ from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 
+# the offset is shifted when stored in C*
+_OFFSET_BIT_SHIFT = 16
 
 MINUTE = 60
 HOUR = 60 * MINUTE
@@ -69,6 +71,8 @@ class InvalidGlobError(InvalidArgumentError):
 # ====================
 # The following few constants are heuristics that are used to tune
 # the datatable.
+# We store 1000 seconds per row
+_ROW_SIZE_MS = 1000 * 1000
 # We expect timestamp T to be written at T +/- _OUT_OF_ORDER_S
 # As result we delay expiry and compaction by that much time
 _OUT_OF_ORDER_S = 15 * MINUTE
@@ -128,7 +132,7 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
     "  metric uuid,"              # Metric UUID.
     "  time_start_ms bigint,"     # Lower bound for this row.
-    "  offset int,"               # time_start_ms + offset * precision = timestamp
+    "  offset int,"               # time_start_ms + (offset >> 16) * precision = timestamp
     "  value double,"             # Value for the point.
     "  count int,"                # If value is sum, divide by count to get the avg.
     "  PRIMARY KEY ((metric, time_start_ms), offset)"
@@ -152,24 +156,6 @@ _DATAPOINTS_CREATION_CQL_CS_TEMPLATE = {
         "    'compaction_window_size': %(compaction_window_size)d"
     )
 }
-
-
-def _row_size_ms(stage):
-    """Number of milliseconds to put in one Cassandra row.
-
-    Args:
-      stage: The stage the table stores.
-
-    Returns:
-      An integer, the duration in milliseconds.
-    """
-    return min(
-        stage.precision_ms * _MAX_PARTITION_SIZE,
-        max(
-            stage.precision_ms * _EXPECTED_POINTS_PER_READ,
-            _MIN_PARTITION_SIZE_MS
-        )
-    )
 
 
 class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
@@ -277,6 +263,8 @@ class _LazyPreparedStatements(object):
 
     def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
         statement = self.__stage_to_select.get(stage)
+        row_min_offset <<= _OFFSET_BIT_SHIFT
+        row_max_offset <<= _OFFSET_BIT_SHIFT
         args = (metric_id, row_start_ms, row_min_offset, row_max_offset)
         if statement:
             return statement, args
@@ -464,20 +452,25 @@ class _CassandraAccessor(bg_accessor.Accessor):
             concurrency=self.__concurrency,
             results_generator=True,
         )
-        return bg_accessor.PointGrouper(
-            metric, time_start_ms, time_end_ms, stage, query_results)
+        return bg_accessor.PointGrouper(metric,
+                                        time_start_ms,
+                                        time_end_ms,
+                                        stage,
+                                        query_results,
+                                        _OFFSET_BIT_SHIFT)
 
     def _fetch_points_make_selects(self, metric_id, time_start_ms,
                                    time_end_ms, stage):
         # We fetch with ms precision, even though we only store with second
         # precision.
-        first_row = bg_accessor.round_down(time_start_ms, _row_size_ms(stage))
-        last_row = bg_accessor.round_down(time_end_ms, _row_size_ms(stage))
+        first_row = bg_accessor.round_down(time_start_ms, _ROW_SIZE_MS)
+        last_row = bg_accessor.round_down(time_end_ms, _ROW_SIZE_MS)
         res = []
         # xrange(a,b) does not contain b, so we use last_row+1
-        for row_start_ms in xrange(first_row, last_row + 1, _row_size_ms(stage)):
-            row_min_offset_ms = -1  # Selects all FIXME
-            row_max_offset_ms = stage.duration_ms  # Selects all
+        for row_start_ms in xrange(first_row, last_row + 1, _ROW_SIZE_MS):
+            # set offset to fetch all data
+            row_min_offset_ms = 0
+            row_max_offset_ms = _ROW_SIZE_MS
             if row_start_ms == first_row:
                 row_min_offset_ms = time_start_ms - row_start_ms
             if row_start_ms == last_row:
@@ -590,9 +583,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         for timestamp, value, count, stage in downsampled:
             timestamp_ms = int(timestamp) * 1000
-            time_offset_ms = timestamp_ms % _row_size_ms(stage)
+            time_offset_ms = timestamp_ms % _ROW_SIZE_MS
             time_start_ms = timestamp_ms - time_offset_ms
-            offset = stage.step_ms(time_offset_ms)
+            # shift offset left (see #116)
+            offset = stage.step_ms(time_offset_ms) << _OFFSET_BIT_SHIFT
 
             statement, args = self.__lazy_statements.prepare_insert(
                 stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
