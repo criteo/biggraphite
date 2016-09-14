@@ -786,11 +786,11 @@ class PointGrouper(object):
         first_exc = None
 
         # TODO: This function is still quite Cassandra Specific.
-        for successfull, rows_or_exception in self.query_results:
+        for successful, rows_or_exception in self.query_results:
             if first_exc:
                 # A query failed, we still consume the results
                 continue
-            if not successfull:
+            if not successful:
                 first_exc = rows_or_exception
             for row in rows_or_exception:
                 # row is (time_start_ms, offset, value, count)
