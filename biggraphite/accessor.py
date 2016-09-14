@@ -548,12 +548,6 @@ class Accessor(object):
 
     __metaclass__ = abc.ABCMeta
 
-    # Current value is based on Cassandra page settings, so that everything fits in a single
-    # reply with default settings.
-    # TODO: Mesure actual number of metrics for existing queries and estimate a more
-    # reasonable limit, also consider other engines.
-    MAX_METRIC_PER_GLOB = 5000
-
     def __init__(self, backend_name):
         """Set internal variables."""
         self.backend_name = backend_name

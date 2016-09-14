@@ -14,20 +14,19 @@
 # limitations under the License.
 """Utility module."""
 
-from os import path as os_path
-import os
-
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import memory as bg_memory
 
 
+DRIVERS = frozenset([
+    ("cassandra", bg_cassandra),
+    ("memory", bg_memory),
+])
+
 DEFAULT_DRIVER = "cassandra"
-DEFAULT_CASSANDRA_KEYSPACE = "biggraphite"
-DEFAULT_CASSANDRA_CONTACT_POINTS = "127.0.0.1"
-DEFAULT_CASSANDRA_PORT = 9042
-DEFAULT_CASSANDRA_TIMEOUT = 10.0
-DEFAULT_CASSANDRA_CONNECTIONS = 4
-DEFAULT_CASSANDRA_COMPRESSION = False
+OPTIONS = {
+    "driver": str
+}
 
 
 class Error(Exception):
@@ -42,113 +41,30 @@ class ConfigError(Error):
     pass
 
 
-# TODO(c.chary): we probably want our own config file at some point, this
-#  file could be used by command line utilities. Alternatively we can
-#  make them load settings from existing config files.
-
-def _get_setting(settings, name, optional=False, default=None):
-    # Only way we found to support both Carbon & Django settings.
-    res = default
-    try:
-        res = settings[name]
-    except (TypeError, KeyError):
-        try:
-            res = getattr(settings, name)
-        except:
-            pass
-    # Fallback to env.
-    if res is None:
-        res = os.environ.get(name)
-    if res is None and not optional:
-        raise ConfigError("%s missing in configuration" % name)
-    return res
-
-
-def list_from_str(value):
-    """Convert a comma separated string into a list.
-
-    Args:
-      value: str or list or set.
-
-    Returns:
-      list a list of values.
-    """
-    if type(value) is str:
-        value = [s.strip() for s in value.split(",")]
-    elif type(value) in (list, set):
-        value = list(value)
-    else:
-        raise ConfigError("Unkown type for '%s'" % (value))
-    return value
-
-
-def cassandra_accessor_from_settings(settings):
-    """Get Cassandra Accessor from configuration.
-
-    Args:
-      settings: either carbon_conf.Settings or a Django-like settings object
-
-    Returns:
-      Cassandra accessor (not connected)
-    """
-    def _compression_values(value):
-        # value is either a bool or a str.
-        if value == 'True':
-            return value
-        elif value == 'False':
-            return value
-        elif type(value) is bool:
-            return value
-        else:
-            return str(value)
-
-    options = (
-        ("keyspace", "BG_CASSANDRA_KEYSPACE", str, True),
-        ("contact_points", "BG_CASSANDRA_CONTACT_POINTS", list_from_str, False),
-        ("port", "BG_CASSANDRA_PORT", int, True),
-        ("concurrency", "BG_CASSANDRA_CONNECTIONS", int, True),
-        ("default_timeout", "BG_CASSANDRA_TIMEOUT", int, True),
-        ("compression", "BG_CASSANDRA_COMPRESSION", _compression_values, True),
-    )
-    kwargs = {}
-    for name, up_name, func, optional in options:
-        value = _get_setting(settings, up_name, optional=optional)
-        if value is None:
-            continue
-        kwargs[name] = func(value)
-    return bg_cassandra.build(**kwargs)
-
-
-def memory_accessor_from_settings(settings):
-    """Get Memory Accessor from configuration.
-
-    Args:
-      settings: either carbon_conf.Settings or a Django-like settings object
-
-    Returns:
-      Memory accessor (not connected)
-    """
-    return bg_memory.build()
-
-
 def accessor_from_settings(settings):
     """Get Accessor from configuration.
 
     Args:
-      settings: either carbon_conf.Settings or a Django-like settings object
+      settings: dict(str -> value).
 
     Returns:
       Accessor (not connected)
     """
-    drivers = (
-        ("cassandra", cassandra_accessor_from_settings),
-        ("memory", memory_accessor_from_settings),
-    )
-    driver_name = _get_setting(settings, "BG_DRIVER", default=DEFAULT_DRIVER)
-    for name, builder in drivers:
+    driver_name = settings.get('driver', DEFAULT_DRIVER)
+    driver_settings = {}
+
+    # Get driver specific settings.
+    prefix = driver_name + '_'
+    for key, value in settings.items():
+        if key.startswith(prefix):
+            key = key[len(prefix):]
+            driver_settings[key] = value
+
+    for name, driver in DRIVERS:
         if name == driver_name:
-            return builder(settings)
-    raise ConfigError("Invalid value '%s' for option 'BG_DRIVER'" % driver_name)
+            return driver.build(**driver_settings)
+
+    raise ConfigError("Invalid value '%s' for BG_DRIVER." % driver_name)
 
 
 def add_argparse_arguments(parser):
@@ -160,30 +76,29 @@ def add_argparse_arguments(parser):
     parser.add_argument("--driver",
                         help="BigGraphite driver ('cassandra' or 'memory')",
                         default=DEFAULT_DRIVER)
-    parser.add_argument("--cassandra_keyspace", metavar="NAME",
-                        help="Cassandra keyspace.",
-                        default=DEFAULT_CASSANDRA_KEYSPACE)
-    parser.add_argument("--cassandra_contact_points", metavar="HOST", nargs="+",
-                        help="Hosts used for discovery.",
-                        default=DEFAULT_CASSANDRA_CONTACT_POINTS)
-    parser.add_argument("--cassandra_port", metavar="PORT", type=int,
-                        help="The native port to connect to.",
-                        default=DEFAULT_CASSANDRA_PORT)
-    parser.add_argument("--cassandra_connections", metavar="N", type=int,
-                        help="Number of connections per Cassandra host per process.",
-                        default=DEFAULT_CASSANDRA_CONNECTIONS)
-    parser.add_argument("--cassandra_timeout", metavar="TIMEOUT", type=int,
-                        help="Cassandra query timeout in seconds.",
-                        default=DEFAULT_CASSANDRA_TIMEOUT)
-    parser.add_argument("--cassandra_compression", metavar="COMPRESSION", type=str,
-                        help="Cassandra network compression.",
-                        default=DEFAULT_CASSANDRA_COMPRESSION)
     parser.add_argument("--storage_path", metavar="PATH",
                         help="Storage path (cache, etc..)")
+    bg_cassandra.add_argparse_arguments(parser)
+
+
+def get_setting(settings, name):
+    """Get a specific setting from Carbon/Django like settings."""
+    res = None
+    found = False
+    try:
+        res = settings[name]
+        found = True
+    except (TypeError, KeyError):
+        try:
+            res = getattr(settings, name)
+            found = True
+        except:
+            pass
+    return res, found
 
 
 def settings_from_args(args):
-    """Create settings from args.
+    """Create settings dict from args.
 
     Args:
       args: argparse.Namespace, parsed arguments.
@@ -191,27 +106,31 @@ def settings_from_args(args):
     Returns:
       dict(string: value): settings
     """
-    return {
-        'BG_DRIVER': args.driver,
-        'BG_CASSANDRA_KEYSPACE': args.cassandra_keyspace,
-        'BG_CASSANDRA_CONTACT_POINTS': args.cassandra_contact_points,
-        'BG_CASSANDRA_PORT': args.cassandra_port,
-        'BG_CASSANDRA_CONNECTIONS': args.cassandra_connections,
-        'BG_CASSANDRA_TIMEOUT': args.cassandra_timeout,
-        'BG_CASSANDRA_COMPRESSION': args.cassandra_compression,
-    }
+    return settings_from_confattr(args, prefix="")
 
 
-def storage_path_from_settings(settings):
-    """Get storage path from configuration.
+def settings_from_confattr(conf, prefix="bg_"):
+    """Create settings dict from Django/Carbon like settings.
 
     Args:
       settings: either carbon_conf.Settings or a Django-like settings object
 
     Returns:
-      An absolute path.
+      dict(string: value): settings
     """
-    path = _get_setting(settings, "STORAGE_DIR")
-    if not os_path.exists(path):
-        raise ConfigError("STORAGE_DIR is set to an unexisting directory: '%s'" % path)
-    return os_path.abspath(path)
+    settings = {}
+
+    options = dict(OPTIONS)
+    for name, driver in DRIVERS:
+        options.update({('%s_' % name) + k: v for k, v in driver.OPTIONS.items()})
+
+    for option, validator in options.items():
+        option_u = (prefix + option).upper()
+        option_l = (prefix + option).lower()
+        value, found = get_setting(conf, option_u)
+        if not found:
+            value, found = get_setting(conf, option_l)
+        if found:
+            settings[option] = validator(value)
+
+    return settings

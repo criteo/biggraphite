@@ -42,6 +42,62 @@ _OFFSET_SHIFT = 16
 # Round the row size to 1000 seconds
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
 
+DEFAULT_KEYSPACE = "biggraphite"
+DEFAULT_CONTACT_POINTS = "127.0.0.1"
+DEFAULT_PORT = 9042
+DEFAULT_TIMEOUT = 10.0
+DEFAULT_CONNECTIONS = 4
+# Disable compression per default as this is clearly useless for writes and
+# reads do not generate that much traffic.
+DEFAULT_COMPRESSION = False
+# Current value is based on Cassandra page settings, so that everything fits in a single
+# reply with default settings.
+# TODO: Mesure actual number of metrics for existing queries and estimate a more
+# reasonable limit, also consider other engines.
+DEFAULT_MAX_METRICS_PER_GLOB = 5000
+
+OPTIONS = {
+    "keyspace": str,
+    "contact_points": _utils.list_from_str,
+    "timeout": float,
+    "connections": int,
+    "compression": _utils.bool_from_str,
+    "max_metrics_per_glob": int,
+}
+
+
+def add_argparse_arguments(parser):
+    """Add Cassandra arguments to an argparse parser."""
+    parser.add_argument(
+        "--cassandra_keyspace", metavar="NAME",
+        help="Cassandra keyspace.",
+        default=DEFAULT_KEYSPACE)
+    parser.add_argument(
+        "--cassandra_contact_points", metavar="HOST", nargs="+",
+        help="Hosts used for discovery.",
+        default=DEFAULT_CONTACT_POINTS)
+    parser.add_argument(
+        "--cassandra_port", metavar="PORT", type=int,
+        help="The native port to connect to.",
+        default=DEFAULT_PORT)
+    parser.add_argument(
+        "--cassandra_connections", metavar="N", type=int,
+        help="Number of connections per Cassandra host per process.",
+        default=DEFAULT_CONNECTIONS)
+    parser.add_argument(
+        "--cassandra_timeout", metavar="TIMEOUT", type=int,
+        help="Cassandra query timeout in seconds.",
+        default=DEFAULT_TIMEOUT)
+    parser.add_argument(
+        "--cassandra_compression", metavar="COMPRESSION", type=str,
+        help="Cassandra network compression.",
+        default=DEFAULT_COMPRESSION)
+    parser.add_argument(
+        "--cassandra_max_metrics_per_glob",
+        help="Maximum number of metrics returned for a glob query.",
+        default=DEFAULT_MAX_METRICS_PER_GLOB)
+
+
 MINUTE = 60
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
@@ -64,7 +120,7 @@ class NotConnectedError(CassandraError):
 
 
 class TooManyMetrics(CassandraError):
-    """A name glob yielded more than Accessor.MAX_METRIC_PER_GLOB metrics."""
+    """A name glob yielded more than MAX_METRIC_PER_GLOB metrics."""
 
 
 class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
@@ -73,6 +129,10 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
 
 class InvalidGlobError(InvalidArgumentError):
     """The provided glob is invalid."""
+
+# TODO(c.chary): convert some of these to options, but make sure
+# they are stored in the database an loaded automatically from
+# here.
 
 # HEURISTIC PARAMETERS
 # ====================
@@ -189,6 +249,16 @@ class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
     max_in_flight = 300
 
 
+class _CountDown(_utils.CountDown):
+    """Cassandra specific version of CountDown."""
+
+    def on_cassandra_result(self, result):
+        self.on_result(result)
+
+    def on_cassandra_failure(self, exc):
+        self.on_failure(exc)
+
+
 class _LazyPreparedStatements(object):
     """On demand factory of prepared statements and tables.
 
@@ -266,7 +336,8 @@ class _LazyPreparedStatements(object):
         self._session.execute(statement_str)
 
     def _get_table_name(self, stage):
-        return "\"{}\".\"datapoints_{}p_{}s\"".format(self._keyspace, stage.points, stage.precision)
+        return "\"{}\".\"datapoints_{}p_{}s\"".format(
+            self._keyspace, stage.points, stage.precision)
 
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
@@ -313,35 +384,35 @@ class _CassandraAccessor(bg_accessor.Accessor):
     Please refer to bg_accessor.Accessor.
     """
 
-    # Current value is based on page settings, so that everything fits in a single Cassandra
-    # reply with default settings.
-    # TODO: Mesure actual number of metrics for existing queries and estimate a more
-    # reasonable limit.
-    MAX_METRIC_PER_GLOB = 5000
-
-    _DEFAULT_CASSANDRA_PORT = 9042
-
     _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
-    def __init__(self, keyspace='biggraphite', contact_points=[], port=None,
-                 concurrency=4, default_timeout=None, compression=False):
+    def __init__(self,
+                 keyspace='biggraphite',
+                 contact_points=DEFAULT_CONTACT_POINTS,
+                 port=DEFAULT_PORT,
+                 connections=DEFAULT_CONNECTIONS,
+                 timeout=DEFAULT_TIMEOUT,
+                 compression=DEFAULT_COMPRESSION,
+                 max_metrics_per_glob=DEFAULT_MAX_METRICS_PER_GLOB):
         """Record parameters needed to connect.
 
         Args:
           keyspace: Base names of Cassandra keyspaces dedicated to BigGraphite.
           contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
           port: The port to connect to, as an int.
-          concurrency: How many worker threads to use.
-          default_timeout: Default timeout for operations in seconds.
+          connections: How many worker threads to use.
+          timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
+          max_metrics_per_glob: Maximum number of metrics per glob.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
         self.keyspace = keyspace
         self.keyspace_metadata = keyspace + "_metadata"
         self.contact_points = contact_points
-        self.port = port or self._DEFAULT_CASSANDRA_PORT
-        self.__concurrency = concurrency
+        self.port = port
+        self.max_metrics_per_glob = max_metrics_per_glob
+        self.__connections = connections
         self.__compression = compression
         # For some reason this isn't enabled yet for pypy, even if it seems to
         # be working properly.
@@ -351,7 +422,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__downsampler = _downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
-        self.__default_timeout = default_timeout
+        self.__timeout = timeout
         self.__insert_metrics_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
@@ -361,15 +432,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).connect(skip_schema_upgrade=skip_schema_upgrade)
         self.__cluster = c_cluster.Cluster(
             self.contact_points, self.port,
-            executor_threads=self.__concurrency,
+            executor_threads=self.__connections,
             compression=self.__compression,
             load_balancing_policy=self.__load_balancing_policy,
         )
         self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
         self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU
         self.__session = self.__cluster.connect()
-        if self.__default_timeout:
-            self.__session.default_timeout = self.__default_timeout
+        if self.__timeout:
+            self.__session.default_timeout = self.__timeout
         if not skip_schema_upgrade:
             self._upgrade_schema()
 
@@ -483,7 +554,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         query_results = c_concurrent.execute_concurrent(
             self.__session,
             statements_and_args,
-            concurrency=self.__concurrency,
             results_generator=True,
         )
         query_results = self.demangle_query_results(query_results)
@@ -581,14 +651,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " WHERE %(where)s LIMIT %(limit)d ALLOW FILTERING;"
         ) % {
             "keyspace": self.keyspace_metadata, "table": table, "where": where,
-            "limit": self.MAX_METRIC_PER_GLOB + 1,
+            "limit": self.max_metrics_per_glob + 1,
         }
         try:
             metrics_names = [r[0] for r in self.__session.execute(query)]
         except Exception as e:
             raise RetryableCassandraError(e)
-        if len(metrics_names) > self.MAX_METRIC_PER_GLOB:
-            msg = "%s yields more than %d results" % (glob, self.MAX_METRIC_PER_GLOB)
+        if len(metrics_names) > self.max_metrics_per_glob:
+            msg = "%s yields more than %d results" % (glob, self.max_metrics_per_glob)
             raise TooManyMetrics(msg)
         metrics_names.sort()
         return metrics_names
@@ -611,7 +681,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         count_down = None
         if on_done:
-            count_down = _utils.CountDown(count=len(downsampled), on_zero=on_done)
+            count_down = _CountDown(count=len(downsampled), on_zero=on_done)
 
         for timestamp, value, count, stage in downsampled:
             timestamp_ms = int(timestamp) * 1000
@@ -718,6 +788,6 @@ def build(*args, **kwargs):
       keyspace: Base name of Cassandra keyspaces dedicated to BigGraphite.
       contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
       port: The port to connect to, as an int.
-      concurrency: How many worker threads to use.
+      connections: How many worker threads to use.
     """
     return _CassandraAccessor(*args, **kwargs)

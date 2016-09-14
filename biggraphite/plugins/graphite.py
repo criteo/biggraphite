@@ -25,7 +25,6 @@ from graphite import readers
 from biggraphite import accessor as bg_accessor
 from biggraphite import graphite_utils
 from biggraphite import metadata_cache as bg_metadata_cache
-from biggraphite import utils as bg_utils
 
 
 _CONFIG_NAME = "biggraphite"
@@ -141,7 +140,7 @@ class Finder(object):
         """Return an accessor."""
         if not self._accessor:
             from django.conf import settings as django_settings
-            self._accessor = bg_utils.accessor_from_settings(django_settings)
+            self._accessor = graphite_utils.accessor_from_settings(django_settings)
             self._accessor.connect()
         return self._accessor
 
@@ -150,7 +149,7 @@ class Finder(object):
         if not self._cache:
             # TODO: Allow to use Django's cache.
             from django.conf import settings as django_settings
-            storage_path = bg_utils.storage_path_from_settings(django_settings)
+            storage_path = graphite_utils.storage_path(django_settings)
             self._cache = bg_metadata_cache.DiskCache(self.accessor(), storage_path)
             self._cache.open()
         return self._cache

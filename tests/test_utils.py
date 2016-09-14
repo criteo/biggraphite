@@ -22,30 +22,16 @@ from biggraphite import utils as bg_utils
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
 
-    def test_storage_path_from_settings(self):
-        settings = {}
-        self.assertRaises(bg_utils.ConfigError,
-                          bg_utils.storage_path_from_settings, settings)
-
-        settings["STORAGE_DIR"] = "/"
-        self.assertEquals("/", bg_utils.storage_path_from_settings(settings))
-
     def _check_settings(self, settings):
-        # A non existing non-optional value with no default.
-        self.assertRaises(bg_utils.ConfigError,
-                          bg_utils._get_setting, settings, "BAR")
-
-        # A non existing optional value with a default.
-        value = bg_utils._get_setting(settings, "BAR", optional=True)
+        # A non existing value.
+        value, found = bg_utils.get_setting(settings, "BAR")
         self.assertEquals(value, None)
-
-        # A non existing value with a default.
-        value = bg_utils._get_setting(settings, "BAR", default="FOO")
-        self.assertEquals(value, "FOO")
+        self.assertFalse(found)
 
         # An existing value.
-        value = bg_utils._get_setting(settings, "FOO")
+        value, found = bg_utils.get_setting(settings, "FOO")
         self.assertEquals(value, "BAR")
+        self.assertTrue(found)
 
     def test_carbon_settings(self):
         from carbon import conf as carbon_conf
@@ -64,15 +50,19 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         settings["BG_CASSANDRA_CONTACT_POINTS"] = "localhost"
         settings["BG_CASSANDRA_COMPRESSION"] = True
         settings["BG_CASSANDRA_TIMEOUT"] = 5
+
+        settings = bg_utils.settings_from_confattr(settings)
         accessor = bg_utils.accessor_from_settings(settings)
         self.assertNotEquals(accessor, None)
 
         settings["BG_CASSANDRA_COMPRESSION"] = False
+        settings = bg_utils.settings_from_confattr(settings)
         accessor = bg_utils.accessor_from_settings(settings)
         self.assertNotEquals(accessor, None)
 
     def test_memory_accessor(self):
         settings = {'BG_DRIVER': 'memory'}
+        settings = bg_utils.settings_from_confattr(settings)
         accessor = bg_utils.accessor_from_settings(settings)
         self.assertNotEquals(accessor, None)
 
