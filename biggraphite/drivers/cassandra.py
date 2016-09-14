@@ -38,6 +38,9 @@ from biggraphite.drivers import _utils
 # This is possible because we have less than 50K cells per partition.
 _OFFSET_SHIFT = 16
 
+# Round the row size to 1000 seconds
+_ROW_SIZE_PRECISION_MS = 1000 * 1000
+
 MINUTE = 60
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
@@ -168,13 +171,14 @@ def _row_size_ms(stage):
     Returns:
       An integer, the duration in milliseconds.
     """
-    return min(
+    row_size_ms = min(
         stage.precision_ms * _MAX_PARTITION_SIZE,
         max(
             stage.precision_ms * _EXPECTED_POINTS_PER_READ,
             _MIN_PARTITION_SIZE_MS
         )
     )
+    return bg_accessor.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
 
 class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
