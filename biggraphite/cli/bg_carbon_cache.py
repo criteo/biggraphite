@@ -45,6 +45,13 @@ def main(_executable=sys.argv[0], _sys_path=sys.path):
     # Importing the plugin registers it.
     from biggraphite.plugins import carbon as unused_carbon  # noqa
     try:
+        # The carbon code tries to guess GRAPHITE_ROOT from the filename
+        # given to run_twistd_plugin() to set GRAPHITE_ROOT. This is then
+        # used to setup default paths. Try to make it somewhat compatible
+        # when carbon is installed in its default directory.
+        if os.path.dirname(carbon_util.__file__) == "/opt/graphite/lib/carbon":
+            if not os.environ.has_key("GRAPHITE_ROOT"):
+                os.environ["GRAPHITE_ROOT"] = "/opt/graphite"
         carbon_util.run_twistd_plugin("carbon-cache")
     except carbon_exceptions.CarbonConfigException as exc:
         # This is what carbon cache does, we preserve that behaviour.
