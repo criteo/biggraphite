@@ -90,6 +90,38 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEquals(self.metadata_cache.hit_count, 1)
         self.assertEquals(self.metadata_cache.miss_count, 1)
 
+    def test_repair_shard(self):
+        # Add a normal metric.
+        metric_name = "a.b.test"
+        metric = bg_test_utils.make_metric(metric_name)
+
+        self.metadata_cache.create_metric(metric)
+        self.metadata_cache.repair(shard=0, nshards=2)
+        self.metadata_cache.repair(shard=1, nshards=2)
+        self.metadata_cache.get_metric(metric_name)
+        # Should be only one entry, and it was a hit.
+        self.assertEquals(self.metadata_cache.hit_count, 1)
+        self.assertEquals(self.metadata_cache.miss_count, 0)
+
+        # Add a spurious metric.
+        metric_name = "a.b.fake"
+        metric = bg_test_utils.make_metric(metric_name)
+
+        self.metadata_cache._cache(metric)
+
+        # Will not fix.
+        self.metadata_cache.repair(start_key="b")
+        self.metadata_cache.get_metric(metric_name)
+        self.assertEquals(self.metadata_cache.hit_count, 2)
+
+        # Will fix.
+        self.metadata_cache.repair(start_key="a", shard=0, nshards=2)
+        self.metadata_cache.repair(start_key="a", shard=1, nshards=2)
+        self.metadata_cache.get_metric(metric_name)
+        # repair() will remove it, and the get will produce a miss.
+        self.assertEquals(self.metadata_cache.hit_count, 2)
+        self.assertEquals(self.metadata_cache.miss_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
