@@ -12,6 +12,9 @@ BigGraphite is a storage layer for timeseries data. It integrates with Graphite 
 
 For usage information and how to contribute, please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+# Usage
+
+See [USAGE.md](USAGE.md) and [CONFIGURATION.md](CONFIGURATION.MD).
 
 # Contact
 
