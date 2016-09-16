@@ -33,6 +33,8 @@ from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 
+log = logging.getLogger(__name__)
+
 # The offset is a Cassandra int (4 bytes) and is shifted by two bytes.
 # We want to use the lower two bytes to have multiple writers for the same metric,
 # and use these bytes for multiplexing.
@@ -55,6 +57,7 @@ DEFAULT_COMPRESSION = False
 # TODO: Mesure actual number of metrics for existing queries and estimate a more
 # reasonable limit, also consider other engines.
 DEFAULT_MAX_METRICS_PER_GLOB = 5000
+DEFAULT_TRACE = False
 
 OPTIONS = {
     "keyspace": str,
@@ -63,6 +66,7 @@ OPTIONS = {
     "connections": int,
     "compression": _utils.bool_from_str,
     "max_metrics_per_glob": int,
+    "trace": bool,
 }
 
 
@@ -96,6 +100,11 @@ def add_argparse_arguments(parser):
         "--cassandra_max_metrics_per_glob",
         help="Maximum number of metrics returned for a glob query.",
         default=DEFAULT_MAX_METRICS_PER_GLOB)
+    parser.add_argument(
+        "--cassandra_trace",
+        help="Enable query traces",
+        default=DEFAULT_TRACE,
+        action="store_true")
 
 
 MINUTE = 60
@@ -393,7 +402,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  connections=DEFAULT_CONNECTIONS,
                  timeout=DEFAULT_TIMEOUT,
                  compression=DEFAULT_COMPRESSION,
-                 max_metrics_per_glob=DEFAULT_MAX_METRICS_PER_GLOB):
+                 max_metrics_per_glob=DEFAULT_MAX_METRICS_PER_GLOB,
+                 trace=DEFAULT_TRACE):
         """Record parameters needed to connect.
 
         Args:
@@ -403,7 +413,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
           connections: How many worker threads to use.
           timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
-          max_metrics_per_glob: Maximum number of metrics per glob.
+          max_metrics_per_glob: int, Maximum number of metrics per glob.
+          trace: bool, Enabling query tracing.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -414,6 +425,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.max_metrics_per_glob = max_metrics_per_glob
         self.__connections = connections
         self.__compression = compression
+        self.__trace = trace
         # For some reason this isn't enabled yet for pypy, even if it seems to
         # be working properly.
         # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188
@@ -463,6 +475,50 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         self.is_connected = True
 
+    def _execute(self, *args, **kwargs):
+        """Wrapper for __session.execute_async()."""
+        if self.__trace:
+            kwargs["trace"] = True
+            log.debug(' '.join([str(arg) for arg in args]))
+
+        result = self.__session.execute(*args, **kwargs)
+
+        if self.__trace:
+            trace = result.get_query_trace()
+            for e in trace.events:
+                log.debug("%s: %s" % (e.source_elapsed, str(e)))
+        return result
+
+    def _execute_async(self, *args, **kwargs):
+        """Wrapper for __session.execute_async()."""
+        if self.__trace:
+            kwargs["trace"] = True
+            log.debug(' '.join([str(arg) for arg in args]))
+
+        future = self.__session.execute_async(*args, **kwargs)
+
+        if self.__trace:
+            trace = future.get_query_trace()
+            for e in trace.events:
+                log.debug(e.source_elapsed, e.description)
+        return future
+
+    def _execute_concurrent(self, session, statements_and_parameters, **kwargs):
+        """Wrapper for concurrent.execute_concurrent()."""
+        if not self.__trace:
+            return c_concurrent.execute_concurrent(
+                session, statements_and_parameters, **kwargs)
+        query_results = []
+        for statement, params in statements_and_parameters:
+            try:
+                result = self._execute(statement, params, trace=True)
+                success = True
+            except Exception as e:
+                result = e
+                success = False
+            query_results.append((success, result))
+        return query_results
+
     def make_metric(self, name, metadata):
         """See bg_accessor.Accessor."""
         encoded_name = bg_accessor.encode_metric_name(name)
@@ -496,7 +552,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         #  - batch queries cannot contain IF NOT EXISTS and involve multiple primary keys
         # We can still end up with empty directories, which will need a reaper job to clean them.
         for statement, args in queries:
-            self.__session.execute(statement, args)
+            self._execute(statement, args)
 
     def _create_parent_dirs_queries(self, components):
         queries = []
@@ -523,9 +579,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).drop_all_metrics()
         for keyspace in self.keyspace, self.keyspace_metadata:
             statement_str = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
-            tables = [r[0] for r in self.__session.execute(statement_str, (keyspace, ))]
+            tables = [r[0] for r in self._execute(statement_str, (keyspace, ))]
             for table in tables:
-                self.__session.execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
+                self._execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
 
     def demangle_query_results(self, query_results):
         """Process query results to work with them."""
@@ -541,7 +597,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).fetch_points(
             metric, time_start, time_end, stage)
 
-        logging.debug(
+        log.debug(
             "fetch: [%s, start=%d, end=%d, stage=%s]",
             metric.name, time_start, time_end, stage)
 
@@ -551,7 +607,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         statements_and_args = self._fetch_points_make_selects(
             metric.id, time_start_ms, time_end_ms, stage)
-        query_results = c_concurrent.execute_concurrent(
+        query_results = self._execute_concurrent(
             self.__session,
             statements_and_args,
             results_generator=True,
@@ -592,7 +648,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).has_metric(metric_name)
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
-        result = list(self.__session.execute(
+        result = list(self._execute(
             self.__select_metric_statement, (encoded_metric_name, )))
         if not result:
             return False
@@ -610,7 +666,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
         metric_name = bg_accessor.encode_metric_name(metric_name)
-        result = list(self.__session.execute(
+        result = list(self._execute(
             self.__select_metric_statement, (metric_name, )))
 
         if not result:
@@ -654,7 +710,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "limit": self.max_metrics_per_glob + 1,
         }
         try:
-            metrics_names = [r[0] for r in self.__session.execute(query)]
+            metrics_names = [r[0] for r in self._execute(query)]
         except Exception as e:
             raise RetryableCassandraError(e)
         if len(metrics_names) > self.max_metrics_per_glob:
@@ -668,7 +724,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).insert_points_async(
             metric, datapoints, on_done)
 
-        logging.debug("insert: [%s, %s]", metric.name, datapoints)
+        log.debug("insert: [%s, %s]", metric.name, datapoints)
 
         downsampled = self.__downsampler.feed(metric, datapoints)
         return self.insert_downsampled_points_async(metric, downsampled, on_done)
@@ -693,7 +749,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
                 offset=offset, value=value, count=count,
             )
-            future = self.__session.execute_async(query=statement, parameters=args)
+            future = self._execute_async(query=statement, parameters=args)
             if count_down:
                 future.add_callbacks(
                     count_down.on_cassandra_result,
@@ -710,7 +766,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         partitioner = self.__cluster.metadata.partitioner
         if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
-            logging.warn("Partitioner '%s' not supported for repairs" % partitioner)
+            log.warn("Partitioner '%s' not supported for repairs" % partitioner)
             return
 
         start_token = murmur3.INT64_MIN
@@ -740,18 +796,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             args = (token,)
-            result = self.__session.execute(statement, args)
+            result = self._execute(statement, args)
 
             if len(result.current_rows) == 0:
                 break
             for row in result:
                 parent_dir = row.name.rpartition(".")[0]
                 if parent_dir and not self.glob_directory_names(parent_dir):
-                    logging.warning("Creating missing parent dir '%s'" % parent_dir)
+                    log.warning("Creating missing parent dir '%s'" % parent_dir)
                     components = self._components_from_name(row.name)
                     queries = self._create_parent_dirs_queries(components)
                     for statement, args in queries:
-                        self.__session.execute(statement, args)
+                        self._execute(statement, args)
                 token = row.system_token_name
 
     def shutdown(self):
@@ -778,7 +834,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         for cql in _METADATA_CREATION_CQL:
-            self.__session.execute(cql % {"keyspace": self.keyspace_metadata})
+            self._execute(cql % {"keyspace": self.keyspace_metadata})
 
 
 def build(*args, **kwargs):
