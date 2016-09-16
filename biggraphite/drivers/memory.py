@@ -19,7 +19,6 @@ from __future__ import print_function
 import collections
 import fnmatch
 import re
-import uuid
 
 import sortedcontainers
 
@@ -32,8 +31,6 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
     Row = collections.namedtuple(
         'Row', ['time_start_ms', 'offset', 'value', 'count'])
-
-    _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
     def __init__(self):
         """Create a new MemoryAccessor."""
@@ -90,11 +87,6 @@ class _MemoryAccessor(bg_accessor.Accessor):
         self._metric_to_points.clear()
         self._name_to_metric.clear()
         self._directory_names.clear()
-
-    def make_metric(self, name, metadata):
-        """See bg_accessor.Accessor."""
-        id = uuid.uuid5(self._UUID_NAMESPACE, name)
-        return bg_accessor.Metric(name, id, metadata)
 
     def create_metric(self, metric):
         """See the real Accessor for a description."""

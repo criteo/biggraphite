@@ -26,6 +26,7 @@ import json
 import math
 import re
 import threading
+import uuid
 
 
 class Error(Exception):
@@ -43,6 +44,8 @@ class InvalidArgumentError(Error):
 _UTF8_CODEC = codecs.getencoder('utf8')
 
 _NAN = float("nan")
+
+_UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
 
 def _wait_async_call(async_function, *args, **kwargs):
@@ -81,6 +84,19 @@ def encode_metric_name(name):
         return name
     # Next line may raise UnicodeError
     return _UTF8_CODEC(name)[0]
+
+
+def make_metric(name, metadata):
+        """Create a Metric object from its definition as name and metadata.
+
+        Args:
+          name: metric name.
+          metadadata: metric metadata.
+
+        Returns: a Metric object with a valid id.
+        """
+        id = uuid.uuid5(_UUID_NAMESPACE, name)
+        return Metric(name, id, metadata)
 
 
 def round_down(rounded, divider):
@@ -641,17 +657,6 @@ class Accessor(object):
     def get_metric(self, metric_name):
         """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
-
-    @abc.abstractmethod
-    def make_metric(self, name, metadata):
-        """Create a Metric object from its definition as name and metadata.
-
-        Args:
-          name: metric name.
-          metadadata: metric metadata.
-
-        Returns: a Metric object with a valid id.
-        """
 
     @abc.abstractmethod
     def glob_metric_names(self, glob):

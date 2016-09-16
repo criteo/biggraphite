@@ -321,8 +321,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     _DEFAULT_CASSANDRA_PORT = 9042
 
-    _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
-
     def __init__(self, keyspace='biggraphite', contact_points=[], port=None,
                  concurrency=4, default_timeout=None, compression=False):
         """Record parameters needed to connect.
@@ -391,12 +389,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
 
         self.is_connected = True
-
-    def make_metric(self, name, metadata):
-        """See bg_accessor.Accessor."""
-        encoded_name = bg_accessor.encode_metric_name(name)
-        id = uuid.uuid5(self._UUID_NAMESPACE, encoded_name)
-        return bg_accessor.Metric(name, id, metadata)
 
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""

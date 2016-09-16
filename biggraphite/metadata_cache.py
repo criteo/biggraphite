@@ -130,7 +130,8 @@ class DiskCache(object):
 
     def make_metric(self, name, metadata):
         """Create a metric object from a name and metadata."""
-        return self.__accessor.make_metric(name, metadata)
+        encoded_name = bg_accessor.encode_metric_name(name)
+        return bg_accessor.make_metric(encoded_name, metadata)
 
     def create_metric(self, metric):
         """Create a metric definition from a Metric."""
