@@ -46,7 +46,7 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         self._check_settings(settings)
 
     def test_cassandra_accessor(self):
-        settings = {'BG_DRIVER': 'cassandra'}
+        settings = {"BG_DRIVER": "cassandra"}
         settings["BG_CASSANDRA_CONTACT_POINTS"] = "localhost"
         settings["BG_CASSANDRA_COMPRESSION"] = True
         settings["BG_CASSANDRA_TIMEOUT"] = 5
@@ -61,10 +61,13 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         self.assertNotEquals(accessor, None)
 
     def test_memory_accessor(self):
-        settings = {'BG_DRIVER': 'memory'}
+        settings = {"BG_DRIVER": "memory"}
         settings = bg_utils.settings_from_confattr(settings)
         accessor = bg_utils.accessor_from_settings(settings)
         self.assertNotEquals(accessor, None)
+
+    def test_set_log_level(self):
+        bg_utils.set_log_level({"log_level": "INFO"})
 
 
 if __name__ == "__main__":

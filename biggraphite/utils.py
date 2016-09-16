@@ -14,6 +14,8 @@
 # limitations under the License.
 """Utility module."""
 
+import logging
+
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import memory as bg_memory
 
@@ -24,8 +26,10 @@ DRIVERS = frozenset([
 ])
 
 DEFAULT_DRIVER = "cassandra"
+DEFAULT_LOG_LEVEL = "WARNING"
 OPTIONS = {
-    "driver": str
+    "driver": str,
+    "loglevel": str,
 }
 
 
@@ -73,12 +77,24 @@ def add_argparse_arguments(parser):
     Args:
       parser: argparse.ArgumentParser()
     """
-    parser.add_argument("--driver",
-                        help="BigGraphite driver ('cassandra' or 'memory')",
-                        default=DEFAULT_DRIVER)
-    parser.add_argument("--storage_path", metavar="PATH",
-                        help="Storage path (cache, etc..)")
+    parser.add_argument(
+        "--driver",
+        help="BigGraphite driver ('cassandra' or 'memory')",
+        default=DEFAULT_DRIVER)
+    parser.add_argument(
+        "--storage_path", metavar="PATH",
+        help="Storage path (cache, etc..)")
+    parser.add_argument(
+        "--loglevel", metavar="LEVEL",
+        help="Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+        default=DEFAULT_LOG_LEVEL)
     bg_cassandra.add_argparse_arguments(parser)
+
+
+def set_log_level(settings):
+    """Set logs level according to settings."""
+    logger = logging.getLogger()
+    logger.setLevel(settings.get('loglevel', DEFAULT_LOG_LEVEL))
 
 
 def get_setting(settings, name):
@@ -122,7 +138,8 @@ def settings_from_confattr(conf, prefix="bg_"):
 
     options = dict(OPTIONS)
     for name, driver in DRIVERS:
-        options.update({('%s_' % name) + k: v for k, v in driver.OPTIONS.items()})
+        options.update(
+            {('%s_' % name) + k: v for k, v in driver.OPTIONS.items()})
 
     for option, validator in options.items():
         option_u = (prefix + option).upper()
