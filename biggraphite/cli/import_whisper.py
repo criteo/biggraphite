@@ -29,8 +29,8 @@ import whisper
 from biggraphite import accessor as bg_accessor
 from biggraphite import utils as bg_utils
 
-_DEV_NULL = open(os.devnull, "w")
 
+_DEV_NULL = open(os.devnull, "w")
 
 _POINT_STRUCT = struct.Struct(whisper.pointFormat)
 _WORKER = None
@@ -57,9 +57,6 @@ def metric_name_from_wsp(root_dir, wsp_path):
 class _Worker(object):
 
     def __init__(self, opts):
-        # TODO(c.chary): Create accessor_from_argv()
-        self._accessor = bg_utils.accessor_from_settings(
-            bg_utils.settings_from_args(opts))
         self._opts = opts
 
     @staticmethod
@@ -123,19 +120,15 @@ class _Worker(object):
         return res
 
     def import_whisper(self, path):
-        if not self._accessor.is_connected:
-            self._accessor.connect()
-
         name = metric_name_from_wsp(self._opts.root_directory, path)
         metadata = self._read_metadata(name, path)
-        metric = self._accessor.make_metric(name, metadata)
-        self._accessor.create_metric(metric)
+        metric = bg_accessor.make_metric(name, metadata)
 
         if self._opts.no_data:
             return 0
 
         points = self._read_points(path)
-        self._accessor.insert_downsampled_points(metric, points)
+        #self._accessor.insert_downsampled_points(metric, points)
         return len(points)
 
 

@@ -26,7 +26,6 @@ import tempfile
 import shutil
 import unittest
 import logging
-import uuid
 
 from cassandra import cluster as c_cluster
 import mock
@@ -113,13 +112,10 @@ def prepare_graphite_imports():
             if path not in sys.path:
                 sys.path.insert(0, path)
 
-_UUID_NAMESPACE = uuid.UUID('{00000000-0000-0000-0000-000000000000}')
-
 
 def make_metric(name, metadata=None, **kwargs):
     """Create a bg_accessor.Metric with specified metadata."""
     encoded_name = bg_accessor.encode_metric_name(name)
-    id = uuid.uuid5(_UUID_NAMESPACE, encoded_name)
     retention = kwargs.get("retention")
     if isinstance(retention, basestring):
         kwargs["retention"] = bg_accessor.Retention.from_string(retention)
@@ -128,7 +124,7 @@ def make_metric(name, metadata=None, **kwargs):
         assert not kwargs
     else:
         metadata = bg_accessor.MetricMetadata(**kwargs)
-    return bg_accessor.Metric(name, id, metadata)
+    return bg_accessor.make_metric(encoded_name, metadata)
 
 
 class TestCaseWithTempDir(unittest.TestCase):
