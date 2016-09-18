@@ -94,7 +94,7 @@ def add_argparse_arguments(parser):
 def set_log_level(settings):
     """Set logs level according to settings."""
     logger = logging.getLogger()
-    logger.setLevel(settings.get('loglevel', DEFAULT_LOG_LEVEL))
+    logger.setLevel(settings.get("loglevel", DEFAULT_LOG_LEVEL))
 
 
 def get_setting(settings, name):

@@ -52,6 +52,7 @@ DEFAULT_COMPRESSION = False
 # reasonable limit, also consider other engines.
 DEFAULT_MAX_METRICS_PER_GLOB = 5000
 DEFAULT_TRACE = False
+DEFAULT_BULKIMPORT = False
 
 OPTIONS = {
     "keyspace": str,
@@ -61,6 +62,7 @@ OPTIONS = {
     "compression": _utils.bool_from_str,
     "max_metrics_per_glob": int,
     "trace": bool,
+    "bulkimport": bool,
 }
 
 
@@ -99,6 +101,10 @@ def add_argparse_arguments(parser):
         help="Enable query traces",
         default=DEFAULT_TRACE,
         action="store_true")
+    parser.add_argument(
+        "--cassandra_bulkimport", action="store_true",
+        help="Generate files needed for bulkimport.")
+
 
 
 MINUTE = 60
@@ -267,15 +273,39 @@ class _LazyPreparedStatements(object):
 
     As per design (CASSANDRA_DESIGN.md) we have one table per retention stage.
     This creates tables and corresponding prepared statements once they are needed.
+
+    When bulkimport is True this class will instead write the files necessary to
+    bulkimport data.
     """
 
-    def __init__(self, session, keyspace):
+    def __init__(self, session, keyspace, bulkimport=False):
         self._keyspace = keyspace
         self._session = session
+        self._bulkimport = bulkimport
         self.__stage_to_insert = {}
         self.__stage_to_select = {}
+        self.__data_files = {}
 
-    def _create_datapoints_table(self, stage):
+    def _bulkimport_write_schema(self, stage, statement_str):
+        filename = stage.as_string + ".cql"
+        log.info("Writing schema for '%s' in '%s'" % (stage.as_string, filename))
+        open(filename, "w").write(statement_str)
+
+    def _bulkimport_write_datapoint(self, stage, args):
+        stage_str = stage.as_string
+        if stage_str not in self.__data_files:
+            statement_str = self._create_datapoints_table_stmt(stage)
+            self._bulkimport_write_schema(stage, statement_str)
+
+            filename = stage.as_string + ".csv"
+            log.info("Writing data for '%s' in '%s'" % (stage.as_string, filename))
+            fp = open(filename, "w")
+            self.__data_files[stage_str] = fp
+        else:
+            fp = self.__data_files[stage_str]
+        fp.write(",".join([str(a) for a in args]) + "\n")
+
+    def _create_datapoints_table_stmt(self, stage):
         # Time after which data expire.
         time_to_live = stage.duration + _OUT_OF_ORDER_S
 
@@ -334,7 +364,9 @@ class _LazyPreparedStatements(object):
             "compaction_options": compaction_options,
         }
 
-        statement_str = _DATAPOINTS_CREATION_CQL_TEMPLATE % kwargs
+        return _DATAPOINTS_CREATION_CQL_TEMPLATE % kwargs
+
+    def _create_datapoints_table(self, stage):
         # The statement is idempotent
         self._session.execute(statement_str)
 
@@ -345,6 +377,11 @@ class _LazyPreparedStatements(object):
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
         args = (metric_id, time_start_ms, offset, value, count)
+
+        if self._bulkimport:
+            self._bulkimport_write_datapoint(stage, args)
+            return None, args
+
         if statement:
             return statement, args
 
@@ -394,7 +431,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  timeout=DEFAULT_TIMEOUT,
                  compression=DEFAULT_COMPRESSION,
                  max_metrics_per_glob=DEFAULT_MAX_METRICS_PER_GLOB,
-                 trace=DEFAULT_TRACE):
+                 trace=DEFAULT_TRACE,
+                 bulkimport=DEFAULT_BULKIMPORT):
         """Record parameters needed to connect.
 
         Args:
@@ -406,6 +444,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
           compression: One of False, True, "lz4", "snappy"
           max_metrics_per_glob: int, Maximum number of metrics per glob.
           trace: bool, Enabling query tracing.
+          bulkimport: bool, Configure the accessor to generate files necessary for
+            bulk import.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -417,6 +457,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__connections = connections
         self.__compression = compression
         self.__trace = trace
+        self.__bulkimport = bulkimport
         # For some reason this isn't enabled yet for pypy, even if it seems to
         # be working properly.
         # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188
@@ -447,7 +488,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not skip_schema_upgrade:
             self._upgrade_schema()
 
-        self.__lazy_statements = _LazyPreparedStatements(self.__session, self.keyspace)
+        self.__lazy_statements = _LazyPreparedStatements(
+            self.__session, self.keyspace, self.__bulkimport)
 
         # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
@@ -468,6 +510,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _execute(self, *args, **kwargs):
         """Wrapper for __session.execute_async()."""
+        if self.__bulkimport:
+            return []
+
         if self.__trace:
             kwargs["trace"] = True
             log.debug(' '.join([str(arg) for arg in args]))
@@ -482,6 +527,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _execute_async(self, *args, **kwargs):
         """Wrapper for __session.execute_async()."""
+        if self.__bulkimport:
+            class _FakeFuture(object):
+                def add_callbacks(self, on_result, on_failure):
+                    on_result(None)
+            return _FakeFuture()
+
         if self.__trace:
             kwargs["trace"] = True
             log.debug(' '.join([str(arg) for arg in args]))
@@ -496,6 +547,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _execute_concurrent(self, session, statements_and_parameters, **kwargs):
         """Wrapper for concurrent.execute_concurrent()."""
+        if self.__bulkimport:
+            return []
+
         if not self.__trace:
             return c_concurrent.execute_concurrent(
                 session, statements_and_parameters, **kwargs)
@@ -519,6 +573,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).create_metric(metric)
+
+        if self.__bulkimport:
+            return
+
         components = self._components_from_name(metric.name)
         queries = []
 

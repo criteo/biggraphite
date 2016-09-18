@@ -22,6 +22,7 @@ from multiprocessing import dummy as multiprocessing_dummy
 import os
 import struct
 import sys
+import logging
 
 import progressbar
 import whisper
@@ -34,6 +35,9 @@ _DEV_NULL = open(os.devnull, "w")
 
 _POINT_STRUCT = struct.Struct(whisper.pointFormat)
 _WORKER = None
+
+
+log = logging.getLogger(__name__)
 
 
 def metric_name_from_wsp(root_dir, wsp_path):
@@ -57,9 +61,9 @@ def metric_name_from_wsp(root_dir, wsp_path):
 class _Worker(object):
 
     def __init__(self, opts):
-        # TODO(c.chary): Create accessor_from_argv()
-        self._accessor = bg_utils.accessor_from_settings(
-            bg_utils.settings_from_args(opts))
+        settings = bg_utils.settings_from_args(opts)
+        bg_utils.set_log_level(settings)
+        self._accessor = bg_utils.accessor_from_settings(settings)
         self._opts = opts
 
     @staticmethod
@@ -95,7 +99,7 @@ class _Worker(object):
         for archive in archives:
             offset = archive["offset"]
             step = archive["secondsPerPoint"]
-            archive_starts_at = 0
+            archive_starts_at = float("inf")
             expected_next_timestamp = 0
             stage = bg_accessor.Stage(
                 precision=archive["secondsPerPoint"], points=archive["points"])
@@ -114,6 +118,7 @@ class _Worker(object):
                 else:
                     expected_next_timestamp = timestamp + step
                 archive_starts_at = min(timestamp, archive_starts_at)
+
                 if timestamp < prev_archive_starts_at:
                     res.append((timestamp, value, 1, stage))
                 offset += whisper.pointSize
@@ -146,8 +151,11 @@ def _setup_process(opts):
 
 def _import_whisper(*args, **kwargs):
     assert _WORKER is not None, "_setup_process was never called"
-    return _WORKER.import_whisper(*args, **kwargs)
-
+    try:
+        return _WORKER.import_whisper(*args, **kwargs)
+    except Exception as e:
+        log.exception(e)
+        return 0
 
 def _parse_opts(args):
     parser = argparse.ArgumentParser(
