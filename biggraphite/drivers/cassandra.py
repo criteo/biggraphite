@@ -35,12 +35,6 @@ from biggraphite.drivers import _utils
 
 log = logging.getLogger(__name__)
 
-# The offset is a Cassandra int (4 bytes) and is shifted by two bytes.
-# We want to use the lower two bytes to have multiple writers for the same metric,
-# and use these bytes for multiplexing.
-# This is possible because we have less than 50K cells per partition.
-_OFFSET_SHIFT = 16
-
 # Round the row size to 1000 seconds
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
 
@@ -206,7 +200,7 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
     "  metric uuid,"           # Metric UUID.
     "  time_start_ms bigint,"  # Lower bound for this row.
-    "  offset int,"            # time_start_ms + (offset >> _OFFSET_SHIFT) * precision = timestamp
+    "  offset smallint,"       # time_start_ms + offset * precision = timestamp
     "  value double,"          # Value for the point.
     "  count int,"             # If value is sum, divide by count to get the avg.
     "  PRIMARY KEY ((metric, time_start_ms), offset)"
@@ -350,7 +344,6 @@ class _LazyPreparedStatements(object):
 
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
-        offset <<= _OFFSET_SHIFT
         args = (metric_id, time_start_ms, offset, value, count)
         if statement:
             return statement, args
@@ -368,8 +361,6 @@ class _LazyPreparedStatements(object):
 
     def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
         statement = self.__stage_to_select.get(stage)
-        row_min_offset <<= _OFFSET_SHIFT
-        row_max_offset <<= _OFFSET_SHIFT
         args = (metric_id, row_start_ms, row_min_offset, row_max_offset)
         if statement:
             return statement, args
@@ -583,15 +574,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for table in tables:
                 self._execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
 
-    def demangle_query_results(self, query_results):
-        """Process query results to work with them."""
-        for success, result in query_results:
-            if success:
-                result = [
-                    row._replace(offset=row.offset >> _OFFSET_SHIFT)
-                    for row in result]
-            yield success, result
-
     def fetch_points(self, metric, time_start, time_end, stage):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).fetch_points(
@@ -612,7 +594,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             statements_and_args,
             results_generator=True,
         )
-        query_results = self.demangle_query_results(query_results)
         return bg_accessor.PointGrouper(
             metric, time_start_ms, time_end_ms, stage, query_results)
 
