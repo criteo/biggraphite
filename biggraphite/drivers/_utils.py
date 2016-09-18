@@ -63,10 +63,40 @@ class CountDown(object):
             elif not self._count:
                 self._on_zero(None)
 
-    def on_cassandra_result(self, unused_result):
+    def on_result(self, unused_result):
         """Call decrement(), suitable for Cassandra's execute_async."""
         self.decrement()
 
-    def on_cassandra_failure(self, exc):
+    def on_failure(self, exc):
         """Call cancel(), suitable for Cassandra's execute_async."""
         self.cancel(Error(exc))
+
+
+def list_from_str(value):
+    """Convert a comma separated string into a list.
+
+    Args:
+      value: str or list or set.
+
+    Returns:
+      list a list of values.
+    """
+    if type(value) is str:
+        value = [s.strip() for s in value.split(",")]
+    elif type(value) in (list, set):
+        value = list(value)
+    else:
+        raise Error("Unkown type for '%s'" % (value))
+    return value
+
+
+def bool_from_str(value):
+    """Convert a user-specified string to a bool."""
+    if value == 'True':
+        return value
+    elif value == 'False':
+        return value
+    elif type(value) is bool:
+        return value
+
+    return str(value)

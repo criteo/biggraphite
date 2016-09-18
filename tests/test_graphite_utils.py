@@ -23,6 +23,14 @@ from biggraphite import graphite_utils as bg_gu
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
 
+    def test_storage_path_from_settings(self):
+        settings = {}
+        self.assertRaises(bg_gu.ConfigError,
+                          bg_gu.storage_path, settings)
+
+        settings["STORAGE_DIR"] = "/"
+        self.assertEquals("/", bg_gu.storage_path(settings))
+
     def test_is_graphite_glob(self):
         self.assertTrue(bg_gu._is_graphite_glob("a*"))
         self.assertTrue(bg_gu._is_graphite_glob("a.b*"))

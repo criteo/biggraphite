@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright 2016 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,11 +12,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import print_function
 
-import logging
+import unittest
 
-log = logging.getLogger("biggraphite")
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
-log.addHandler(handler)
+from biggraphite.cli import bgutil
+from biggraphite import test_utils as bg_test_utils
+
+
+class TestBgutil(bg_test_utils.TestCaseWithFakeAccessor):
+
+    def test_run(self):
+        bgutil.main(['--driver=memory', 'read', 'foo'])
+
+
+if __name__ == "__main__":
+    unittest.main()

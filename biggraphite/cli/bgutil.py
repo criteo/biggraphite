@@ -54,8 +54,9 @@ def main(args=None):
         args = sys.argv[1:]
 
     opts = _parse_opts(args)
-    accessor = bg_utils.accessor_from_settings(
-        bg_utils.settings_from_args(opts))
+    settings = bg_utils.settings_from_args(opts)
+    bg_utils.set_log_level(settings)
+    accessor = bg_utils.accessor_from_settings(settings)
     opts.func(accessor, opts)
 
 if __name__ == "__main__":

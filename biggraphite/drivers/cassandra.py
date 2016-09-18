@@ -33,14 +33,78 @@ from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 
-# The offset is a Cassandra int (4 bytes) and is shifted by two bytes.
-# We want to use the lower two bytes to have multiple writers for the same metric,
-# and use these bytes for multiplexing.
-# This is possible because we have less than 50K cells per partition.
-_OFFSET_SHIFT = 16
+log = logging.getLogger(__name__)
 
 # Round the row size to 1000 seconds
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
+
+DEFAULT_KEYSPACE = "biggraphite"
+DEFAULT_CONTACT_POINTS = "127.0.0.1"
+DEFAULT_PORT = 9042
+DEFAULT_TIMEOUT = 10.0
+DEFAULT_CONNECTIONS = 4
+# Disable compression per default as this is clearly useless for writes and
+# reads do not generate that much traffic.
+DEFAULT_COMPRESSION = False
+# Current value is based on Cassandra page settings, so that everything fits in a single
+# reply with default settings.
+# TODO: Mesure actual number of metrics for existing queries and estimate a more
+# reasonable limit, also consider other engines.
+DEFAULT_MAX_METRICS_PER_GLOB = 5000
+DEFAULT_TRACE = False
+DEFAULT_BULKIMPORT = False
+
+OPTIONS = {
+    "keyspace": str,
+    "contact_points": _utils.list_from_str,
+    "timeout": float,
+    "connections": int,
+    "compression": _utils.bool_from_str,
+    "max_metrics_per_glob": int,
+    "trace": bool,
+    "bulkimport": bool,
+}
+
+
+def add_argparse_arguments(parser):
+    """Add Cassandra arguments to an argparse parser."""
+    parser.add_argument(
+        "--cassandra_keyspace", metavar="NAME",
+        help="Cassandra keyspace.",
+        default=DEFAULT_KEYSPACE)
+    parser.add_argument(
+        "--cassandra_contact_points", metavar="HOST", nargs="+",
+        help="Hosts used for discovery.",
+        default=DEFAULT_CONTACT_POINTS)
+    parser.add_argument(
+        "--cassandra_port", metavar="PORT", type=int,
+        help="The native port to connect to.",
+        default=DEFAULT_PORT)
+    parser.add_argument(
+        "--cassandra_connections", metavar="N", type=int,
+        help="Number of connections per Cassandra host per process.",
+        default=DEFAULT_CONNECTIONS)
+    parser.add_argument(
+        "--cassandra_timeout", metavar="TIMEOUT", type=int,
+        help="Cassandra query timeout in seconds.",
+        default=DEFAULT_TIMEOUT)
+    parser.add_argument(
+        "--cassandra_compression", metavar="COMPRESSION", type=str,
+        help="Cassandra network compression.",
+        default=DEFAULT_COMPRESSION)
+    parser.add_argument(
+        "--cassandra_max_metrics_per_glob",
+        help="Maximum number of metrics returned for a glob query.",
+        default=DEFAULT_MAX_METRICS_PER_GLOB)
+    parser.add_argument(
+        "--cassandra_trace",
+        help="Enable query traces",
+        default=DEFAULT_TRACE,
+        action="store_true")
+    parser.add_argument(
+        "--cassandra_bulkimport", action="store_true",
+        help="Generate files needed for bulkimport.")
+
 
 MINUTE = 60
 HOUR = 60 * MINUTE
@@ -64,7 +128,7 @@ class NotConnectedError(CassandraError):
 
 
 class TooManyMetrics(CassandraError):
-    """A name glob yielded more than Accessor.MAX_METRIC_PER_GLOB metrics."""
+    """A name glob yielded more than MAX_METRIC_PER_GLOB metrics."""
 
 
 class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
@@ -73,6 +137,10 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
 
 class InvalidGlobError(InvalidArgumentError):
     """The provided glob is invalid."""
+
+# TODO(c.chary): convert some of these to options, but make sure
+# they are stored in the database an loaded automatically from
+# here.
 
 # HEURISTIC PARAMETERS
 # ====================
@@ -137,7 +205,7 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
     "  metric uuid,"           # Metric UUID.
     "  time_start_ms bigint,"  # Lower bound for this row.
-    "  offset int,"            # time_start_ms + (offset >> _OFFSET_SHIFT) * precision = timestamp
+    "  offset smallint,"       # time_start_ms + offset * precision = timestamp
     "  value double,"          # Value for the point.
     "  count int,"             # If value is sum, divide by count to get the avg.
     "  PRIMARY KEY ((metric, time_start_ms), offset)"
@@ -189,20 +257,54 @@ class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
     max_in_flight = 300
 
 
+class _CountDown(_utils.CountDown):
+    """Cassandra specific version of CountDown."""
+
+    def on_cassandra_result(self, result):
+        self.on_result(result)
+
+    def on_cassandra_failure(self, exc):
+        self.on_failure(exc)
+
+
 class _LazyPreparedStatements(object):
     """On demand factory of prepared statements and tables.
 
     As per design (CASSANDRA_DESIGN.md) we have one table per retention stage.
     This creates tables and corresponding prepared statements once they are needed.
+
+    When bulkimport is True this class will instead write the files necessary to
+    bulkimport data.
     """
 
-    def __init__(self, session, keyspace):
+    def __init__(self, session, keyspace, bulkimport=False):
         self._keyspace = keyspace
         self._session = session
+        self._bulkimport = bulkimport
         self.__stage_to_insert = {}
         self.__stage_to_select = {}
+        self.__data_files = {}
 
-    def _create_datapoints_table(self, stage):
+    def _bulkimport_write_schema(self, stage, statement_str):
+        filename = stage.as_string + ".cql"
+        log.info("Writing schema for '%s' in '%s'" % (stage.as_string, filename))
+        open(filename, "w").write(statement_str)
+
+    def _bulkimport_write_datapoint(self, stage, args):
+        stage_str = stage.as_string
+        if stage_str not in self.__data_files:
+            statement_str = self._create_datapoints_table_stmt(stage)
+            self._bulkimport_write_schema(stage, statement_str)
+
+            filename = stage.as_string + ".csv"
+            log.info("Writing data for '%s' in '%s'" % (stage.as_string, filename))
+            fp = open(filename, "w")
+            self.__data_files[stage_str] = fp
+        else:
+            fp = self.__data_files[stage_str]
+        fp.write(",".join([str(a) for a in args]) + "\n")
+
+    def _create_datapoints_table_stmt(self, stage):
         # Time after which data expire.
         time_to_live = stage.duration + _OUT_OF_ORDER_S
 
@@ -261,17 +363,25 @@ class _LazyPreparedStatements(object):
             "compaction_options": compaction_options,
         }
 
-        statement_str = _DATAPOINTS_CREATION_CQL_TEMPLATE % kwargs
+        return _DATAPOINTS_CREATION_CQL_TEMPLATE % kwargs
+
+    def _create_datapoints_table(self, stage):
         # The statement is idempotent
+        statement_str = self._create_datapoints_table_stmt(stage)
         self._session.execute(statement_str)
 
     def _get_table_name(self, stage):
-        return "\"{}\".\"datapoints_{}p_{}s\"".format(self._keyspace, stage.points, stage.precision)
+        return "\"{}\".\"datapoints_{}p_{}s\"".format(
+            self._keyspace, stage.points, stage.precision)
 
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
-        offset <<= _OFFSET_SHIFT
         args = (metric_id, time_start_ms, offset, value, count)
+
+        if self._bulkimport:
+            self._bulkimport_write_datapoint(stage, args)
+            return None, args
+
         if statement:
             return statement, args
 
@@ -288,8 +398,6 @@ class _LazyPreparedStatements(object):
 
     def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
         statement = self.__stage_to_select.get(stage)
-        row_min_offset <<= _OFFSET_SHIFT
-        row_max_offset <<= _OFFSET_SHIFT
         args = (metric_id, row_start_ms, row_min_offset, row_max_offset)
         if statement:
             return statement, args
@@ -313,36 +421,43 @@ class _CassandraAccessor(bg_accessor.Accessor):
     Please refer to bg_accessor.Accessor.
     """
 
-    # Current value is based on page settings, so that everything fits in a single Cassandra
-    # reply with default settings.
-    # TODO: Mesure actual number of metrics for existing queries and estimate a more
-    # reasonable limit.
-    MAX_METRIC_PER_GLOB = 5000
-
-    _DEFAULT_CASSANDRA_PORT = 9042
-
     _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
-    def __init__(self, keyspace='biggraphite', contact_points=[], port=None,
-                 concurrency=4, default_timeout=None, compression=False):
+    def __init__(self,
+                 keyspace='biggraphite',
+                 contact_points=DEFAULT_CONTACT_POINTS,
+                 port=DEFAULT_PORT,
+                 connections=DEFAULT_CONNECTIONS,
+                 timeout=DEFAULT_TIMEOUT,
+                 compression=DEFAULT_COMPRESSION,
+                 max_metrics_per_glob=DEFAULT_MAX_METRICS_PER_GLOB,
+                 trace=DEFAULT_TRACE,
+                 bulkimport=DEFAULT_BULKIMPORT):
         """Record parameters needed to connect.
 
         Args:
           keyspace: Base names of Cassandra keyspaces dedicated to BigGraphite.
           contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
           port: The port to connect to, as an int.
-          concurrency: How many worker threads to use.
-          default_timeout: Default timeout for operations in seconds.
+          connections: How many worker threads to use.
+          timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
+          max_metrics_per_glob: int, Maximum number of metrics per glob.
+          trace: bool, Enabling query tracing.
+          bulkimport: bool, Configure the accessor to generate files necessary for
+            bulk import.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
         self.keyspace = keyspace
         self.keyspace_metadata = keyspace + "_metadata"
         self.contact_points = contact_points
-        self.port = port or self._DEFAULT_CASSANDRA_PORT
-        self.__concurrency = concurrency
+        self.port = port
+        self.max_metrics_per_glob = max_metrics_per_glob
+        self.__connections = connections
         self.__compression = compression
+        self.__trace = trace
+        self.__bulkimport = bulkimport
         # For some reason this isn't enabled yet for pypy, even if it seems to
         # be working properly.
         # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188
@@ -351,7 +466,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__downsampler = _downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
-        self.__default_timeout = default_timeout
+        self.__timeout = timeout
         self.__insert_metrics_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
@@ -361,19 +476,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).connect(skip_schema_upgrade=skip_schema_upgrade)
         self.__cluster = c_cluster.Cluster(
             self.contact_points, self.port,
-            executor_threads=self.__concurrency,
+            executor_threads=self.__connections,
             compression=self.__compression,
             load_balancing_policy=self.__load_balancing_policy,
         )
         self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
         self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU
         self.__session = self.__cluster.connect()
-        if self.__default_timeout:
-            self.__session.default_timeout = self.__default_timeout
+        if self.__timeout:
+            self.__session.default_timeout = self.__timeout
         if not skip_schema_upgrade:
             self._upgrade_schema()
 
-        self.__lazy_statements = _LazyPreparedStatements(self.__session, self.keyspace)
+        self.__lazy_statements = _LazyPreparedStatements(
+            self.__session, self.keyspace, self.__bulkimport)
 
         # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
@@ -392,6 +508,62 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         self.is_connected = True
 
+    def _execute(self, *args, **kwargs):
+        """Wrapper for __session.execute_async()."""
+        if self.__bulkimport:
+            return []
+
+        if self.__trace:
+            kwargs["trace"] = True
+            log.debug(' '.join([str(arg) for arg in args]))
+
+        result = self.__session.execute(*args, **kwargs)
+
+        if self.__trace:
+            trace = result.get_query_trace()
+            for e in trace.events:
+                log.debug("%s: %s" % (e.source_elapsed, str(e)))
+        return result
+
+    def _execute_async(self, *args, **kwargs):
+        """Wrapper for __session.execute_async()."""
+        if self.__bulkimport:
+            class _FakeFuture(object):
+                def add_callbacks(self, on_result, on_failure):
+                    on_result(None)
+            return _FakeFuture()
+
+        if self.__trace:
+            kwargs["trace"] = True
+            log.debug(' '.join([str(arg) for arg in args]))
+
+        future = self.__session.execute_async(*args, **kwargs)
+
+        if self.__trace:
+            trace = future.get_query_trace()
+            for e in trace.events:
+                log.debug(e.source_elapsed, e.description)
+        return future
+
+    def _execute_concurrent(self, session, statements_and_parameters, **kwargs):
+        """Wrapper for concurrent.execute_concurrent()."""
+        if self.__bulkimport:
+            return []
+
+        if not self.__trace:
+            return c_concurrent.execute_concurrent(
+                session, statements_and_parameters, **kwargs)
+        query_results = []
+        for statement, params in statements_and_parameters:
+            try:
+                result = self._execute(statement, params, trace=True)
+                success = True
+            except Exception as e:
+                result = e
+                success = False
+            query_results.append((success, result))
+        return query_results
+
     def make_metric(self, name, metadata):
         """See bg_accessor.Accessor."""
         encoded_name = bg_accessor.encode_metric_name(name)
@@ -401,6 +573,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).create_metric(metric)
+
+        if self.__bulkimport:
+            return
+
         components = self._components_from_name(metric.name)
         queries = []
 
@@ -425,7 +601,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         #  - batch queries cannot contain IF NOT EXISTS and involve multiple primary keys
         # We can still end up with empty directories, which will need a reaper job to clean them.
         for statement, args in queries:
-            self.__session.execute(statement, args)
+            self._execute(statement, args)
 
     def _create_parent_dirs_queries(self, components):
         queries = []
@@ -452,25 +628,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).drop_all_metrics()
         for keyspace in self.keyspace, self.keyspace_metadata:
             statement_str = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
-            tables = [r[0] for r in self.__session.execute(statement_str, (keyspace, ))]
+            tables = [r[0] for r in self._execute(statement_str, (keyspace, ))]
             for table in tables:
-                self.__session.execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
-
-    def demangle_query_results(self, query_results):
-        """Process query results to work with them."""
-        for success, result in query_results:
-            if success:
-                result = [
-                    row._replace(offset=row.offset >> _OFFSET_SHIFT)
-                    for row in result]
-            yield success, result
+                self._execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
 
     def fetch_points(self, metric, time_start, time_end, stage):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).fetch_points(
             metric, time_start, time_end, stage)
 
-        logging.debug(
+        log.debug(
             "fetch: [%s, start=%d, end=%d, stage=%s]",
             metric.name, time_start, time_end, stage)
 
@@ -480,13 +647,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         statements_and_args = self._fetch_points_make_selects(
             metric.id, time_start_ms, time_end_ms, stage)
-        query_results = c_concurrent.execute_concurrent(
+        query_results = self._execute_concurrent(
             self.__session,
             statements_and_args,
-            concurrency=self.__concurrency,
             results_generator=True,
         )
-        query_results = self.demangle_query_results(query_results)
         return bg_accessor.PointGrouper(
             metric, time_start_ms, time_end_ms, stage, query_results)
 
@@ -522,7 +687,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).has_metric(metric_name)
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
-        result = list(self.__session.execute(
+        result = list(self._execute(
             self.__select_metric_statement, (encoded_metric_name, )))
         if not result:
             return False
@@ -540,7 +705,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
         metric_name = bg_accessor.encode_metric_name(metric_name)
-        result = list(self.__session.execute(
+        result = list(self._execute(
             self.__select_metric_statement, (metric_name, )))
 
         if not result:
@@ -581,14 +746,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " WHERE %(where)s LIMIT %(limit)d ALLOW FILTERING;"
         ) % {
             "keyspace": self.keyspace_metadata, "table": table, "where": where,
-            "limit": self.MAX_METRIC_PER_GLOB + 1,
+            "limit": self.max_metrics_per_glob + 1,
         }
         try:
-            metrics_names = [r[0] for r in self.__session.execute(query)]
+            metrics_names = [r[0] for r in self._execute(query)]
         except Exception as e:
             raise RetryableCassandraError(e)
-        if len(metrics_names) > self.MAX_METRIC_PER_GLOB:
-            msg = "%s yields more than %d results" % (glob, self.MAX_METRIC_PER_GLOB)
+        if len(metrics_names) > self.max_metrics_per_glob:
+            msg = "%s yields more than %d results" % (glob, self.max_metrics_per_glob)
             raise TooManyMetrics(msg)
         metrics_names.sort()
         return metrics_names
@@ -598,7 +763,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).insert_points_async(
             metric, datapoints, on_done)
 
-        logging.debug("insert: [%s, %s]", metric.name, datapoints)
+        log.debug("insert: [%s, %s]", metric.name, datapoints)
 
         downsampled = self.__downsampler.feed(metric, datapoints)
         return self.insert_downsampled_points_async(metric, downsampled, on_done)
@@ -611,7 +776,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         count_down = None
         if on_done:
-            count_down = _utils.CountDown(count=len(downsampled), on_zero=on_done)
+            count_down = _CountDown(count=len(downsampled), on_zero=on_done)
 
         for timestamp, value, count, stage in downsampled:
             timestamp_ms = int(timestamp) * 1000
@@ -623,7 +788,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
                 offset=offset, value=value, count=count,
             )
-            future = self.__session.execute_async(query=statement, parameters=args)
+            future = self._execute_async(query=statement, parameters=args)
             if count_down:
                 future.add_callbacks(
                     count_down.on_cassandra_result,
@@ -640,7 +805,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         partitioner = self.__cluster.metadata.partitioner
         if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
-            logging.warn("Partitioner '%s' not supported for repairs" % partitioner)
+            log.warn("Partitioner '%s' not supported for repairs" % partitioner)
             return
 
         start_token = murmur3.INT64_MIN
@@ -670,18 +835,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             args = (token,)
-            result = self.__session.execute(statement, args)
+            result = self._execute(statement, args)
 
             if len(result.current_rows) == 0:
                 break
             for row in result:
                 parent_dir = row.name.rpartition(".")[0]
                 if parent_dir and not self.glob_directory_names(parent_dir):
-                    logging.warning("Creating missing parent dir '%s'" % parent_dir)
+                    log.warning("Creating missing parent dir '%s'" % parent_dir)
                     components = self._components_from_name(row.name)
                     queries = self._create_parent_dirs_queries(components)
                     for statement, args in queries:
-                        self.__session.execute(statement, args)
+                        self._execute(statement, args)
                 token = row.system_token_name
 
     def shutdown(self):
@@ -708,7 +873,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         for cql in _METADATA_CREATION_CQL:
-            self.__session.execute(cql % {"keyspace": self.keyspace_metadata})
+            self._execute(cql % {"keyspace": self.keyspace_metadata})
 
 
 def build(*args, **kwargs):
@@ -718,6 +883,6 @@ def build(*args, **kwargs):
       keyspace: Base name of Cassandra keyspaces dedicated to BigGraphite.
       contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
       port: The port to connect to, as an int.
-      concurrency: How many worker threads to use.
+      connections: How many worker threads to use.
     """
     return _CassandraAccessor(*args, **kwargs)

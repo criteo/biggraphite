@@ -14,12 +14,54 @@
 # limitations under the License.
 """Graphite utility module."""
 
+from os import path as os_path
 import fnmatch
 import re
 
+from biggraphite import utils as bg_utils
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
 _GRAPHITE_GLOB_RE = re.compile(r"^[^*?{}\[\]]+$")
+
+
+class Error(Exception):
+    """Base class for all exceptions from this module."""
+
+    pass
+
+
+class ConfigError(Error):
+    """Configuration problems."""
+
+    pass
+
+
+def storage_path(settings):
+    """Get storage path from configuration.
+
+    Args:
+      settings: either carbon_conf.Settings or a Django-like settings object
+
+    Returns:
+      An absolute path.
+    """
+    path, found = bg_utils.get_setting(settings, "STORAGE_DIR")
+    if not path or not os_path.exists(path):
+        raise ConfigError("STORAGE_DIR is set to an unexisting directory: '%s'" % path)
+    return os_path.abspath(path)
+
+
+def accessor_from_settings(settings):
+    """Get Accessor from configuration.
+
+    Args:
+      settings: either carbon_conf.Settings or a Django-like settings object
+
+    Returns:
+      Accessor (not connected)
+    """
+    settings = bg_utils.settings_from_confattr(settings)
+    bg_utils.accessor_from_settings(settings)
 
 
 def _is_graphite_glob(metric_component):

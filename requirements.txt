@@ -1,6 +1,9 @@
+ConfigArgParse
 cassandra-driver
 enum34
+ipython
 lmdb
+parsedatetime
 progressbar2
 sortedcontainers
 statistics
@@ -9,5 +12,3 @@ whisper
 git+https://github.com/graphite-project/carbon.git@master#egg=carbon
 git+https://github.com/graphite-project/graphite-web.git@master#egg=graphite-web
 
-ipython
-parsedatetime

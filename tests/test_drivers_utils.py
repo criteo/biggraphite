@@ -32,19 +32,19 @@ class CountDownTest(unittest.TestCase):
 
     def test_on_failure(self):
         exc = Exception()
-        self.count_down.on_cassandra_failure(exc)
+        self.count_down.on_failure(exc)
         self.on_zero.assert_called_once()
 
         # Failing again should not call the callback again.
-        self.count_down.on_cassandra_failure(exc)
+        self.count_down.on_failure(exc)
         self.on_zero.assert_called_once()
 
     def test_on_result(self):
         result = "whatever this is not used"
         for _ in xrange(self._COUNT - 1):
-            self.count_down.on_cassandra_result(result)
+            self.count_down.on_result(result)
             self.on_zero.assert_not_called()
-        self.count_down.on_cassandra_result(result)
+        self.count_down.on_result(result)
         self.on_zero.assert_called_with(None)
 
 

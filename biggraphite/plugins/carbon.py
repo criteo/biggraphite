@@ -24,6 +24,7 @@ from carbon import database
 from carbon import exceptions as carbon_exceptions
 
 from biggraphite import utils as bg_utils
+from biggraphite import graphite_utils as bg_graphite_utils
 from biggraphite import accessor
 from biggraphite import metadata_cache
 
@@ -53,29 +54,29 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._settings = settings
         self._sync_countdown = 0
 
-        # TODO: we may want to use/implement these
-        # settings.WHISPER_AUTOFLUSH:
-        # settings.WHISPER_SPARSE
-        # settings.WHISPER_FALLOCATE_CREATE:
-        # settings.WHISPER_LOCK_WRITES:
-
     def accessor(self):
         if not self._accessor:
             try:
-                self._accessor = bg_utils.accessor_from_settings(self._settings)
-                self._accessor.connect()
+                accessor = bg_utils.accessor_from_settings(self._settings)
             except bg_utils.ConfigError as e:
                 raise carbon_exceptions.CarbonConfigException(e)
+
+            accessor.connect()
+            self._accessor = accessor
+
         return self._accessor
 
     def cache(self):
         if not self._cache:
             try:
-                storage_path = bg_utils.storage_path_from_settings(self._settings)
-                self._cache = metadata_cache.DiskCache(self.accessor(), storage_path)
-                self._cache.open()
-            except bg_utils.ConfigError as e:
+                storage_path = bg_graphite_utils.storage_path(self._settings)
+            except bg_graphite_utils.ConfigError as e:
                 raise carbon_exceptions.CarbonConfigException(e)
+
+            cache = metadata_cache.DiskCache(self.accessor(), storage_path)
+            cache.open()
+            self._cache = cache
+
         return self._cache
 
     def write(self, metric_name, datapoints):

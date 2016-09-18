@@ -27,6 +27,9 @@ from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling
 
 
+OPTIONS = {}
+
+
 class _MemoryAccessor(bg_accessor.Accessor):
     """A memory acessor that doubles as a memory MetadataCache."""
 
