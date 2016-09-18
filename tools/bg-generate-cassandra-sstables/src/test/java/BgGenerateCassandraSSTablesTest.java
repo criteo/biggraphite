@@ -13,12 +13,16 @@
  *
  */
 import static org.junit.Assert.*;
-
+import biggraphite.*;
 
 public class BgGenerateCassandraSSTablesTest {
     @org.junit.Test
-    public void main() throws Exception {
-        // Put fake csv / schema in the resources and check that we can run
+    public void mainShouldRun() throws Exception {
+        // Just test that we can import simple files.
+        String[] args = new String[]{
+            "biggraphite", "datapoints",
+            "src/test/resources/schema.cql",
+            "src/test/resources/points.csv"};
+        BgGenerateCassandraSSTables.main(args);
     }
-
 }
