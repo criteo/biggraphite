@@ -106,7 +106,6 @@ def add_argparse_arguments(parser):
         help="Generate files needed for bulkimport.")
 
 
-
 MINUTE = 60
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
@@ -368,6 +367,7 @@ class _LazyPreparedStatements(object):
 
     def _create_datapoints_table(self, stage):
         # The statement is idempotent
+        statement_str = self._create_datapoints_table_stmt(stage)
         self._session.execute(statement_str)
 
     def _get_table_name(self, stage):

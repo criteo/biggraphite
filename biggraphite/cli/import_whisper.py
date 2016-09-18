@@ -157,6 +157,7 @@ def _import_whisper(*args, **kwargs):
         log.exception(e)
         return 0
 
+
 def _parse_opts(args):
     parser = argparse.ArgumentParser(
         description="Import whisper files into BigGraphite.")
