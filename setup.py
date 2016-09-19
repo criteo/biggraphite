@@ -37,12 +37,12 @@ _INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
 
 setuptools.setup(
     name="biggraphite",
-    version="0.2",
-    maintainer="Criteo Graphite team",
+    version="0.3",
+    maintainer="Criteo Graphite Team",
     maintainer_email="github@criteo.com",
-    description="Tools for tools for storing carbon data in Cassandra.",
+    description="Simple Scalable Time Series Database.",
     license="Apache Software License",
-    keywords="graphite carbon cassandra biggraphite",
+    keywords="graphite carbon cassandra biggraphite tsdb timeseries",
     url="https://github.com/criteo/biggraphite",
     include_package_data=True,
     packages=["biggraphite", "biggraphite.plugins", "biggraphite.drivers", "biggraphite.cli"],
