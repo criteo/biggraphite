@@ -23,8 +23,7 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 from carbon import database
 from carbon import exceptions as carbon_exceptions
 
-from biggraphite import utils as bg_utils
-from biggraphite import graphite_utils as bg_graphite_utils
+from biggraphite import graphite_utils
 from biggraphite import accessor
 from biggraphite import metadata_cache
 
@@ -56,11 +55,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def accessor(self):
         if not self._accessor:
-            try:
-                accessor = bg_utils.accessor_from_settings(self._settings)
-            except bg_utils.ConfigError as e:
-                raise carbon_exceptions.CarbonConfigException(e)
-
+            accessor = graphite_utils.accessor_from_settings(self._settings)
             accessor.connect()
             self._accessor = accessor
 
@@ -69,8 +64,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def cache(self):
         if not self._cache:
             try:
-                storage_path = bg_graphite_utils.storage_path(self._settings)
-            except bg_graphite_utils.ConfigError as e:
+                storage_path = graphite_utils.storage_path(self._settings)
+            except graphite_utils.ConfigError as e:
                 raise carbon_exceptions.CarbonConfigException(e)
 
             cache = metadata_cache.DiskCache(self.accessor(), storage_path)

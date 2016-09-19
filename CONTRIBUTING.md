@@ -52,7 +52,7 @@ pip install -r requirements.txt
 pip install -r tests-requirements.txt
 
 # Install Cassandra
-export CASSANDRA_VERSION=3.5
+export CASSANDRA_VERSION=3.7
 wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
 tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
 export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}
@@ -110,7 +110,7 @@ You can test your new configuration with:
 
 ```bash
 touch storage-schemas.conf
-bg-carbon-cache --debug --nodaemon --conf=carbon.conf starts
+bg-carbon-cache --debug --nodaemon --conf=carbon.conf start
 echo "local.random.diceroll 4 `date +%s`" | nc -q0 localhost 2003
 ```
 

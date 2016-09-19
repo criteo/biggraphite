@@ -61,7 +61,8 @@ def accessor_from_settings(settings):
       Accessor (not connected)
     """
     settings = bg_utils.settings_from_confattr(settings)
-    bg_utils.accessor_from_settings(settings)
+    bg_utils.set_log_level(settings)
+    return bg_utils.accessor_from_settings(settings)
 
 
 def _is_graphite_glob(metric_component):

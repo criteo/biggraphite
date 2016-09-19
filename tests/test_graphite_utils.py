@@ -72,6 +72,20 @@ class TestGraphiteUtils(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual((["a.a.a", "a.b.c", "a.b.d", "x.y.c"], []), bg_gu.glob(self.accessor, "*.*.*"))
         self.assertEqual((["a.b.c", "a.b.d"], []), bg_gu.glob(self.accessor, "*.{b,c,d,5}.?"))
 
+    def test_storage_path(self):
+        import types
+        settings = types.ModuleType("settings")
+        settings.STORAGE_DIR = "/tmp"
+        storage_path = bg_gu.storage_path(settings)
+        self.assertEquals(storage_path, settings.STORAGE_DIR)
+
+    def test_accessor_from_settings(self):
+        import types
+        settings = types.ModuleType("settings")
+        settings.BG_DRIVER = "memory"
+        accessor = bg_gu.accessor_from_settings(settings)
+        self.assertNotEquals(accessor, None)
+
 
 if __name__ == "__main__":
     unittest.main()
