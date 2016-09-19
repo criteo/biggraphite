@@ -19,6 +19,9 @@ from __future__ import print_function
 
 import logging
 import uuid
+import os
+from os import path as os_path
+import multiprocessing
 
 import cassandra
 from cassandra import murmur3
@@ -285,8 +288,17 @@ class _LazyPreparedStatements(object):
         self.__stage_to_select = {}
         self.__data_files = {}
 
+    def __bulkimport_filename(self, filename):
+        current = multiprocessing.current_process()
+        uid = str(current._identity[0]) if len(current._identity) else "0"
+        filename = os_path.join("data", uid, filename)
+        dirname = os_path.dirname(filename)
+        if not os_path.exists(dirname):
+            os.makedirs(dirname)
+        return filename
+
     def _bulkimport_write_schema(self, stage, statement_str):
-        filename = stage.as_string + ".cql"
+        filename = self.__bulkimport_filename(stage.as_string + ".cql")
         log.info("Writing schema for '%s' in '%s'" % (stage.as_string, filename))
         open(filename, "w").write(statement_str)
 
@@ -296,7 +308,7 @@ class _LazyPreparedStatements(object):
             statement_str = self._create_datapoints_table_stmt(stage)
             self._bulkimport_write_schema(stage, statement_str)
 
-            filename = stage.as_string + ".csv"
+            filename = self.__bulkimport_filename(stage.as_string + ".csv")
             log.info("Writing data for '%s' in '%s'" % (stage.as_string, filename))
             fp = open(filename, "w")
             self.__data_files[stage_str] = fp
