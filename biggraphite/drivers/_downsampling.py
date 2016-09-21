@@ -232,11 +232,11 @@ class MetricAggregates(object):
                 #   2. Compute aggregated value with new value.
                 #   3. Update stage information.
                 # The last point in result now contains up-to-date information.
-                current_value = current_point[1]
-                current_count = current_point[2]
-                aggregated_value = aggregator.merge(current_value, current_count, value)
-                result[-1] = (
-                    step * stage.precision, aggregated_value, current_count + 1, stage)
+                _, current_value, current_count, _ = current_point
+                values = [current_value, value]
+                counts = [current_count, 1]
+                value, count = aggregator.merge(values, counts)
+                result[-1] = (step * stage.precision, value, count, stage)
             elif current_step < step:
                 # Point is in new step => add new step.
                 result.append((step * stage.precision, value, 1, stage))
