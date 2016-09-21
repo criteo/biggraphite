@@ -114,41 +114,50 @@ class Aggregator(enum.Enum):
         self._downsample = getattr(self, "_downsample_" + self.name)
         self._merge = getattr(self, "_merge_" + self.name)
 
-    def merge(self, old, old_weight, fresh):
-        """Merge fresh values from a finer grained Stage in a coarser Stage.
-
-        For example: old=DAY_DATA, old_weight=24, fresh=CURRENT_HOUR_DATA.
-        NaNs are ignored: if one of old or fresh is NaN, the other is returned.
+    def merge(self, values=[], counts=[], newest_first=False):
+        """Merge aggregated values from a similar stage.
 
         Args:
-          old: A float, the value for the coarser, older Stage.
-          old_weight: Weight of old relative to weight of fresh.
-           Only used when computing averages.
-          fresh: A float, the value for the less coarse, newer Stage.
+          values: values to aggregate as float from oldest to most recent (unless
+            newest_first is True).
+          counts: counts associated with values as int.  when dealing with
+            already aggregated values.
+          newest_first: if True, values are in reverse order.
 
         Returns:
-          The merged value, NaN if both are NaN.
+          The merged values and counts, NaN if values is empty or all values are NaN.
         """
-        if math.isnan(fresh):
-            return old
-        if math.isnan(old):
-            return fresh
-        return self._merge(old, old_weight, fresh)
+        if not values:
+            return _NAN
+        if not counts:
+            counts = [1] * len(values)
+        return self._merge(values, counts, newest_first)
 
-    def _merge_average(self, old, old_weight, fresh):
-        return (old * old_weight + fresh) / float(old_weight + 1)
+    def _merge_average(self, values, counts, values_newest_first):
+        # Averages are simply sum+count. The actual average is computed
+        # only during reads by dividing sum by count.
+        total, count = self.__sum_and_count(values, counts)
+        return total, count
 
-    def _merge_last(self, old, old_weight, fresh):
-        return fresh
+    def _merge_last(self, values, counts, values_newest_first):
+        if not values_newest_first:
+            values = reversed(values)
+        for v in values:
+            if not math.isnan(v):
+                return v, sum(counts)
+        return _NAN, sum(counts)
 
-    def _merge_maximum(self, old, old_weight, fresh):
-        return max(old, fresh)
+    def _merge_maximum(self, values, counts, values_newest_first):
+        _, maximum = self.__min_and_max(values)
+        return maximum, sum(counts)
 
-    def _merge_minimum(self, old, old_weight, fresh):
-        return min(old, fresh)
+    def _merge_minimum(self, values, counts, values_newest_first):
+        minimum, _ = self.__min_and_max(values)
+        return minimum, sum(counts)
 
-    def _merge_total(self, old, old_weight, fresh):
-        return old + fresh
+    def _merge_total(self, values, counts, values_newest_first):
+        total, count = self.__sum_and_count(values, counts)
+        return total, count
 
     def downsample(self, values=[], counts=[], newest_first=False):
         """Aggregate together values of a given stage.

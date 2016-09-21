@@ -23,25 +23,31 @@ from biggraphite.drivers import _downsampling as bg_ds
 
 
 class TestDownsampler(unittest.TestCase):
-    METRIC_NAME = "test.metric"
+    METRIC_NAME_SUM = "test.metric.sum"
+    METRIC_NAME_AVG = "test.metric.avg"
     PRECISION = 10
     CAPACITY = 3
 
     def setUp(self):
-        """Set up a Downsampler, aggregating with the sum function."""
-        aggregator = bg_accessor.Aggregator.total
+        """Set up a Downsampler, aggregating with the sum and average function."""
         capacity_precisions = (self.CAPACITY, self.PRECISION,
                                self.CAPACITY, self.PRECISION ** 2)
         retention_string = "%d*%ds:%d*%ds" % (capacity_precisions)
         retention = bg_accessor.Retention.from_string(retention_string)
         self.stage_0 = retention.stages[0]
         self.stage_1 = retention.stages[1]
-        id = uuid.uuid4()
-        metric_metadata = bg_accessor.MetricMetadata(aggregator=aggregator, retention=retention)
-        self.metric = bg_accessor.Metric(self.METRIC_NAME, id, metric_metadata)
+        uid = uuid.uuid4()
+        metric_metadata = bg_accessor.MetricMetadata(
+            aggregator=bg_accessor.Aggregator.total, retention=retention)
+        self.metric_sum = bg_accessor.Metric(self.METRIC_NAME_SUM, uid, metric_metadata)
+
+        uid = uuid.uuid4()
+        metric_metadata = bg_accessor.MetricMetadata(
+            aggregator=bg_accessor.Aggregator.average, retention=retention)
+        self.metric_avg = bg_accessor.Metric(self.METRIC_NAME_AVG, uid, metric_metadata)
         self.ds = bg_ds.Downsampler(self.CAPACITY)
 
-    def test_feed_simple(self):
+    def test_feed_simple_sum(self):
         """Test feed with few points."""
         # 1. Put value 1 at timestamp 0.
         # 2. Check that it is used in the aggregates, even though it is not expired.
@@ -52,12 +58,12 @@ class TestDownsampler(unittest.TestCase):
             (0, 1, 1, self.stage_0),
             (0, 1, 1, self.stage_1)
         ]
-        result = self.ds.feed(self.metric, points)
+        result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, expected)
 
         # 1. Feed no point, and check that nothing is thrown.
         points = []
-        result = self.ds.feed(self.metric, points)
+        result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, [])
 
         # 1. Add point with value 3 that overrides the previous point.
@@ -67,7 +73,7 @@ class TestDownsampler(unittest.TestCase):
             (0, 3, 1, self.stage_0),
             (0, 3, 1, self.stage_1)
         ]
-        result = self.ds.feed(self.metric, points)
+        result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, expected)
 
         # 1. Add point with value 9 at index 1 in stage0 buffer.
@@ -81,25 +87,54 @@ class TestDownsampler(unittest.TestCase):
             (self.PRECISION, 9, 1, self.stage_0),
             (0, 14, 2, self.stage_1)
         ]
-        result = self.ds.feed(self.metric, points)
+        result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, expected)
 
         # 1. Feed no point, and check that nothing is thrown.
         points = []
-        result = self.ds.feed(self.metric, points)
+        result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, [])
 
-        # Fix unit tests
+    def test_feed_simple_avg(self):
+        """Test feed with few points."""
+        # 1. Put value 1 at timestamp 0.
+        # 2. Check that it is used in the aggregates, even though it is not expired.
+        points = [
+            (0, 1),
+        ]
+        expected = [
+            (0, 1, 1, self.stage_0),
+            (0, 1, 1, self.stage_1)
+        ]
+        result = self.ds.feed(self.metric_avg, points)
+        self.assertEqual(result, expected)
+
+        # 1. Add point with value 9 at index 1 in stage0 buffer.
+        # 2. Check that the aggregates are updated using both points.
+        points = [
+            (0, 5),  # Overrides previous point.
+            (self.PRECISION, 9),
+            (self.PRECISION ** 2 * self.CAPACITY, 10)
+        ]
+        expected = [
+            (0, 5, 1, self.stage_0),
+            (self.PRECISION, 9, 1, self.stage_0),
+            (300, 10.0, 1, self.stage_0),
+            (0, 14.0, 2, self.stage_1),
+            (300, 10.0, 1, self.stage_1)
+        ]
+        result = self.ds.feed(self.metric_avg, points)
+        self.assertEqual(result, expected)
 
     def test_feed_multiple(self):
         """Test feed with one point per minute for 30 minutes."""
         for i in xrange(30):
-            result = self.ds.feed(self.metric, [(1, i)])
+            result = self.ds.feed(self.metric_sum, [(1, i)])
             # We should generate only one metric per retention.
             self.assertEquals(len(result), 2)
 
         for i in xrange(30):
-            result = self.ds.feed(self.metric, [(0, i)])
+            result = self.ds.feed(self.metric_sum, [(0, i)])
             self.assertEquals(len(result), 2)
 
     def test_feed_extended(self):
@@ -127,7 +162,7 @@ class TestDownsampler(unittest.TestCase):
             (self.CAPACITY * self.PRECISION ** 2, 1501, 1, self.stage_1)
         ]
         expected = expected_stage_0 + expected_stage_1
-        result = self.ds.feed(self.metric, points)
+        result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, expected)
 
     def test_out_of_order(self):
@@ -149,7 +184,7 @@ class TestDownsampler(unittest.TestCase):
             (self.PRECISION ** 2, 42, 1, self.stage_1)
         ]
         expected = expected_stage_0 + expected_stage_1
-        result = self.ds.feed(self.metric, points)
+        result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, expected)
 
 
