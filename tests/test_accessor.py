@@ -66,25 +66,24 @@ class TestAggregator(unittest.TestCase):
         self.assertTrue(math.isnan(downsampled))
 
     def test_merge(self):
-        old = 10
-        old_weight = 10
-        fresh = 120
+        values = [10, 20]
+        count = [1, 1]
         expectations = (
-            ("average", 20),
-            ("last", 120),
-            ("minimum", 10),
-            ("maximum", 120),
-            ("total", 130),
+            ("average", (30, 2)),
+            ("last", (20, 2)),
+            ("minimum", (10, 2)),
+            ("maximum", (20, 2)),
+            ("total", (30, 2)),
         )
         for name, value_expected in expectations:
             aggregator = bg_accessor.Aggregator.from_config_name(name)
-            merged = aggregator.merge(old, old_weight, fresh)
+            merged = aggregator.merge(values, count)
             self.assertEqual(value_expected, merged)
 
     def test_merge_nans(self):
         aggregator = bg_accessor.Aggregator.average
-        self.assertEqual(10, aggregator.merge(old=10, old_weight=1, fresh=_NAN))
-        self.assertEqual(10, aggregator.merge(old=_NAN, old_weight=1, fresh=10))
+        self.assertEqual((10, 1), aggregator.merge([10, _NAN]))
+        self.assertEqual((10, 1), aggregator.merge([_NAN, 10]))
 
     def test_config_names(self):
         self.assertEqual(
