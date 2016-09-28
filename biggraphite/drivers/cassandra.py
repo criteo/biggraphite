@@ -874,7 +874,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _upgrade_schema(self):
         # Currently no change, so only upgrade operation is to setup
-        self.__cluster.refresh_schema_metadata()
+        try:
+            self.__cluster.refresh_schema_metadata()
+        except cassandra.DriverException:
+            log.exception("Failed to refresh metadata.")
+            return
+
         keyspaces = self.__cluster.metadata.keyspaces.keys()
         for keyspace in [self.keyspace, self.keyspace_metadata]:
             if keyspace not in keyspaces:
