@@ -64,6 +64,9 @@ class DiskCache(object):
 
     def __init__(self, accessor, path):
         """Create a new DiskCache."""
+        assert accessor
+        assert path
+
         self.hit_count = 0
         self.miss_count = 0
         self.__accessor_lock = threading.Lock()
