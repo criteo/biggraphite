@@ -41,6 +41,9 @@ class Reader(object):
 
     def __init__(self, accessor, metadata_cache, metric_name):
         """Create a new reader."""
+        assert accessor
+        assert metadata_cache
+
         self._accessor = accessor
         self._metadata_cache = metadata_cache
         self._metric = None
@@ -68,7 +71,6 @@ class Reader(object):
     def __refresh_metric(self):
         if self._metric is None:
             self._metric = self._metadata_cache.get_metric(self._metric_name)
-            self._metadata_cache = None
 
     def fetch(self, start_time, end_time, now=None):
         """Fetch point for a given interval as per the Graphite API.
