@@ -142,8 +142,12 @@ class Finder(object):
         """Return an accessor."""
         if not self._accessor:
             from django.conf import settings as django_settings
-            self._accessor = graphite_utils.accessor_from_settings(django_settings)
-            self._accessor.connect()
+            accessor = graphite_utils.accessor_from_settings(django_settings)
+            # If connect() fail it will raise an exception that will be caught
+            # by the caller. If the plugin is called again, self._accessor will
+            # still be None and a new accessor will be created.
+            accessor.connect()
+            self._accessor = accessor
         return self._accessor
 
     def cache(self):
