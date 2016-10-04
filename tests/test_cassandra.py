@@ -228,6 +228,10 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         for k, v in meta_dict.iteritems():
             self.assertEqual(v, getattr(metric_again.metadata, k))
 
+    def test_repair(self):
+        # TODO(c.chary): Add better test for repair()
+        self.accessor.repair()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -857,8 +857,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     log.warning("Creating missing parent dir '%s'" % parent_dir)
                     components = self._components_from_name(row.name)
                     queries = self._create_parent_dirs_queries(components)
-                    for statement, args in queries:
-                        self._execute(statement, args)
+                    for i_statement, i_args in queries:
+                        self._execute(i_statement, i_args)
                 token = row.system_token_name
 
     def shutdown(self):
