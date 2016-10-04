@@ -142,8 +142,9 @@ class Finder(object):
         """Return an accessor."""
         if not self._accessor:
             from django.conf import settings as django_settings
-            self._accessor = graphite_utils.accessor_from_settings(django_settings)
-            self._accessor.connect()
+            accessor = graphite_utils.accessor_from_settings(django_settings)
+            accessor.connect()
+            self._accessor = accessor
         return self._accessor
 
     def cache(self):
