@@ -215,6 +215,8 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     ")"
     "  WITH CLUSTERING ORDER BY (offset DESC)"
     "  AND default_time_to_live = %(default_time_to_live)d"
+    "  AND memtable_flush_period_in_ms = %(memtable_flush_period_in_ms)d"
+    "  AND comment = '%(comment)s'"
     "  AND compaction = {"
     "    'class': '%(compaction_strategy)s',"
     "    'timestamp_resolution': 'MICROSECONDS',"
