@@ -47,6 +47,11 @@ class _MemoryAccessor(bg_accessor.Accessor):
         self._directory_names = sortedcontainers.SortedSet()
         self.__downsampler = _downsampling.Downsampler()
 
+    @staticmethod
+    def _components_from_name(metric_name):
+        res = metric_name.split(".")
+        return filter(None, res)
+
     @property
     def _metric_names(self):
         return self._name_to_metric.keys()
@@ -96,16 +101,18 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
     def make_metric(self, name, metadata):
         """See bg_accessor.Accessor."""
-        id = uuid.uuid5(self._UUID_NAMESPACE, name)
-        return bg_accessor.Metric(name, id, metadata)
+        # Cleanup name (avoid double dots)
+        name = ".".join(self._components_from_name(name))
+        uid = uuid.uuid5(self._UUID_NAMESPACE, name)
+        return bg_accessor.Metric(name, uid, metadata)
 
     def create_metric(self, metric):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).create_metric(metric)
         self._name_to_metric[metric.name] = metric
-        parts = metric.name.split(".")[:-1]
+        components = self._components_from_name(metric.name)
         path = []
-        for part in parts:
+        for part in components[:-1]:
             path.append(part)
             self._directory_names.add(".".join(path))
 

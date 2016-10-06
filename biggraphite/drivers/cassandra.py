@@ -582,6 +582,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def make_metric(self, name, metadata):
         """See bg_accessor.Accessor."""
+        # Cleanup name (avoid double dots)
+        name = ".".join(self._components_from_name(name)[:-1])
         encoded_name = bg_accessor.encode_metric_name(name)
         id = uuid.uuid5(self._UUID_NAMESPACE, encoded_name)
         return bg_accessor.Metric(name, id, metadata)
@@ -637,7 +639,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _components_from_name(metric_name):
         res = metric_name.split(".")
         res.append(_LAST_COMPONENT)
-        return res
+        return filter(None, res)
 
     def drop_all_metrics(self):
         """See bg_accessor.Accessor."""

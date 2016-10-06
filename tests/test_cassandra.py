@@ -232,6 +232,20 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         # TODO(c.chary): Add better test for repair()
         self.accessor.repair()
 
+    def test_doubledots(self):
+        metric = self.make_metric("a.b..c")
+        metric_1 = self.make_metric("a.b.c")
+        points = [(1, 42)]
+        self.accessor.create_metric(metric)
+        self.accessor.create_metric(metric_1)
+        self.assertEqual(['a.b.c'], self.accessor.glob_metric_names("a.b.*"))
+
+        self.accessor.insert_points(metric, points)
+        actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
+        self.assertEqual(points, list(actual_points))
+        actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
+        self.assertEqual(points, list(actual_points))
+
 
 if __name__ == "__main__":
     unittest.main()
