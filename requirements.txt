@@ -1,6 +1,7 @@
 ConfigArgParse
 cassandra-driver
 enum34
+humanize
 ipython
 lmdb
 parsedatetime

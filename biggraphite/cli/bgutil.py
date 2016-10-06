@@ -21,6 +21,7 @@ import sys
 
 from biggraphite import utils as bg_utils
 
+from biggraphite.cli import command_du
 from biggraphite.cli import command_test
 from biggraphite.cli import command_read
 from biggraphite.cli import command_repair
@@ -29,6 +30,7 @@ from biggraphite.cli import command_shell
 
 COMMANDS = [
     command_test.CommandTest(),
+    command_du.CommandDu(),
     command_read.CommandRead(),
     command_repair.CommandRepair(),
     command_shell.CommandShell(),
@@ -42,7 +44,9 @@ def _parse_opts(args):
     bg_utils.add_argparse_arguments(parser)
     subparsers = parser.add_subparsers(help="commands")
     for command in COMMANDS:
-        subparser = subparsers.add_parser(command.NAME, help=command.HELP)
+        subparser = subparsers.add_parser(command.NAME, add_help=False)  # accept -h for du
+        # but we still want --help
+        subparser.add_argument('--help', action='help', help='show this help message and exit')
         command.add_arguments(subparser)
         subparser.set_defaults(func=command.run)
     return parser.parse_args(args)
