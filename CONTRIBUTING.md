@@ -48,8 +48,10 @@ source bg/bin/activate
 
 # Install Graphite dependencies
 export GRAPHITE_NO_PREFIX=true
+# Install the libffi-dev package from your distribution before running pip install
 pip install -r requirements.txt
 pip install -r tests-requirements.txt
+pip install -e .
 
 # Install Cassandra
 export CASSANDRA_VERSION=3.9
