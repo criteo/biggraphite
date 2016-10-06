@@ -27,14 +27,17 @@ class CommandRead(command.BaseCommand):
     """Read points."""
 
     NAME = "read"
-    HELP = "read points for a specific metric."
+    HELP = "read points for one or several specific metrics."
 
     def add_arguments(self, parser):
         """Add custom arguments.
 
         See command.CommandBase.
         """
-        parser.add_argument("metric")
+        parser.add_argument(
+            "metrics",
+            help="One metric name or globbing on metrics names"
+        )
         parser.add_argument(
             "--time-start",
             action=command.ParseDateTimeArg,
@@ -62,19 +65,41 @@ class CommandRead(command.BaseCommand):
         See command.CommandBase.
         """
         accessor.connect()
-        metric = accessor.get_metric(opts.metric)
+        metric_names = (
+            accessor.glob_metric_names(opts.metrics) if '*' in opts.metrics else
+            [opts.metrics]
+        )
+        if not metric_names:
+            print("Globbing pattern '%s' doesn't match any metric" % opts.metrics)
+
+        metrics = [
+            accessor.get_metric(metric)
+            for metric in metric_names
+        ]
+
+        forced_stage = bg_accessor.Stage.from_string(opts.stage) if opts.stage else None
+
+        for i, metric in enumerate(metrics):
+            if i:
+                print()
+
+            self._display_metric(
+                accessor, metric, metric_names[i],
+                opts.time_start, opts.time_end, forced_stage
+            )
+
+    @staticmethod
+    def _display_metric(accessor, metric, metric_name, time_start, time_end, forced_stage=None):
+        """Print metric's information."""
         if metric is None:
-            print ("Metric '%s' doesn't exist" % opts.metric)
+            print("Metric '%s' doesn't exist" % metric_name)
             return
 
-        if opts.stage:
-            stage = bg_accessor.Stage.from_string(opts.stage)
-        else:
-            # TODO(c.chary): get a stage that matches the time window.
-            stage = metric.metadata.retention[0]
+        # TODO(c.chary): get a stage that matches the time window.
+        stage = forced_stage or metric.metadata.retention[0]
 
-        time_start = stage.round_up(time.mktime(opts.time_start.timetuple()))
-        time_stop = stage.round_up(time.mktime(opts.time_end.timetuple()))
+        time_start = stage.round_up(time.mktime(time_start.timetuple()))
+        time_stop = stage.round_up(time.mktime(time_end.timetuple()))
 
         print("Name: ", metric.name)
         print("Metadata: ", metric.metadata.as_string_dict())
