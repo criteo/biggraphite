@@ -215,6 +215,8 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     ")"
     "  WITH CLUSTERING ORDER BY (offset DESC)"
     "  AND default_time_to_live = %(default_time_to_live)d"
+    "  AND memtable_flush_period_in_ms = %(memtable_flush_period_in_ms)d"
+    "  AND comment = '%(comment)s'"
     "  AND compaction = {"
     "    'class': '%(compaction_strategy)s',"
     "    'timestamp_resolution': 'MICROSECONDS',"
@@ -410,7 +412,8 @@ class _LazyPreparedStatements(object):
 
     def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
         statement = self.__stage_to_select.get(stage)
-        args = (metric_id, row_start_ms, row_min_offset, row_max_offset)
+        limit = (row_max_offset - row_min_offset)
+        args = (metric_id, row_start_ms, row_min_offset, row_max_offset, limit)
         if statement:
             return statement, args
 
@@ -419,7 +422,8 @@ class _LazyPreparedStatements(object):
             "SELECT time_start_ms, offset, value, count FROM %(table)s"
             " WHERE metric=? AND time_start_ms=?"
             " AND offset >= ? AND offset < ? "
-            " ORDER BY offset;"
+            " ORDER BY offset"
+            " LIMIT ?;"
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = cassandra.ConsistencyLevel.ONE
