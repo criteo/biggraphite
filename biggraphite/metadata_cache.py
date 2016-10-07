@@ -59,8 +59,11 @@ class DiskCache(object):
     # According to LMDB's author, 128 readers is about 8KiB of RAM, 1024 is about 128kiB and even
     # 4096 is safe: https://twitter.com/armon/status/534867803426533376
     _MAX_READERS = 2048
-
     _METRIC_SEPARATOR = '|'
+
+    # 1G on 32 bits systems
+    # 16G on 64 bits systems
+    MAP_SIZE = (1024*1024*1024*16 if sys.maxsize > 2**32 else 1024*1024*1024)
 
     def __init__(self, accessor, path):
         """Create a new DiskCache."""
@@ -94,13 +97,10 @@ class DiskCache(object):
             os.makedirs(self.__path)
         except OSError:
             pass  # Directory already exists
-        map_size = 1024*1024*1024  # 1G on 32 bits systems
-        if sys.maxsize > 2**32:
-            map_size *= 16  # 16G on 64 bits systems
         logging.info('Opening cache %s' % self.__path)
         self.__env = lmdb.open(
             self.__path,
-            map_size=map_size,
+            map_size=self.MAP_SIZE,
             # Only one sync per transaction, system crash can undo a transaction.
             metasync=False,
             # Use mmap()

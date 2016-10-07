@@ -63,7 +63,8 @@ def create_unreplicated_keyspace(session, keyspace):
     """Create a keyspace, mostly used for tests."""
     template = (
         "CREATE KEYSPACE \"%s\" "
-        " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1};"
+        " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1}"
+        " AND durable_writes = false;"
     )
     session.execute(template % keyspace)
 
@@ -157,6 +158,7 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
         self.addCleanup(self.accessor.shutdown)
         self.metadata_cache = bg_metadata_cache.DiskCache(
             self.accessor, self.tempdir)
+        self.metadata_cache.MAP_SIZE = 1024*1024
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 
@@ -232,6 +234,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.addCleanup(self.accessor.shutdown)
         self.addCleanup(self.__drop_all_metrics)
         self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)
+        self.metadata_cache.MAP_SIZE = 1024*1024
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 
