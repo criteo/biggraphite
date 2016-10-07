@@ -24,7 +24,6 @@ import uuid
 import sortedcontainers
 
 from biggraphite import accessor as bg_accessor
-from biggraphite.drivers import _downsampling
 
 
 OPTIONS = {}
@@ -45,7 +44,6 @@ class _MemoryAccessor(bg_accessor.Accessor):
             sortedcontainers.SortedDict)
         self._name_to_metric = {}
         self._directory_names = sortedcontainers.SortedSet()
-        self.__downsampler = _downsampling.Downsampler()
 
     @staticmethod
     def _components_from_name(metric_name):
@@ -80,7 +78,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         #   fixed. Currently it waits a few iteration before emitting points.
         #   it will also need additional fixing to read aggregated metrics
         #   while storing downsampled metrics.
-        # datapoints = self.__downsampler.feed(metric, datapoints)
+        # datapoints = self._downsampler.feed(metric, datapoints)
         for datapoint in datapoints:
             timestamp, value = datapoint
             points[timestamp] = value

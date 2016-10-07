@@ -27,6 +27,8 @@ import math
 import re
 import threading
 
+from biggraphite.drivers import _downsampling
+
 
 class Error(Exception):
     """Base class for all exceptions from this module."""
@@ -562,10 +564,13 @@ class Accessor(object):
 
     __metaclass__ = abc.ABCMeta
 
+    max_requests_per_connection = None
+
     def __init__(self, backend_name):
         """Set internal variables."""
         self.backend_name = backend_name
         self.is_connected = False
+        self._downsampler = _downsampling.Downsampler(accessor=self)
 
     def __enter__(self):
         """Call connect()."""
