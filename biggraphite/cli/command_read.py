@@ -20,6 +20,7 @@ import time
 import datetime
 
 from biggraphite.cli import command
+from biggraphite.cli.command_list import list_metrics
 from biggraphite import accessor as bg_accessor
 
 
@@ -65,26 +66,14 @@ class CommandRead(command.BaseCommand):
         See command.CommandBase.
         """
         accessor.connect()
-        metric_names = (
-            accessor.glob_metric_names(opts.metrics) if '*' in opts.metrics else
-            [opts.metrics]
-        )
-        if not metric_names:
-            print("Globbing pattern '%s' doesn't match any metric" % opts.metrics)
-
-        metrics = [
-            accessor.get_metric(metric)
-            for metric in metric_names
-        ]
-
         forced_stage = bg_accessor.Stage.from_string(opts.stage) if opts.stage else None
 
-        for i, metric in enumerate(metrics):
+        for i, metric in enumerate(list_metrics(accessor, opts.metrics)):
             if i:
                 print()
 
             self._display_metric(
-                accessor, metric, metric_names[i],
+                accessor, metric, metric.name,
                 opts.time_start, opts.time_end, forced_stage
             )
 
