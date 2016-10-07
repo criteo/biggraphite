@@ -27,6 +27,7 @@ from biggraphite.cli import command_read
 from biggraphite.cli import command_info
 from biggraphite.cli import command_repair
 from biggraphite.cli import command_shell
+from biggraphite.cli import command_write
 
 
 COMMANDS = [
@@ -36,6 +37,7 @@ COMMANDS = [
     command_info.CommandInfo(),
     command_repair.CommandRepair(),
     command_shell.CommandShell(),
+    command_write.CommandWrite(),
 ]
 
 
