@@ -51,22 +51,12 @@ class Reader(object):
 
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
-        stage = bg_accessor.Stage(precision=1, points=60)
         if self._metric and self._metric.retention:
-            stage = self._metric.retention.find_stage_for_ts(searched=start_time, now=now)
+            retention = self._metric.retention
+        else:
+            retention = bg_accessor.Retention.from_string("1*60s")
 
-        now = stage.round_up(now)
-
-        oldest_timestamp = now - stage.duration
-        start_time = max(start_time, oldest_timestamp)
-        start_time = stage.round_down(start_time)
-
-        end_time = min(now, end_time)
-        end_time = stage.round_up(end_time)
-
-        if end_time < start_time:
-            end_time = start_time
-        return start_time, end_time, stage
+        return retention.align_ts(start_time, end_time, now)
 
     def __refresh_metric(self):
         if self._metric is None:
