@@ -63,7 +63,8 @@ def create_unreplicated_keyspace(session, keyspace):
     """Create a keyspace, mostly used for tests."""
     template = (
         "CREATE KEYSPACE \"%s\" "
-        " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1};"
+        " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1}"
+        " AND durable_writes = false;"
     )
     session.execute(template % keyspace)
 
