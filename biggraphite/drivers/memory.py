@@ -17,15 +17,13 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import collections
-import fnmatch
-import re
 import uuid
 
 import sortedcontainers
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
-
 
 OPTIONS = {}
 
@@ -118,13 +116,25 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
     @staticmethod
     def __glob_names(names, glob):
-        dots_count = glob.count(".")
-        glob_re = re.compile(fnmatch.translate(glob))
-
-        return [
-            name for name in names
-            if name.count(".") == dots_count and glob_re.match(name)
+        dots = glob.count(".")
+        literal_glob_components = [
+            (index, component)
+            for (index, component) in enumerate(glob.split("."))
+            if not bg_glob._is_graphite_glob(component)
         ]
+
+        def maybe_matched_by_glob_prefilter(metric):
+            if metric.count(".") != dots:
+                return False
+            metric_components = metric.split(".")
+            for (index, value) in literal_glob_components:
+                if metric_components[index] != value:
+                    return False
+            return True
+
+        results = filter(maybe_matched_by_glob_prefilter, names)
+        results.sort()
+        return results
 
     def glob_metric_names(self, glob):
         """See the real Accessor for a description."""
@@ -156,8 +166,8 @@ class _MemoryAccessor(bg_accessor.Accessor):
             # A row is time_base_ms, time_offset_ms, value, count
             row = self.Row(ts * 1000.0, 0, float(points[ts]), 1)
             rows.append(row)
-        query_results = [(True, rows)]
 
+        query_results = [(True, rows)]
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
         return bg_accessor.PointGrouper(
