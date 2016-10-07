@@ -813,7 +813,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def __build_select_metric_names_query(self, table, components, glob, is_raw=False):
         """Build a select query to find metric names (table can be directories or metrics though).
 
-        Arguments:
+        Args:
           table: Table name from which to select the rows.
           components: Individual components from the glob.
           glob: Globbing pattern we are generating the query for.

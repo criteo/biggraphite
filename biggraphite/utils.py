@@ -52,7 +52,7 @@ def accessor_from_settings(settings):
       settings: dict(str -> value).
 
     Returns:
-      Accessor (not connected)
+      Accessor (not connected).
     """
     driver_name = settings.get('driver', DEFAULT_DRIVER)
     driver_settings = {}
