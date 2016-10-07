@@ -447,6 +447,11 @@ class Retention(object):
         # There is always at least one stage.
         return self.stages[-1]
 
+    @property
+    def points(self):
+        """Return the total number of points for this retention."""
+        return sum(stage.points for stage in self.stages)
+
 
 class MetricMetadata(object):
     """Represents all information about a metric except its name.
