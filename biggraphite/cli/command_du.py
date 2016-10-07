@@ -19,7 +19,7 @@ from __future__ import print_function
 import humanize
 
 from biggraphite.cli import command
-
+from biggraphite.cli.command_list import list_metrics
 
 _BYTES_PER_POINT = 24
 
@@ -57,28 +57,8 @@ class CommandDu(command.BaseCommand):
 
         See command.CommandBase.
         """
-        accessor.connect()
-        metric_names = sorted(
-            accessor.glob_metric_names(opts.metrics) if '*' in opts.metrics else
-            [opts.metrics]
-        )
-
-        # TODO(r.sicard): share with command_read
-        if not metric_names:
-            print("Globbing pattern '%s' doesn't match any metric" % opts.metrics)
-            exit(1)
-
-        metrics = [
-            accessor.get_metric(metric)
-            for metric in metric_names
-        ]
-
-        if not metrics[0]:
-            print("Metric '%s' doesn't exist" % metric_names[0])
-            exit(1)
-
         total = 0
-        for metric in metrics:
+        for metric in list_metrics(accessor, opts.metrics):
             points = metric.metadata.retention.points
             total += points
             self._display_metric_size(metric.name, metric.metadata.retention.points, opts.unit)
