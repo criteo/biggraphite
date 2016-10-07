@@ -145,6 +145,30 @@ class TestRetention(unittest.TestCase):
             self.assertRaises(bg_accessor.InvalidArgumentError,
                               bg_accessor.Retention.from_string, s)
 
+    def test_align_time_window(self):
+        retention = self._TEST
+
+        self.assertEqual(
+            retention.align_time_window(0, 0, 0),
+            (0, 0, bg_accessor.Stage(precision=60, points=60))
+        )
+        self.assertEqual(
+            retention.align_time_window(60, 120, 1200),
+            (60, 120, bg_accessor.Stage(precision=60, points=60))
+        )
+        self.assertEqual(
+            retention.align_time_window(61, 119, 1200),
+            (60, 120, bg_accessor.Stage(precision=60, points=60))
+        )
+        self.assertEqual(
+            retention.align_time_window(59, 121, 1200),
+            (0, 180, bg_accessor.Stage(precision=60, points=60))
+        )
+        self.assertEqual(
+            retention.align_time_window(59, 3601, 8000),
+            (0, 7200, bg_accessor.Stage(precision=3600, points=24))
+        )
+
 
 class TestMetricMetadata(unittest.TestCase):
 
