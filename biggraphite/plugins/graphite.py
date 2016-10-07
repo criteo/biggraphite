@@ -23,6 +23,7 @@ from graphite import readers
 
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import glob_utils
 from biggraphite import graphite_utils
 from biggraphite import metadata_cache as bg_metadata_cache
 
@@ -153,7 +154,7 @@ class Finder(object):
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: handle directories constructor argument/property
-        metric_names, directories = graphite_utils.glob(self.accessor(), query.pattern)
+        metric_names, directories = glob_utils.graphite_glob(self.accessor(), query.pattern)
         for metric_name in metric_names:
             reader = Reader(self.accessor(), self.cache(), metric_name)
             yield node.LeafNode(metric_name, reader)
