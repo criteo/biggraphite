@@ -173,7 +173,10 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
     def test_glob_metrics(self):
-        for name in "a", "a.a", "a.b", "a.a.a", "x.y.z":
+        metrics = ["a", "a.a", "a.b", "a.a.a", "x.y.z", "x.y.y.z", "x.y.y.y.z"]
+        metrics.sort()
+
+        for name in metrics:
             metric = bg_test_utils.make_metric(name)
             self.accessor.create_metric(metric)
 
@@ -181,16 +184,31 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             # Check we can find the matches of a glob
             self.assertEqual(expected_matches, self.accessor.glob_metric_names(glob))
 
-        assert_find("a.a", ["a.a"])  # Test exact match
-        assert_find("A", [])  # Test case mismatch
+        # Exact matches
+        assert_find("a.a", ["a.a"])
+        assert_find("A", [])
 
-        # Test various lengths
-        assert_find("*", ["a"])
-        assert_find("*.*", ["a.a", "a.b"])
-        assert_find("*.*.*", ["a.a.a", "x.y.z"])
+        # Wildcards
+        assert_find("*",
+                    [x for x in metrics if x.count(".") == 0])
+        assert_find("*.*",
+                    [x for x in metrics if x.count(".") == 1])
+        assert_find("*.*.*",
+                    [x for x in metrics if x.count(".") == 2])
+
+        # Globstars
+        assert_find("**",
+                    metrics)
+        assert_find("x.**",
+                    [x for x in metrics if x.startswith("x.")])
+        assert_find("**.z",
+                    [x for x in metrics if x.endswith(".z")])
+        assert_find("x.**.z",
+                    [x for x in metrics if x.startswith("x.") and x.endswith(".z")])
 
         self.accessor.drop_all_metrics()
         assert_find("*", [])
+        assert_find("**", [])
 
     def test_glob_directories(self):
         for name in "a", "a.b", "x.y.z":

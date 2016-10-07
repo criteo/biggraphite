@@ -56,6 +56,7 @@ DEFAULT_COMPRESSION = False
 DEFAULT_MAX_METRICS_PER_GLOB = 5000
 DEFAULT_TRACE = False
 DEFAULT_BULKIMPORT = False
+DEFAULT_MAX_WILDCARDS_FOR_GLOBSTAR = 32
 
 OPTIONS = {
     "keyspace": str,
@@ -100,6 +101,10 @@ def add_argparse_arguments(parser):
         help="Maximum number of metrics returned for a glob query.",
         default=DEFAULT_MAX_METRICS_PER_GLOB)
     parser.add_argument(
+        "--cassandra_max_queries_for_globstar", type=int,
+        help="Maximum number of wildcards (sub-queries) for globstar queries.",
+        default=DEFAULT_MAX_WILDCARDS_FOR_GLOBSTAR)
+    parser.add_argument(
         "--cassandra_trace",
         help="Enable query traces",
         default=DEFAULT_TRACE,
@@ -112,6 +117,7 @@ def add_argparse_arguments(parser):
 MINUTE = 60
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
+GLOBSTAR = "**"
 
 
 class Error(bg_accessor.Error):
@@ -316,7 +322,7 @@ class _LazyPreparedStatements(object):
             self.__data_files[stage_str] = fp
         else:
             fp = self.__data_files[stage_str]
-        fp.write(",".join([str(a) for a in args]) + "\n")
+            fp.write(",".join([str(a) for a in args]) + "\n")
 
     def _create_datapoints_table_stmt(self, stage):
         # Time after which data expire.
@@ -447,6 +453,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  timeout=DEFAULT_TIMEOUT,
                  compression=DEFAULT_COMPRESSION,
                  max_metrics_per_glob=DEFAULT_MAX_METRICS_PER_GLOB,
+                 max_wildcards_for_globstar=DEFAULT_MAX_WILDCARDS_FOR_GLOBSTAR,
                  trace=DEFAULT_TRACE,
                  bulkimport=DEFAULT_BULKIMPORT):
         """Record parameters needed to connect.
@@ -470,6 +477,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.contact_points = contact_points
         self.port = port
         self.max_metrics_per_glob = max_metrics_per_glob
+        self.max_wildcards_for_globstar = max_wildcards_for_globstar
         self.__connections = connections
         self.__compression = compression
         self.__trace = trace
@@ -561,14 +569,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 log.debug(e.source_elapsed, e.description)
         return future
 
-    def _execute_concurrent(self, session, statements_and_parameters, **kwargs):
+    def _execute_concurrent(self, statements_and_parameters, **kwargs):
         """Wrapper for concurrent.execute_concurrent()."""
         if self.__bulkimport:
             return []
 
         if not self.__trace:
             return c_concurrent.execute_concurrent(
-                session, statements_and_parameters, **kwargs)
+                self.__session, statements_and_parameters, **kwargs)
+
         query_results = []
         for statement, params in statements_and_parameters:
             try:
@@ -577,7 +586,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             except Exception as e:
                 result = e
                 success = False
-            query_results.append((success, result))
+                query_results.append((success, result))
         return query_results
 
     def make_metric(self, name, metadata):
@@ -666,7 +675,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         statements_and_args = self._fetch_points_make_selects(
             metric.id, time_start_ms, time_end_ms, stage)
         query_results = self._execute_concurrent(
-            self.__session,
             statements_and_args,
             results_generator=True,
         )
@@ -690,12 +698,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 row_min_offset_ms = time_start_ms - row_start_ms
             if row_start_ms == last_row:
                 row_max_offset_ms = time_end_ms - row_start_ms
+
             row_min_offset = stage.step_ms(row_min_offset_ms)
             row_max_offset = stage.step_ms(row_max_offset_ms)
 
             select = self.__lazy_statements.prepare_select(
-                stage=stage, metric_id=metric_id, row_start_ms=row_start_ms,
-                row_min_offset=row_min_offset, row_max_offset=row_max_offset,
+                stage=stage,
+                metric_id=metric_id,
+                row_start_ms=row_start_ms,
+                row_min_offset=row_min_offset,
+                row_max_offset=row_max_offset,
             )
             res.append(select)
 
@@ -749,32 +761,93 @@ class _CassandraAccessor(bg_accessor.Accessor):
             msg = "Metric globs can have a maximum of %d dots" % _COMPONENTS_MAX_LEN - 2
             raise bg_accessor.InvalidGlobError(msg)
 
+        queries = []
+
+        # Handle globstars (any number of wildcards at its position in the path)
+        if GLOBSTAR in components:
+            if components.count(GLOBSTAR) > 1:
+                # For performance reasons, we will not handle more than one of these
+                msg = "Metric globs can have a maximum of one globstar (**)"
+                raise bg_accessor.InvalidGlobError(msg)
+
+            # If the globstar is at the end, just drop the last component marker;
+            # otherwise we have to use iterative deepening with wildcards.
+            gs_index = components.index(GLOBSTAR)
+            before_last = - 2
+            if gs_index == len(components) + before_last:
+                gs_query = self.__build_select_metric_names_query(
+                    table, components[:before_last], glob, is_raw=True)
+                queries.append(gs_query)
+            else:
+                prefix = components[0:gs_index]
+                suffix = components[gs_index+1:]
+                max_wildcards = min(
+                    self.max_wildcards_for_globstar,
+                    _COMPONENTS_MAX_LEN - len(components)
+                )
+                for wildcards in range(1, max_wildcards):
+                    gs_components = prefix + (["*"] * wildcards) + suffix
+                    gs_query = self.__build_select_metric_names_query(table, gs_components, glob)
+                    queries.append(gs_query)
+        else:
+            query = self.__build_select_metric_names_query(table, components, glob)
+            queries.append(query)
+
+        metric_names = []
+        try:
+            for query in queries:
+                for row in self._execute(query):
+                    metric_names.append(row[0])
+                if len(metric_names) > self.max_metrics_per_glob:
+                    break
+        except Exception as e:
+            raise RetryableCassandraError(e)
+
+        if len(metric_names) > self.max_metrics_per_glob:
+            msg = "%s yields more than %d results" % (glob, self.max_metrics_per_glob)
+            raise TooManyMetrics(msg)
+
+        metric_names.sort()
+        return metric_names
+
+    def __build_select_metric_names_query(self, table, components, glob, is_raw=False):
+        """Build a select query to find metric names (table can be directories or metrics though).
+
+        Arguments:
+          table: Table name from which to select the rows.
+          components: Individual components from the glob.
+          glob: Globbing pattern we are generating the query for.
+          is_raw: True when we want to force WHERE clause generation without checking.
+
+        Returns:
+          Query string that is ready to be executed.
+        """
         where_parts = [
             "component_%d = %s" % (n, c_encoder.cql_quote(s))
             for n, s in enumerate(components)
             if s != "*"
         ]
-        if len(where_parts) == len(components):
-            # No wildcard, skip indexes
-            where = "name = " + c_encoder.cql_quote(glob)
+        if is_raw or len(where_parts) != len(components):
+            if len(where_parts) == 0:
+                # Avoid pesky syntax errors in case someone queries for "**"
+                where = ""
+            else:
+                where = "WHERE " + " AND ".join(where_parts)
         else:
-            where = " AND ".join(where_parts)
+            # No wildcard, skip indexes
+            where = "WHERE name = " + c_encoder.cql_quote(glob)
+
         query = (
             "SELECT name FROM \"%(keyspace)s\".\"%(table)s\""
-            " WHERE %(where)s LIMIT %(limit)d ALLOW FILTERING;"
+            " %(where)s LIMIT %(limit)d ALLOW FILTERING;"
         ) % {
-            "keyspace": self.keyspace_metadata, "table": table, "where": where,
+            "keyspace": self.keyspace_metadata,
+            "table": table,
+            "where": where,
             "limit": self.max_metrics_per_glob + 1,
         }
-        try:
-            metrics_names = [r[0] for r in self._execute(query)]
-        except Exception as e:
-            raise RetryableCassandraError(e)
-        if len(metrics_names) > self.max_metrics_per_glob:
-            msg = "%s yields more than %d results" % (glob, self.max_metrics_per_glob)
-            raise TooManyMetrics(msg)
-        metrics_names.sort()
-        return metrics_names
+
+        return query
 
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See bg_accessor.Accessor."""
@@ -865,6 +938,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     queries = self._create_parent_dirs_queries(components)
                     for i_statement, i_args in queries:
                         self._execute(i_statement, i_args)
+
                 token = row.system_token_name
 
     def shutdown(self):
