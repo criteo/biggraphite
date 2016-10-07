@@ -102,7 +102,6 @@ class CommandRead(command.BaseCommand):
         time_stop = stage.round_up(time.mktime(time_end.timetuple()))
 
         print("Name: ", metric.name)
-        print("Metadata: ", metric.metadata.as_string_dict())
         print("Time window: %s to %s" % (time_start, time_stop))
         print("Stage: ", str(stage))
         print("Points:")
