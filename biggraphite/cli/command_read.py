@@ -95,14 +95,16 @@ class CommandRead(command.BaseCommand):
             print("Metric '%s' doesn't exist" % metric_name)
             return
 
-        # TODO(c.chary): get a stage that matches the time window.
-        stage = forced_stage or metric.metadata.retention[0]
-
-        time_start = stage.round_up(time.mktime(time_start.timetuple()))
-        time_stop = stage.round_up(time.mktime(time_end.timetuple()))
+        if forced_stage:
+            stage = forced_stage
+            time_start = stage.round_up(time.mktime(time_start.timetuple()))
+            time_stop = stage.round_up(time.mktime(time_end.timetuple()))
+        else:
+            time_start, time_end, stage = metric.retention.align_time_window(
+                time_start, time_end, time.time()
+            )
 
         print("Name: ", metric.name)
-        print("Metadata: ", metric.metadata.as_string_dict())
         print("Time window: %s to %s" % (time_start, time_stop))
         print("Stage: ", str(stage))
         print("Points:")

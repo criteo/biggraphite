@@ -24,6 +24,7 @@ from biggraphite import utils as bg_utils
 from biggraphite.cli import command_du
 from biggraphite.cli import command_test
 from biggraphite.cli import command_read
+from biggraphite.cli import command_info
 from biggraphite.cli import command_repair
 from biggraphite.cli import command_shell
 
@@ -32,6 +33,7 @@ COMMANDS = [
     command_test.CommandTest(),
     command_du.CommandDu(),
     command_read.CommandRead(),
+    command_info.CommandInfo(),
     command_repair.CommandRepair(),
     command_shell.CommandShell(),
 ]
