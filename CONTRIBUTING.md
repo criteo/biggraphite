@@ -106,6 +106,7 @@ Change (or append) the following settings to the `carbon.conf` file:
 BG_CASSANDRA_KEYSPACE = biggraphite
 BG_CASSANDRA_CONTACT_POINTS = 127.0.0.1
 DATABASE = biggraphite
+STORAGE_DIR = /tmp
 ```
 
 You can test your new configuration with:

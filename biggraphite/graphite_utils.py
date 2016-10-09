@@ -78,6 +78,42 @@ def _graphite_glob_to_accessor_components(graphite_glob):
     ])
 
 
+def _expand_braces(glob):
+    """Expand curly braces expressions.
+
+    From: https://bugs.python.org/issue9584
+
+    Args:
+      glob: a fnmatch like glob.
+
+    Returns:
+      list(str): a list of expanded versions of glob.
+    """
+    r = r'.*(\{.+?[^\\]\})'
+    p = re.compile(r)
+
+    s = glob[:]
+    res = list()
+
+    m = p.search(s)
+    if m is not None:
+        sub = m.group(1)
+        open_brace = s.find(sub)
+        close_brace = open_brace + len(sub) - 1
+        if sub.find(',') != -1:
+            for pat in sub.strip('{}').split(','):
+                res.extend(_expand_braces(s[:open_brace] + pat + s[close_brace+1:]))
+
+        else:
+            res.extend(_expand_braces(
+                s[:open_brace] + sub.replace('}', '\\}') + s[close_brace+1:]))
+
+    else:
+        res.append(s.replace('\\}', '}'))
+
+    return list(set(res))
+
+
 def _filter_metrics(metrics, glob):
     """fnmatch.filter supporting braces. Adapted from graphite-web/webapp/graphite/finders/__init__.py.
 
@@ -88,13 +124,8 @@ def _filter_metrics(metrics, glob):
     Returns:
       Sorted unique list of metrics matching the glob
     """
-    brace_open, brace_close = glob.find("{"), glob.find("}")
-
     matches = set()
-    variants = [glob]
-    if brace_open > -1 and brace_close > brace_open:
-        brace_variants = glob[brace_open+1:brace_close].split(",")
-        variants = [glob[:brace_open] + p + glob[brace_close+1:] for p in brace_variants]
+    variants = _expand_braces(glob)
 
     for variant in variants:
         for match in fnmatch.filter(metrics, variant):

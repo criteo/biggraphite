@@ -37,6 +37,7 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         self.assertTrue(bg_gu._is_graphite_glob("a.b?"))
         self.assertTrue(bg_gu._is_graphite_glob("a.b[a-z]?"))
         self.assertTrue(bg_gu._is_graphite_glob("a{b,c,d}.a"))
+        self.assertTrue(bg_gu._is_graphite_glob("{b}"))
         self.assertTrue(bg_gu._is_graphite_glob("a.*.a"))
         self.assertFalse(bg_gu._is_graphite_glob("a.a"))
         self.assertFalse(bg_gu._is_graphite_glob("a-z"))
@@ -49,6 +50,7 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         self.assertEqual('*.b', bg_gu._graphite_glob_to_accessor_components('a{x,y}z.b'))
         self.assertEqual('*.b', bg_gu._graphite_glob_to_accessor_components('a[0-9].b'))
         self.assertEqual('*.b', bg_gu._graphite_glob_to_accessor_components('a[0-9]z.b'))
+        self.assertEqual('*.*', bg_gu._graphite_glob_to_accessor_components('a[0-9]z.{b}'))
 
     def test_filter_metrics(self):
         # pylama:ignore=E501
@@ -58,6 +60,8 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         self.assertEqual(['a.bd', 'a.cd'], bg_gu._filter_metrics(['y.z', 'a.bd', 'a.cd'], '?.{b,c}?'))
         self.assertEqual(['a.0_', 'a.1_'], bg_gu._filter_metrics(['a.b_', 'a.0_', 'a.1_'], '?.[0-9]?'))
         self.assertEqual(['a.b.c', 'a.x.y'], bg_gu._filter_metrics(['a.b', 'a.b.c', 'a.x.y'], 'a.*.*'))
+        self.assertEqual(['a.b.c', 'a.x.y'], bg_gu._filter_metrics(['a.b', 'a.b.c', 'a.x.y'], 'a.{b,x}.*'))
+        self.assertEqual(['a.b.c', 'a.x.y'], bg_gu._filter_metrics(['a.b', 'a.b.c', 'a.x.y'], 'a.{b,x}.{c,y}'))
 
 
 class TestGraphiteUtils(bg_test_utils.TestCaseWithFakeAccessor):
