@@ -22,6 +22,7 @@ import datetime
 from biggraphite.cli import command
 from biggraphite import accessor as bg_accessor
 
+
 class CommandWrite(command.BaseCommand):
     """Write points."""
 
@@ -29,6 +30,7 @@ class CommandWrite(command.BaseCommand):
     HELP = "write a point to a given metric, creating it if it does not exist."
 
     def add_arguments(self, parser):
+        """Add custom arguments."""
         parser.add_argument(
             "metric",
             help="Name of the metric to update.",
@@ -73,6 +75,7 @@ class CommandWrite(command.BaseCommand):
         )
 
     def run(self, accessor, opts):
+        """Run the command."""
         accessor.connect()
 
         metric = accessor.get_metric(opts.metric)
@@ -81,9 +84,9 @@ class CommandWrite(command.BaseCommand):
         else:
             print("Metric '%s' was not found and will be created")
             metadata = bg_accessor.MetricMetadata(
-                aggregator = bg_accessor.Aggregator.from_config_name(opts.aggregator),
-                retention = bg_accessor.Retention.from_string(opts.retention),
-                carbon_xfilesfactor = opts.x_files_factor,
+                aggregator=bg_accessor.Aggregator.from_config_name(opts.aggregator),
+                retention=bg_accessor.Retention.from_string(opts.retention),
+                carbon_xfilesfactor=opts.x_files_factor,
             )
             metric = accessor.make_metric(opts.metric, metadata)
             accessor.create_metric(metric)
