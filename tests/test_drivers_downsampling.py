@@ -45,7 +45,7 @@ class TestDownsampler(unittest.TestCase):
         metric_metadata = bg_accessor.MetricMetadata(
             aggregator=bg_accessor.Aggregator.average, retention=retention)
         self.metric_avg = bg_accessor.Metric(self.METRIC_NAME_AVG, uid, metric_metadata)
-        self.ds = bg_ds.Downsampler(self.CAPACITY)
+        self.ds = bg_ds.Downsampler(accessor=None, capacity=self.CAPACITY)
 
     def test_feed_simple_sum(self):
         """Test feed with few points."""

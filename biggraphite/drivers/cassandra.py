@@ -33,7 +33,6 @@ from cassandra import policies as c_policies
 from cassandra.io import asyncorereactor as c_asyncorereactor
 
 from biggraphite import accessor as bg_accessor
-from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 
 log = logging.getLogger(__name__)
@@ -487,13 +486,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188
         self.__load_balancing_policy = (
             c_policies.TokenAwarePolicy(c_policies.DCAwareRoundRobinPolicy()))
-        self.__downsampler = _downsampling.Downsampler()
         self.__cluster = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
         self.__timeout = timeout
         self.__insert_metrics_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
+
+    @property
+    def max_requests_per_connection(self):
+        return self.__cluster.get_max_requests_per_connection()
 
     def connect(self, skip_schema_upgrade=False):
         """See bg_accessor.Accessor."""
@@ -855,9 +857,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             metric, datapoints, on_done)
 
         log.debug("insert: [%s, %s]", metric.name, datapoints)
-
-        downsampled = self.__downsampler.feed(metric, datapoints)
-        return self.insert_downsampled_points_async(metric, downsampled, on_done)
+        self._downsampler.write_aggregates(metric, datapoints, on_done)
 
     def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
         """See bg_accessor.Accessor."""

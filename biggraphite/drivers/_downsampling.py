@@ -19,8 +19,76 @@ from __future__ import print_function
 
 import array
 import math
+import Queue
+import threading
+
 
 _NaN = float("NaN")
+
+_MAX_WRITE_DELAY = 5 * 60  # in seconds
+
+
+class _Writer(threading.Thread):
+    def __init__(self, accessor):
+        super(_Writer, self).__init__()
+        self._accessor = accessor
+        self._queue = Queue.Queue()
+        self._must_stop = threading.Event()
+        self._avg_sleep = 0
+
+    def soon(self, metric, downsampled, on_done=None):
+        self._accessor.insert_downsampled_points_async(metric, downsampled, on_done)
+
+    def later(self, metric, downsampled, on_done=None):
+        if not self.__started.is_set():
+            self.start()
+        self._queue.put_nowait((metric, downsampled, on_done))
+
+    def stop(self):
+        self._must_stop.set()
+
+    def __del__(self):
+        self.stop()
+
+    def run(self):
+        """Insert aggregates periodically.
+
+        Write once in a while the aggregated points present in the dedicated queue.
+        The delay between two writes is automatically adjusted between 0s and
+        _MAX_WRITE_DELAY, wrt the frequency of the updates encountered.
+        There's a dedicated Event to stop this -otherwise infinite- loop.
+        """
+        max_requests = self._accessor.max_requests_per_connection
+
+        while True:
+            if self._must_stop.wait(timeout=self._avg_sleep):
+                break
+
+            per_metric = {}
+            while not self._queue.empty():
+                metric, downsampled, on_done = self._queue.get()
+                _, callback, aggregated = per_metric.get(metric.name, (None, None, {}))
+
+                # override any existing point with same timestamp and stage: last speaker wins
+                for timestamp, value, count, stage in downsampled:
+                    aggregated[(timestamp, stage)] = (value, count)
+
+                # let's keep one callback function per metric
+                per_metric[metric.name] = (metric, callback or on_done, aggregated)
+
+            request_count = 0
+            for metric, on_done, aggregated in per_metric.itervalues():
+                downsampled = [
+                    (timestamp, value, count, stage)
+                    for (timestamp, stage), (value, count) in aggregated.iteritems()
+                ]
+                self.soon(metric, downsampled, on_done)
+                request_count += len(downsampled)
+
+            if max_requests and request_count > max_requests:
+                self._avg_sleep *= .9
+            else:
+                self._avg_sleep = min(self._avg_sleep + 1., _MAX_WRITE_DELAY)
 
 
 class Downsampler(object):
@@ -30,17 +98,18 @@ class Downsampler(object):
 
     slots = (
         "_capacity",
-        "_names_to_aggregates"
+        "_names_to_aggregates",
+        "_writer"
     )
 
     # TODO(c.chary):
     # - Add a cleanup thread.
-    # - Add a thread to write aggregates.
 
-    def __init__(self, capacity=CAPACITY):
+    def __init__(self, accessor, capacity=CAPACITY):
         """Default constructor."""
         self._capacity = capacity
         self._names_to_aggregates = {}
+        self._writer = _Writer(accessor)
 
     def feed(self, metric, points):
         """Feed the downsampler and produce points.
@@ -63,6 +132,32 @@ class Downsampler(object):
 
         # Sort points by increasing timestamp, because put expects them in order.
         return self._names_to_aggregates[metric.name].update(sorted(points))
+
+    def write_aggregates(self, metric, points, on_done):
+        """Feed the downsampler and asynchronously write aggregated points.
+
+        Arg:
+          metric: Metric
+          points: iterable of (timestamp, value)
+          on_done(e: Exception): called on done, with an exception or None if successful
+        """
+        soon = []
+        later = []
+        for point in self.feed(metric, points):
+            timestamp, value, count, stage = point
+            downsampled = later if self._can_be_postponed(stage) else soon
+            downsampled.append(point)
+
+        if not (soon or later):
+            on_done(None)
+        if soon:
+            self._writer.soon(metric, soon, on_done)
+        if later:
+            self._writer.later(metric, later, on_done)
+
+    @staticmethod
+    def _can_be_postponed(stage):
+        return stage.precision > _MAX_WRITE_DELAY
 
 
 class MetricAggregates(object):
