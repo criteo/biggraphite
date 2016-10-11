@@ -45,7 +45,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     plugin_name = "biggraphite"
 
     # See class pydoc for the rational.
-    _SYNC_EVERY_N_WRITE = 100
+    _SYNC_EVERY_N_WRITE = 10
 
     def __init__(self, settings):
         self._cache = None

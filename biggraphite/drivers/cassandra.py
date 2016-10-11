@@ -265,7 +265,7 @@ class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
     """A connection with a cap on the number of in-flight requests per host."""
 
     # 300 is the minimum with protocol version 3, default is 65536
-    max_in_flight = 300
+    max_in_flight = 500
 
 
 class _CountDown(_utils.CountDown):
