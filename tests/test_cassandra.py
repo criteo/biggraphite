@@ -246,6 +246,13 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         for k, v in meta_dict.iteritems():
             self.assertEqual(v, getattr(metric_again.metadata, k))
 
+    def test_has_metric(self):
+        metric = self.make_metric("a.b.c.d.e.f")
+
+        self.assertEquals(self.accessor.has_metric(metric.name), False)
+        self.accessor.create_metric(metric)
+        self.assertEquals(self.accessor.has_metric(metric.name), True)
+
     def test_repair(self):
         # TODO(c.chary): Add better test for repair()
         self.accessor.repair()

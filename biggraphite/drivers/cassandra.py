@@ -713,13 +713,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         return res
 
-    def has_metric(self, metric_name):
-        """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).has_metric(metric_name)
+    def _select_metric(self, metric_name):
+        """Fetch metric metadata."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         result = list(self._execute(
             self.__select_metric_statement, (encoded_metric_name, )))
         if not result:
+            return None
+        return result[0]
+
+    def has_metric(self, metric_name):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).has_metric(metric_name)
+        if not self._select_metric(metric_name):
             return False
 
         # Small trick here: we also check that the parent directory
@@ -735,13 +741,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
         metric_name = bg_accessor.encode_metric_name(metric_name)
-        result = list(self._execute(
-            self.__select_metric_statement, (metric_name, )))
-
+        result = self._select_metric(metric_name)
         if not result:
             return None
-        id = result[0][0]
-        config = result[0][1]
+        id = result[0]
+        config = result[1]
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
         return bg_accessor.Metric(metric_name, id, metadata)
 
@@ -833,18 +837,21 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 where = ""
             else:
                 where = "WHERE " + " AND ".join(where_parts)
+            filtering = True
         else:
             # No wildcard, skip indexes
             where = "WHERE name = " + c_encoder.cql_quote(glob)
+            filtering = False
 
         query = (
             "SELECT name FROM \"%(keyspace)s\".\"%(table)s\""
-            " %(where)s LIMIT %(limit)d ALLOW FILTERING;"
+            " %(where)s LIMIT %(limit)d %(filtering)s;"
         ) % {
             "keyspace": self.keyspace_metadata,
             "table": table,
             "where": where,
             "limit": self.max_metrics_per_glob + 1,
+            "filtering": "ALLOW FILTERING" if filtering else ""
         }
 
         return query
