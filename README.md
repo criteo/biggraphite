@@ -10,7 +10,7 @@ For usage information and how to contribute, please see [CONTRIBUTING.md](CONTRI
 
 # Usage
 
-See [USAGE.md](USAGE.md) and [CONFIGURATION.md](CONFIGURATION.MD).
+See [USAGE.md](USAGE.md) and [CONFIGURATION.md](CONFIGURATION.md).
 
 # Contact
 
