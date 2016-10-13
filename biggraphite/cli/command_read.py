@@ -121,7 +121,6 @@ class CommandRead(command.BaseCommand):
     @staticmethod
     def _display_metric(metric, results):
         """Print metric's information."""
-
         (points, time_start, time_end, stage) = results
 
         print("Name: ", metric.name)
