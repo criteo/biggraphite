@@ -503,6 +503,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             executor_threads=self.__connections,
             compression=self.__compression,
             load_balancing_policy=self.__load_balancing_policy,
+            # TODO(c.chary): export these metrics somewhere.
+            metrics_enabled=True,
         )
         self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
         self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU
