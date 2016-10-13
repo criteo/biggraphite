@@ -58,6 +58,11 @@ class CommandRead(command.BaseCommand):
             default="",
             required=False,
         )
+        parser.add_argument(
+            "--async",
+            help="Do reads asynchronously.",
+            action="store_true"
+        )
 
     def run(self, accessor, opts):
         """Read points.
@@ -78,43 +83,52 @@ class CommandRead(command.BaseCommand):
         ]
 
         forced_stage = bg_accessor.Stage.from_string(opts.stage) if opts.stage else None
+        time_start = opts.time_start
+        time_end = opts.time_end
 
-        for i, metric in enumerate(metrics):
-            if i:
-                print()
+        async_results = []
+        if opts.async:
+            # Fetch all points asynchronously.
+            for metric in metrics:
+                results = self._fetch_points(
+                    accessor, metric, time_start, time_end, forced_stage)
+                async_results.append(results)
+        else:
+            async_results = [None] * len(metrics)
 
-            self._display_metric(
-                accessor, metric, metric_names[i],
-                opts.time_start, opts.time_end, forced_stage
-            )
+        for metric, results in zip(metrics, async_results):
+            if not results:
+                results = self._fetch_points(
+                    accessor, metric, time_start, time_end, forced_stage)
+
+            self._display_metric(metric, results)
 
     @staticmethod
-    def _display_metric(accessor, metric, metric_name, time_start, time_end, forced_stage=None):
-        """Print metric's information."""
-        if metric is None:
-            print("Metric '%s' doesn't exist" % metric_name)
-            return
-
-        if forced_stage:
-            stage = forced_stage
-            time_start = stage.round_up(time.mktime(time_start.timetuple()))
-            time_stop = stage.round_up(time.mktime(time_end.timetuple()))
+    def _fetch_points(accessor, metric, time_start, time_end, stage):
+        time_start = time.mktime(time_start.timetuple())
+        time_end = time.mktime(time_end.timetuple())
+        if stage:
+            time_start = stage.round_up(time_start)
+            time_end = stage.round_up(time_end)
         else:
             time_start, time_end, stage = metric.retention.align_time_window(
                 time_start, time_end, time.time()
             )
+            points = accessor.fetch_points(metric, time_start, time_end, stage)
+
+        return (points, time_start, time_end, stage)
+
+    @staticmethod
+    def _display_metric(metric, results):
+        """Print metric's information."""
+
+        (points, time_start, time_end, stage) = results
 
         print("Name: ", metric.name)
-        print("Time window: %s to %s" % (time_start, time_stop))
+        print("Time window: %s to %s" % (time_start, time_end))
         print("Stage: ", str(stage))
         print("Points:")
 
-        points = accessor.fetch_points(
-            metric,
-            time_start,
-            time_stop,
-            stage
-        )
-
         for point in points:
             print('%s: %s' % (point[0], point[1]))
+        print()

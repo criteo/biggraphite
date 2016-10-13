@@ -539,8 +539,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         if self.__trace:
             kwargs["trace"] = True
-            log.debug(' '.join([str(arg) for arg in args]))
 
+        log.debug(' '.join([str(arg) for arg in args]))
         result = self.__session.execute(*args, **kwargs)
 
         if self.__trace:
@@ -559,8 +559,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         if self.__trace:
             kwargs["trace"] = True
-            log.debug(' '.join([str(arg) for arg in args]))
 
+        log.debug(' '.join([str(arg) for arg in args]))
         future = self.__session.execute_async(*args, **kwargs)
 
         if self.__trace:
@@ -574,6 +574,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__bulkimport:
             return []
 
+        log.debug(statements_and_parameters)
+
         if not self.__trace:
             return c_concurrent.execute_concurrent(
                 self.__session, statements_and_parameters, **kwargs)
@@ -586,7 +588,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             except Exception as e:
                 result = e
                 success = False
-                query_results.append((success, result))
+            query_results.append((success, result))
         return query_results
 
     def make_metric(self, name, metadata):
