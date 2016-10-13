@@ -77,10 +77,10 @@ class CommandRead(command.BaseCommand):
         if not metric_names:
             print("Globbing pattern '%s' doesn't match any metric" % opts.metrics)
 
-        metrics = [
-            accessor.get_metric(metric)
-            for metric in metric_names
-        ]
+        metrics = filter(None, [
+            accessor.get_metric(metric_name)
+            for metric_name in metric_names
+        ])
 
         forced_stage = bg_accessor.Stage.from_string(opts.stage) if opts.stage else None
         time_start = opts.time_start
