@@ -6,6 +6,7 @@ ipython
 lmdb
 parsedatetime
 progressbar2
+scales
 sortedcontainers
 statistics
 whisper

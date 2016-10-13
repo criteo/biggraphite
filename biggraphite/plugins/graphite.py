@@ -20,6 +20,7 @@ import time
 from graphite import intervals
 from graphite import node
 from graphite import readers
+from graphite.logger import log
 
 
 from biggraphite import accessor as bg_accessor
@@ -75,6 +76,10 @@ class Reader(object):
           A tuple made of (rounded start time, rounded end time, stage precision), points
           Points is a list for which missing points are set to None.
         """
+        time_start = time.time()
+        log.rendering('fetch(%s, %d, %d) - start' % (
+            self._metric_name, start_time, end_time))
+
         self.__refresh_metric()
         if now is None:
             now = time.time()
@@ -94,8 +99,13 @@ class Reader(object):
             for ts, point in ts_and_points:
                 index = stage.step(ts) - start_step
                 points[index] = point
+            log.rendering('fetch(%s, %d, %d) - %d points %f secs' % (
+                self._metric_name, start_time, end_time, len(points),
+                time.time() - time_start))
             return (start_time, end_time, stage.precision), points
 
+        log.rendering('fetch(%s, %d, %d) - started' % (
+            self._metric_name, start_time, end_time))
         return readers.FetchInProgress(read_points)
 
     def get_intervals(self, now=None):
@@ -154,7 +164,10 @@ class Finder(object):
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: handle directories constructor argument/property
+        time_start = time.time()
         metric_names, directories = glob_utils.graphite_glob(self.accessor(), query.pattern)
+        log.rendering('find(%s) - %f secs' % (query.pattern, time.time() - time_start))
+
         for metric_name in metric_names:
             reader = Reader(self.accessor(), self.cache(), metric_name)
             yield node.LeafNode(metric_name, reader)
