@@ -85,12 +85,11 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
             self._plugin.setMetadata, _TEST_METRIC, "aggregationMethod", "avg")
 
     def test_write(self):
-        metric = bg_test_utils.make_metric(_TEST_METRIC)
         points = [(1, 42)]
-        self.accessor.create_metric(metric)
         # Writing twice (the first write is sync and the next one isn't)
-        self._plugin.write(metric.name, points)
-        self._plugin.write(metric.name, points)
+        self._plugin.write(_TEST_METRIC, points)
+        self._plugin.write(_TEST_METRIC, points)
+        metric = self.accessor.get_metric(_TEST_METRIC)
         actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 

@@ -73,15 +73,11 @@ class _MemoryAccessor(bg_accessor.Accessor):
         super(_MemoryAccessor, self).insert_points_async(
             metric, datapoints, on_done)
         assert metric.name in self._name_to_metric
-        points = self._metric_to_points[metric.name]
-        # TODO(c.chary): uncomment that when the downsampler has been
-        #   fixed. Currently it waits a few iteration before emitting points.
-        #   it will also need additional fixing to read aggregated metrics
-        #   while storing downsampled metrics.
-        # datapoints = self.__downsampler.feed(metric, datapoints)
+        datapoints = self.__downsampler.feed(metric, datapoints)
         for datapoint in datapoints:
-            timestamp, value = datapoint
-            points[timestamp] = value
+            timestamp, value, count, stage = datapoint
+            points = self._metric_to_points[(metric.name, stage)]
+            points[timestamp] = (value, count)
         if on_done:
             on_done(None)
 
@@ -144,11 +140,11 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).fetch_points(
             metric, time_start, time_end, stage)
-        points = self._metric_to_points[metric.name]
+        points = self._metric_to_points[(metric.name, stage)]
         rows = []
         for ts in points.irange(time_start, time_end):
             # A row is time_base_ms, time_offset_ms, value, count
-            row = self.Row(ts * 1000.0, 0, float(points[ts]), 1)
+            row = self.Row(ts * 1000.0, 0, float(points[ts][0]), points[ts][1])
             rows.append(row)
 
         query_results = [(True, rows)]

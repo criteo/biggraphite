@@ -773,7 +773,8 @@ class PointGrouper(object):
     abstracted away if more datastores do client-side agregation.
     """
 
-    def __init__(self, metric, time_start_ms, time_end_ms, stage, query_results):
+    def __init__(self, metric, time_start_ms, time_end_ms, stage, query_results,
+                 source_stage=None):
         """Constructor for PointGrouper.
 
         Args:
@@ -784,11 +785,14 @@ class PointGrouper(object):
             exclusive, must be a multiple of stage.precision
           stage: the retention stage we are producing points for
           query_results: query results to fetch values from.
+          source_stage: the retentation stage we are consuming points from.
+            if None, this is equivalent to stage.
         """
         self.metric = metric
         self.time_start_ms = time_start_ms
         self.time_end_ms = time_end_ms
         self.stage = stage
+        self.source_stage = source_stage or stage
         self.query_results = query_results
 
         self.current_values = array.array("d")
@@ -832,22 +836,26 @@ class PointGrouper(object):
             if not successful:
                 first_exc = rows_or_exception
             for row in rows_or_exception:
-                # row is (time_start_ms, offset, value, count)
-                timestamp_ms = row.time_start_ms + row.offset * self.stage.precision_ms
+                (time_start_ms, offset, value, count) = row
+                timestamp_ms = (
+                    time_start_ms + offset * self.source_stage.precision_ms)
 
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms
-                timestamp_ms = round_down(timestamp_ms, self.stage.precision_ms)
+                if self.stage != self.source_stage:
+                    timestamp_ms = round_down(timestamp_ms, self.stage.precision_ms)
 
                 if self.current_timestamp_ms != timestamp_ms:
+                    # This needs to be optimized because in the common case
+                    # there is absolutely nothing to aggregate.
                     ts, point = self.run_aggregator()
                     if ts is not None:
                         yield (ts, point)
 
                     self.current_timestamp_ms = timestamp_ms
 
-                self.current_values.append(row.value)
-                self.current_counts.append(row.count)
+                self.current_values.append(value)
+                self.current_counts.append(count)
 
         ts, point = self.run_aggregator()
         if ts is not None:
