@@ -21,7 +21,6 @@ import unittest
 
 from carbon import database
 from carbon import conf as carbon_conf
-from carbon import exceptions as carbon_exceptions
 
 from biggraphite.plugins import carbon as bg_carbon
 
@@ -47,9 +46,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         )
 
     def test_empty_settings(self):
-        database = bg_carbon.BigGraphiteDatabase(carbon_conf.Settings())
-        self.assertRaises(carbon_exceptions.CarbonConfigException,
-                          database.cache)
+        bg_carbon.BigGraphiteDatabase(carbon_conf.Settings())
 
     def test_get_fs_path(self):
         path = self._plugin.getFilesystemPath(_TEST_METRIC)
@@ -85,12 +82,11 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
             self._plugin.setMetadata, _TEST_METRIC, "aggregationMethod", "avg")
 
     def test_write(self):
-        metric = bg_test_utils.make_metric(_TEST_METRIC)
         points = [(1, 42)]
-        self.accessor.create_metric(metric)
         # Writing twice (the first write is sync and the next one isn't)
-        self._plugin.write(metric.name, points)
-        self._plugin.write(metric.name, points)
+        self._plugin.write(_TEST_METRIC, points)
+        self._plugin.write(_TEST_METRIC, points)
+        metric = self.accessor.get_metric(_TEST_METRIC)
         actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 

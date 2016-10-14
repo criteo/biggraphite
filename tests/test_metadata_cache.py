@@ -18,11 +18,12 @@ from __future__ import print_function
 import unittest
 
 from biggraphite import test_utils as bg_test_utils
+from biggraphite import metadata_cache as bg_metadata_cache
 
 _TEST_METRIC = bg_test_utils.make_metric("a.b.c")
 
 
-class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
+class CacheBaseTest(object):
 
     def _assert_hit_miss(self, hit, miss):
         self.assertEqual(hit, self.metadata_cache.hit_count)
@@ -83,7 +84,7 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         metric_name = "a.b.fake"
         metric = bg_test_utils.make_metric(metric_name)
 
-        self.metadata_cache._cache(metric)
+        self.metadata_cache._cache_set(metric_name, metric)
         self.metadata_cache.repair()
         self.metadata_cache.get_metric(metric_name)
         # repair() will remove it, and the get will produce a miss.
@@ -107,7 +108,7 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         metric_name = "a.b.fake"
         metric = bg_test_utils.make_metric(metric_name)
 
-        self.metadata_cache._cache(metric)
+        self.metadata_cache._cache_set(metric_name, metric)
 
         # Will not fix.
         self.metadata_cache.repair(start_key="b")
@@ -121,6 +122,16 @@ class TestGraphiteUtilsInternals(bg_test_utils.TestCaseWithFakeAccessor):
         # repair() will remove it, and the get will produce a miss.
         self.assertEquals(self.metadata_cache.hit_count, 2)
         self.assertEquals(self.metadata_cache.miss_count, 1)
+
+
+class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
+
+    CACHE_CLASS = bg_metadata_cache.DiskCache
+
+
+class TestMemoryCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
+
+    CACHE_CLASS = bg_metadata_cache.MemoryCache
 
 
 if __name__ == "__main__":

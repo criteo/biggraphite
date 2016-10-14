@@ -507,8 +507,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             metrics_enabled=True,
         )
         self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
-        self.__cluster.row_factory = c_query.tuple_factory  # Saves 2% CPU
         self.__session = self.__cluster.connect()
+        self.__session.row_factory = c_query.tuple_factory  # Saves 2% CPU
         if self.__timeout:
             self.__session.default_timeout = self.__timeout
         if not skip_schema_upgrade:
@@ -683,7 +683,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             results_generator=True,
         )
         return bg_accessor.PointGrouper(
-            metric, time_start_ms, time_end_ms, stage, query_results)
+            metric, time_start_ms, time_end_ms, stage, query_results
+        )
 
     def _fetch_points_make_selects(self, metric_id, time_start_ms,
                                    time_end_ms, stage):

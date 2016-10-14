@@ -32,7 +32,7 @@ _METRIC_NAME = "test_metric"
 
 # TODO: Move this to test_utils.
 def _make_easily_queryable_points(start, end, period):
-    """Return points that aggregats easily.
+    """Return points that aggregates easily.
 
     Averaging over each period gives range((end-start)/period).
     Taking last or max for each period gives [x*3 for x in range(end-start)].
@@ -40,16 +40,18 @@ def _make_easily_queryable_points(start, end, period):
     """
     assert period % 4 == 0
     assert start % period == 0
+    subperiod = period / 4
     res = []
-    for t in xrange(start, end, 4):
+    for t in xrange(start, end, period):
         current_period = (t - start) // period
         # A fourth of points are -1
-        res.append((t+0, -1))
+        res.append((t+0*subperiod, -1))
         # A fourth of points are +1
-        res.append((t+1, +1))
+        res.append((t+1*subperiod, +1))
         # A fourth of points are the start timestamp
-        res.append((t+2, current_period * 3))
+        res.append((t+2*subperiod, current_period * 3))
         # A fourth of points are missing
+
     return res
 
 
@@ -57,9 +59,9 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3600
-    _RETENTION = bg_accessor.Retention.from_string("1440*60s")
+    _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s")
     _POINTS = _make_easily_queryable_points(
-        start=_POINTS_START, end=_POINTS_END, period=_RETENTION[0].precision,
+        start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
     )
     _METRIC = bg_test_utils.make_metric(_METRIC_NAME, retention=_RETENTION)
 
@@ -83,7 +85,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
             end_time=self._POINTS_END-3,
             now=self._POINTS_END+10,
         )
-        self.assertEqual(self._RETENTION[0].precision, step)
+        self.assertEqual(self._RETENTION[1].precision, step)
         # We expect these to have been rounded to match precision.
         self.assertEqual(self._POINTS_START, start)
         self.assertEqual(self._POINTS_END, end)

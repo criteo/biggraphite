@@ -21,11 +21,9 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 # patch: https://goo.gl/1gAcz1 .
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
-from carbon import exceptions as carbon_exceptions
 
 from biggraphite import graphite_utils
 from biggraphite import accessor
-from biggraphite import metadata_cache
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102
@@ -63,12 +61,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def cache(self):
         if not self._cache:
-            try:
-                storage_path = graphite_utils.storage_path(self._settings)
-            except graphite_utils.ConfigError as e:
-                raise carbon_exceptions.CarbonConfigException(e)
-
-            cache = metadata_cache.DiskCache(self.accessor(), storage_path)
+            cache = graphite_utils.cache_from_settings(self.accessor(), self._settings)
             cache.open()
             self._cache = cache
 
@@ -77,6 +70,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
         metric = self.cache().get_metric(metric_name=metric_name)
+
         # Round down timestamp because inner functions expect integers.
         datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
 

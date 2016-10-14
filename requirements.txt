@@ -1,15 +1,25 @@
-ConfigArgParse
-cassandra-driver
-enum34
+
+# Commande line
 humanize
 ipython
-lmdb
 parsedatetime
 progressbar2
-scales
-sortedcontainers
-statistics
-whisper
 
+# Memory driver
+sortedcontainers
+
+# Cassandra driver
+cassandra-driver
+scales
+
+# Core
+enum34
+cachetools
+
+# Metadata cache
+lmdb
+
+# Graphite
+whisper
 git+https://github.com/graphite-project/carbon.git@master#egg=carbon
 git+https://github.com/graphite-project/graphite-web.git@master#egg=graphite-web

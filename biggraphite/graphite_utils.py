@@ -14,8 +14,6 @@
 # limitations under the License.
 """Graphite utility module."""
 
-from os import path as os_path
-
 from biggraphite import utils as bg_utils
 
 
@@ -45,16 +43,15 @@ def accessor_from_settings(settings):
     return bg_utils.accessor_from_settings(settings)
 
 
-def storage_path(settings):
-    """Get storage path from configuration.
+def cache_from_settings(accessor, settings):
+    """Get Cache from Graphite-related configuration object.
 
     Args:
-      settings: either carbon_conf.Settings or a Django-like settings object
+      accessor: a connected Accessor.
+      settings: either carbon_conf.Settings or a Django-like settings object.
 
     Returns:
-      An absolute path.
+      Cache (not opened).
     """
-    path, found = bg_utils.get_setting(settings, "STORAGE_DIR")
-    if not path or not os_path.exists(path):
-        raise ConfigError("STORAGE_DIR is set to an unexisting directory: '%s'" % path)
-    return os_path.abspath(path)
+    settings = bg_utils.settings_from_confattr(settings)
+    return bg_utils.cache_from_settings(accessor, settings)

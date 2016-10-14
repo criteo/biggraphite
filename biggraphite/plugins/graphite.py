@@ -26,7 +26,6 @@ from graphite.logger import log
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils
 from biggraphite import graphite_utils
-from biggraphite import metadata_cache as bg_metadata_cache
 
 
 _CONFIG_NAME = "biggraphite"
@@ -76,7 +75,7 @@ class Reader(object):
           A tuple made of (rounded start time, rounded end time, stage precision), points
           Points is a list for which missing points are set to None.
         """
-        time_start = time.time()
+        fetch_start = time.time()
         log.rendering('fetch(%s, %d, %d) - start' % (
             self._metric_name, start_time, end_time))
 
@@ -87,11 +86,13 @@ class Reader(object):
         start_time, end_time, stage = self.__get_time_info(start_time, end_time, now)
 
         # This returns a generator which we can iterate on later.
-        ts_and_points = self._accessor.fetch_points(self._metric, start_time, end_time, stage)
+        ts_and_points = self._accessor.fetch_points(
+            self._metric, start_time, end_time, stage)
 
         start_step = stage.step(start_time)
 
         def read_points():
+            read_start = time.time()
             points_num = stage.step(end_time) - start_step
             # TODO: Consider wrapping an array (using NaN for None) for
             # speed&memory efficiency
@@ -99,9 +100,12 @@ class Reader(object):
             for ts, point in ts_and_points:
                 index = stage.step(ts) - start_step
                 points[index] = point
-            log.rendering('fetch(%s, %d, %d) - %d points %f secs' % (
-                self._metric_name, start_time, end_time, len(points),
-                time.time() - time_start))
+
+            now = time.time()
+            log.rendering(
+                'fetch(%s, %d, %d) - %d points - read: %f secs - total: %f secs' % (
+                    self._metric_name, start_time, end_time, len(points),
+                    now - read_start, now - fetch_start))
             return (start_time, end_time, stage.precision), points
 
         log.rendering('fetch(%s, %d, %d) - started' % (
@@ -156,17 +160,17 @@ class Finder(object):
         if not self._cache:
             # TODO: Allow to use Django's cache.
             from django.conf import settings as django_settings
-            storage_path = graphite_utils.storage_path(django_settings)
-            self._cache = bg_metadata_cache.DiskCache(self.accessor(), storage_path)
-            self._cache.open()
+            cache = graphite_utils.cache_from_settings(self.accessor(), django_settings)
+            cache.open()
+            self._cache = cache
         return self._cache
 
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: handle directories constructor argument/property
-        time_start = time.time()
+        find_start = time.time()
         metric_names, directories = glob_utils.graphite_glob(self.accessor(), query.pattern)
-        log.rendering('find(%s) - %f secs' % (query.pattern, time.time() - time_start))
+        log.rendering('find(%s) - %f secs' % (query.pattern, time.time() - find_start))
 
         for metric_name in metric_names:
             reader = Reader(self.accessor(), self.cache(), metric_name)
