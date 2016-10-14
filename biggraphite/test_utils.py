@@ -149,6 +149,7 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
     """"A TestCase with a FakeAccessor."""
 
     KEYSPACE = "fake_keyspace"
+    CACHE_CLASS = bg_metadata_cache.MemoryCache
 
     def setUp(self):
         """Create a new Accessor in self.acessor."""
@@ -156,9 +157,8 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
         self.accessor = bg_memory.build()
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
-        self.metadata_cache = bg_metadata_cache.DiskCache(
-            self.accessor, self.tempdir)
-        self.metadata_cache.MAP_SIZE = 1024*1024
+        self.metadata_cache = self.CACHE_CLASS(
+            self.accessor, {'path': self.tempdir, 'size': 1024*1024})
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 
@@ -181,6 +181,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
 
     KEYSPACE = "testkeyspace"
+    CACHE_CLASS = bg_metadata_cache.MemoryCache
 
     @classmethod
     def setUpClass(cls):
@@ -233,8 +234,8 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
         self.addCleanup(self.__drop_all_metrics)
-        self.metadata_cache = bg_metadata_cache.DiskCache(self.accessor, self.tempdir)
-        self.metadata_cache.MAP_SIZE = 1024*1024
+        self.metadata_cache = self.CACHE_CLASS(
+            self.accessor, {'path': self.tempdir, 'size': 1024*1024})
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 

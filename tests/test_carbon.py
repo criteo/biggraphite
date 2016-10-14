@@ -21,7 +21,6 @@ import unittest
 
 from carbon import database
 from carbon import conf as carbon_conf
-from carbon import exceptions as carbon_exceptions
 
 from biggraphite.plugins import carbon as bg_carbon
 
@@ -48,8 +47,6 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_empty_settings(self):
         database = bg_carbon.BigGraphiteDatabase(carbon_conf.Settings())
-        self.assertRaises(carbon_exceptions.CarbonConfigException,
-                          database.cache)
 
     def test_get_fs_path(self):
         path = self._plugin.getFilesystemPath(_TEST_METRIC)

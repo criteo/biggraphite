@@ -18,17 +18,25 @@ import logging
 
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import memory as bg_memory
+from biggraphite import metadata_cache
 
 
 DRIVERS = frozenset([
     ("cassandra", bg_cassandra),
     ("memory", bg_memory),
 ])
+CACHES = frozenset([
+    ("disk", metadata_cache.DiskCache),
+    ("memory", metadata_cache.MemoryCache),
+])
 
 DEFAULT_DRIVER = "cassandra"
+DEFAULT_CACHE = "memory"
 DEFAULT_LOG_LEVEL = "WARNING"
 OPTIONS = {
     "driver": str,
+    "cache": str,
+    "cache_size": lambda v: None if v is None else int(v),
     "loglevel": str,
 }
 
@@ -71,6 +79,30 @@ def accessor_from_settings(settings):
     raise ConfigError("Invalid value '%s' for BG_DRIVER." % driver_name)
 
 
+def cache_from_settings(accessor, settings):
+    """Get Cache from configuration.
+
+    Args:
+      settings: dict(str -> value).
+
+    Returns:
+      Cache (not opened).
+    """
+    cache_name = settings.get('cache', DEFAULT_CACHE)
+    cache_settings = {
+        'path': settings.get('storage_dir'),
+    }
+    size = settings.get('cache_size')
+    if size:
+        cache_settings['size'] = size
+
+    for name, cache in CACHES:
+        if name == cache_name:
+            return cache(accessor, cache_settings)
+
+    raise ConfigError("Invalid value '%s' for BG_CACHE." % cache_name)
+
+
 def add_argparse_arguments(parser):
     """Add generic BigGraphite arguments to an argparse parser.
 
@@ -79,8 +111,15 @@ def add_argparse_arguments(parser):
     """
     parser.add_argument(
         "--driver",
-        help="BigGraphite driver ('cassandra' or 'memory')",
+        help="BigGraphite driver (%s)" % ', '.join([v[0] for v in DRIVERS]),
         default=DEFAULT_DRIVER)
+    parser.add_argument(
+        "--cache",
+        help="BigGraphite cache (%s))" % ', '.join([v[0] for v in CACHES]),
+        default=DEFAULT_DRIVER)
+    parser.add_argument(
+        "--cache-size",
+        help="Metadata cache size.")
     parser.add_argument(
         "--storage_path", metavar="PATH",
         help="Storage path (cache, etc..)")

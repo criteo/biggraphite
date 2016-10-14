@@ -25,6 +25,7 @@ TODO(b.arnould): Currently that cache never expires, as we don't allow for delet
 from __future__ import absolute_import
 from __future__ import print_function
 
+import abc
 import os
 from os import path as os_path
 import sys
@@ -32,6 +33,7 @@ import threading
 import logging
 import uuid
 
+import cachetools
 import lmdb
 
 from biggraphite import accessor as bg_accessor
@@ -45,7 +47,178 @@ class InvalidArgumentError(Error):
     """Callee did not follow requirements on the arguments."""
 
 
-class DiskCache(object):
+class Cache(object):
+    """A metadata cache."""
+
+    __metaclass__ = abc.ABCMeta
+
+    def __init__(self, accessor, settings):
+        """Create a new DiskCache."""
+        assert accessor
+        self.hit_count = 0
+        self.miss_count = 0
+        self._accessor_lock = threading.Lock()
+        self._accessor = accessor
+        # _json_cache associates unparsed json to metadata instances.
+        # The idea is that there are very few configs in use in a given
+        # cluster so the few same strings will show up over and over.
+        self._json_cache_lock = threading.Lock()
+        self._json_cache = {}
+
+    @abc.abstractmethod
+    def open(self):
+        """Allocate ressources used by the cache.
+
+        Safe to call again after close() returned.
+        """
+        pass
+
+    @abc.abstractmethod
+    def close(self):
+        """Free resources allocated by open().
+
+        Safe to call multiple time.
+        """
+        pass
+
+    def make_metric(self, name, metadata):
+        """Create a metric object from a name and metadata."""
+        return self._accessor.make_metric(name, metadata)
+
+    def create_metric(self, metric):
+        """Create a metric definition from a Metric."""
+        with self._accessor_lock:
+            self._accessor.create_metric(metric)
+        self._cache_set(metric.name, metric)
+
+    def has_metric(self, metric_name):
+        """Check if a metric exists."""
+        encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
+        found = self._cache_has(metric_name)
+        if not found:
+            with self._accessor_lock:
+                found = self._accessor.has_metric(metric_name)
+            if found:
+                # The metric was found in the database but not cached, let's
+                # cache it now.
+                self.get_metric(metric_name)
+        return found
+
+    def get_metric(self, metric_name):
+        """Return a Metric for this metric_name, None if no such metric."""
+        metric, hit = self._cache_get(metric_name)
+        if hit:
+            self.hit_count += 1
+        else:
+            self.miss_count += 1
+            with self._accessor_lock:
+                metric = self._accessor.get_metric(metric_name)
+                self._cache_set(metric_name, metric)
+
+        return metric
+
+    @abc.abstractmethod
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+        """Remove spurious entries from the cache.
+
+        During the repair the keyspace is split in nshards and
+        this function will only take care of 1/n th of the data
+        as specified by shard. This allows the caller to parallelize
+        the repair if needed.
+
+        Args:
+          start_key: string, start at key >= start_key.
+          end_key: string, stop at key < end_key.
+          shard: int, shard to repair.
+          nshards: int, number of shards.
+        """
+        pass
+
+    def metadata_from_str(self, metadata_str):
+        """Create a MetricMetadata from a json string."""
+        with self._json_cache_lock:
+            metadata = self._json_cache.get(metadata_str)
+            if not metadata:
+                metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
+                self._json_cache[metadata_str] = metadata
+        return metadata
+
+    @abc.abstractmethod
+    def _cache_has(self, metric_name):
+        """Check if metric is cached."""
+        pass
+
+    @abc.abstractmethod
+    def _cache_get(self, metric_name):
+        """Get metric from cache."""
+        pass
+
+    @abc.abstractmethod
+    def _cache_set(self, metric_name, metric):
+        """Put metric in the cache."""
+        pass
+
+    @abc.abstractmethod
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+        """Remove spurious entries from the cache."""
+        pass
+
+
+class MemoryCache(Cache):
+    """A per-process memory cache."""
+
+    def __init__(self, accessor, settings):
+        super(MemoryCache, self).__init__(accessor, settings)
+        self.__size = settings.get('size', 1*1000*1000)
+        self.__ttl = settings.get('ttl', 24*60*60)
+
+    def open(self):
+        """Allocate ressources used by the cache."""
+        self.__cache = cachetools.TTLCache(maxsize=self.__size, ttl=self.__ttl)
+
+    def close(self):
+        """Free resources allocated by open()."""
+        self.__cache = None
+
+    def _cache_has(self, metric_name):
+        """Check if metric is cached."""
+        return metric_name in self.__cache
+
+    def _cache_get(self, metric_name):
+        """Get metric from cache."""
+        metric = self.__cache.get(metric_name, False)
+        if metric == False:
+            return None, False
+        else:
+            return metric, True
+
+    def _cache_set(self, metric_name, metric):
+        """Put metric in the cache."""
+        if metric:
+            self.__cache[metric_name] = metric
+
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+        """Remove spurious entries from the cache."""
+        i = 0
+        for key in self.__cache:
+            if start_key is not None and key < start_key:
+                continue
+            i += 1
+            if end_key is not None and key >= end_key:
+                break
+            if nshards > 1 and (i % nshards) != shard:
+                continue
+
+            metric = self._accessor.get_metric(key)
+            expected_metric = self.__cache[key]
+            if metric != expected_metric:
+                logging.warning(
+                    "Removing invalid key '%s': expected: %s cached: %s" % (
+                        key, expected_metric, metric))
+                del self.__cache[key]
+
+
+class DiskCache(Cache):
     """A metadata cache that can be shared between processes trusting each other.
 
     open() and close() are the only thread unsafe methods.
@@ -60,26 +233,21 @@ class DiskCache(object):
     # 4096 is safe: https://twitter.com/armon/status/534867803426533376
     _MAX_READERS = 2048
     _METRIC_SEPARATOR = '|'
+    _EMPTY = 'nil'
 
     # 1G on 32 bits systems
     # 16G on 64 bits systems
     MAP_SIZE = (1024*1024*1024*16 if sys.maxsize > 2**32 else 1024*1024*1024)
 
-    def __init__(self, accessor, path):
+    def __init__(self, accessor, settings):
         """Create a new DiskCache."""
-        assert accessor
+        super(DiskCache, self).__init__(accessor, settings)
+
+        path = settings.get("path")
+        size = settings.get("size", self.MAP_SIZE)
         assert path
 
-        self.hit_count = 0
-        self.miss_count = 0
-        self.__accessor_lock = threading.Lock()
-        self.__accessor = accessor
         self.__env = None
-        # __json_cache associates unparsed json to metadata instances. The idea is that there are
-        # very few configs in use in a given cluster so the few same strings will show up over
-        # and over.
-        self.__json_cache_lock = threading.Lock()
-        self.__json_cache = {}
         self.__path = os_path.join(path, "biggraphite", "cache", "version0")
         self.__databases = {
             "metric_to_meta": None
@@ -91,6 +259,7 @@ class DiskCache(object):
 
         Safe to call again after close() returned.
         """
+        super(DiskCache, self).open()
         if self.__env:
             return
         try:
@@ -130,40 +299,26 @@ class DiskCache(object):
         if self.__env:
             self.__env.close()
             self.__env = None
+            super(DiskCache, self).close()
 
-    def make_metric(self, name, metadata):
-        """Create a metric object from a name and metadata."""
-        return self.__accessor.make_metric(name, metadata)
-
-    def create_metric(self, metric):
-        """Create a metric definition from a Metric."""
-        with self.__accessor_lock:
-            self.__accessor.create_metric(metric)
-        self._cache(metric)
-
-    def has_metric(self, metric_name):
-        """Check if a metric exists."""
+    def _cache_has(self, metric_name):
+        """Check if metric is cached."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            found = bool(txn.get(encoded_metric_name))
-        if not found:
-            with self.__accessor_lock:
-                found = self.__accessor.has_metric(metric_name)
-            if found:
-                # The metric was found in the database but not cached, let's
-                # cache it now.
-                self.get_metric(metric_name)
-        return found
+            return bool(txn.get(encoded_metric_name))
 
-    def _get_metric_from_cache(self, metric_name):
+    def _cache_get(self, metric_name):
         """Return a Metric from a the cache, None if no such metric."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
             id_metadata = txn.get(encoded_metric_name)
 
+        if id_metadata == self._EMPTY:
+            return None, True
+
         if not id_metadata:
             # cache miss
-            return None
+            return None, False
 
         # found something in the cache
         split = id_metadata.split(self._METRIC_SEPARATOR, 1)
@@ -171,7 +326,7 @@ class DiskCache(object):
             # invalid string => evict from cache
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.delete(key=encoded_metric_name)
-            return None
+            return None, False
 
         # valid value => get id and metadata string
         # TODO: optimization: id is a UUID (known length)
@@ -181,31 +336,24 @@ class DiskCache(object):
         except:
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.delete(key=encoded_metric_name)
-            return None
+            return None, False
 
-        with self.__json_cache_lock:
-            metadata = self.__json_cache.get(metadata_str)
-            if not metadata:
-                metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
-                self.__json_cache[metadata_str] = metadata
+        metadata = self.metadata_from_str(metadata_str)
+        return bg_accessor.Metric(metric_name, id, metadata), True
 
-        return bg_accessor.Metric(metric_name, id, metadata)
+    def _cache_set(self, metric_name, metric):
+        """If metric is valid, add it to the cache.
 
-    def get_metric(self, metric_name):
-        """Return a Metric for this metric_name, None if no such metric."""
-        metric = self._get_metric_from_cache(metric_name)
-
-        if metric:
-            # valid string => on disk cache hit
-            self.hit_count += 1
-        else:
-            # invalid string or on disk cache miss
-            self.miss_count += 1
-            with self.__accessor_lock:
-                metric = self.__accessor.get_metric(metric_name)
-                self._cache(metric)
-
-        return metric
+        The metric is stored in the cache as follows:
+          - its id, which is a UUID.
+          - vertical bar (pipe) separator.
+          - its metadata JSON representation.
+        """
+        encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
+        key = encoded_metric_name
+        value = self.__get_value(metric)
+        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
+            txn.put(key, value, dupdata=False, overwrite=True)
 
     def stat(self):
         """Count number of cached entries."""
@@ -216,7 +364,7 @@ class DiskCache(object):
                 ret[name] = txn.stat(database)
         return ret
 
-    def get_value(self, metric):
+    def __get_value(self, metric):
         """Get cache value for a metric.
 
         The cache value is a combination of:
@@ -224,6 +372,8 @@ class DiskCache(object):
           - _METRIC_SEPARATOR
           - metadata
         """
+        if not metric:
+            return self._EMPTY
         return str(metric.id) + self._METRIC_SEPARATOR + metric.metadata.as_json()
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
@@ -253,26 +403,13 @@ class DiskCache(object):
                 if nshards > 1 and (i % nshards) != shard:
                     continue
 
-                metric = self.__accessor.get_metric(key)
-                expected_value = self.get_value(metric) if metric else None
+                metric = self._accessor.get_metric(key)
+                expected_value = self.__get_value(metric) if metric else None
                 if value != expected_value:
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
                     txn.delete(key=key)
 
-    def _cache(self, metric):
-        """If metric is valid, add it to the cache.
 
-        The metric is stored in the cache as follows:
-          - its id, which is a UUID.
-          - vertical bar (pipe) separator.
-          - its metadata JSON representation.
-        """
-        if not metric:
-            # Do not cache absent metrics, they will probably soon be created.
-            return None
-        key = metric.name
-        value = self.get_value(metric)
-        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            txn.put(key, value, dupdata=False, overwrite=True)
+

@@ -161,9 +161,9 @@ class Finder(object):
         if not self._cache:
             # TODO: Allow to use Django's cache.
             from django.conf import settings as django_settings
-            storage_path = graphite_utils.storage_path(django_settings)
-            self._cache = bg_metadata_cache.DiskCache(self.accessor(), storage_path)
-            self._cache.open()
+            cache = graphite_utils.cache_from_settings(self.accessor(), storage_path)
+            cache.open()
+            self._cache = cache
         return self._cache
 
     def find_nodes(self, query):

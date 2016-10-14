@@ -63,12 +63,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def cache(self):
         if not self._cache:
-            try:
-                storage_path = graphite_utils.storage_path(self._settings)
-            except graphite_utils.ConfigError as e:
-                raise carbon_exceptions.CarbonConfigException(e)
-
-            cache = metadata_cache.DiskCache(self.accessor(), storage_path)
+            cache = graphite_utils.cache_from_settings(self.accessor(), self._settings)
             cache.open()
             self._cache = cache
 
@@ -77,6 +72,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
         metric = self.cache().get_metric(metric_name=metric_name)
+
         # Round down timestamp because inner functions expect integers.
         datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
 
