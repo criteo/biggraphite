@@ -14,8 +14,6 @@
 # limitations under the License.
 """Graphite utility module."""
 
-from os import path as os_path
-
 from biggraphite import utils as bg_utils
 
 

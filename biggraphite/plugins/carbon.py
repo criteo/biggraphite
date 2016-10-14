@@ -21,11 +21,9 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 # patch: https://goo.gl/1gAcz1 .
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
-from carbon import exceptions as carbon_exceptions
 
 from biggraphite import graphite_utils
 from biggraphite import accessor
-from biggraphite import metadata_cache
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102

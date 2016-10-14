@@ -93,7 +93,6 @@ class Cache(object):
 
     def has_metric(self, metric_name):
         """Check if a metric exists."""
-        encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         found = self._cache_has(metric_name)
         if not found:
             with self._accessor_lock:
@@ -158,16 +157,12 @@ class Cache(object):
         """Put metric in the cache."""
         pass
 
-    @abc.abstractmethod
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
-        """Remove spurious entries from the cache."""
-        pass
-
 
 class MemoryCache(Cache):
     """A per-process memory cache."""
 
     def __init__(self, accessor, settings):
+        """Initialize the memory cache."""
         super(MemoryCache, self).__init__(accessor, settings)
         self.__size = settings.get('size', 1*1000*1000)
         self.__ttl = settings.get('ttl', 24*60*60)
@@ -187,7 +182,7 @@ class MemoryCache(Cache):
     def _cache_get(self, metric_name):
         """Get metric from cache."""
         metric = self.__cache.get(metric_name, False)
-        if metric == False:
+        if metric is False:
             return None, False
         else:
             return metric, True
@@ -244,11 +239,11 @@ class DiskCache(Cache):
         super(DiskCache, self).__init__(accessor, settings)
 
         path = settings.get("path")
-        size = settings.get("size", self.MAP_SIZE)
         assert path
 
         self.__env = None
         self.__path = os_path.join(path, "biggraphite", "cache", "version0")
+        self.__size = settings.get("size", self.MAP_SIZE)
         self.__databases = {
             "metric_to_meta": None
         }
@@ -269,7 +264,7 @@ class DiskCache(Cache):
         logging.info('Opening cache %s' % self.__path)
         self.__env = lmdb.open(
             self.__path,
-            map_size=self.MAP_SIZE,
+            map_size=self.__size,
             # Only one sync per transaction, system crash can undo a transaction.
             metasync=False,
             # Use mmap()
@@ -410,6 +405,3 @@ class DiskCache(Cache):
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
                     txn.delete(key=key)
-
-
-

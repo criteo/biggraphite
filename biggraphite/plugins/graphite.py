@@ -26,7 +26,6 @@ from graphite.logger import log
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils
 from biggraphite import graphite_utils
-from biggraphite import metadata_cache as bg_metadata_cache
 
 
 _CONFIG_NAME = "biggraphite"
@@ -161,7 +160,7 @@ class Finder(object):
         if not self._cache:
             # TODO: Allow to use Django's cache.
             from django.conf import settings as django_settings
-            cache = graphite_utils.cache_from_settings(self.accessor(), storage_path)
+            cache = graphite_utils.cache_from_settings(self.accessor(), django_settings)
             cache.open()
             self._cache = cache
         return self._cache
