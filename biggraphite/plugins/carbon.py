@@ -21,6 +21,7 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 # patch: https://goo.gl/1gAcz1 .
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
+from carbon import log
 
 from biggraphite import graphite_utils
 from biggraphite import accessor
@@ -52,6 +53,15 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._accessor = None
         self._settings = settings
         self._sync_countdown = 0
+
+        # Flush before shutdown.
+        def flush():
+            log.cache("flushing the accessor")
+            if self._accessor:
+                self.accessor().flush()
+        from twisted.internet import reactor
+        reactor.addSystemEventTrigger('before', 'shutdown', flush)
+        # TODO(c.chary): schedule other periodic actions here.
 
     def accessor(self):
         if not self._accessor:

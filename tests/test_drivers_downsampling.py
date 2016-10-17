@@ -19,7 +19,11 @@ import unittest
 import uuid
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import test_utils
 from biggraphite.drivers import _downsampling as bg_ds
+
+
+test_utils.setup_logging()
 
 
 class TestDownsampler(unittest.TestCase):
@@ -186,6 +190,21 @@ class TestDownsampler(unittest.TestCase):
         expected = expected_stage_0 + expected_stage_1
         result = self.ds.feed(self.metric_sum, points)
         self.assertEqual(result, expected)
+
+    def test_purge(self):
+        """Test that we purge old metrics correctly."""
+        points = [
+            (1, 1),
+        ]
+        self.ds.feed(self.metric_sum, points)
+
+        # Should no remove anything.
+        self.ds.purge(now=1)
+        self.assertEquals(len(self.ds._names_to_aggregates), 1)
+
+        # Should remove everything.
+        self.ds.purge(now=(self.PRECISION ** 2) * 3)
+        self.assertEquals(len(self.ds._names_to_aggregates), 0)
 
 
 if __name__ == "__main__":

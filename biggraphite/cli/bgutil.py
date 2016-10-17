@@ -66,6 +66,7 @@ def main(args=None):
     bg_utils.set_log_level(settings)
     accessor = bg_utils.accessor_from_settings(settings)
     opts.func(accessor, opts)
+    accessor.flush()
 
 if __name__ == "__main__":
     main()

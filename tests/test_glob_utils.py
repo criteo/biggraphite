@@ -151,7 +151,6 @@ class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
             ("a.**", ["a.a.a", "a.b.c", "a.b.d"], ["a.a", "a.b"]),
         ]
         for (glob, metrics, directories) in scenarii:
-            print(glob, metrics, directories)
             found = bg_glob.graphite_glob(self.accessor, glob)
             self.assertEqual((metrics, directories), found)
 

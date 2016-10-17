@@ -34,6 +34,7 @@ from cassandra.io import asyncorereactor as c_asyncorereactor
 
 from biggraphite import accessor as bg_accessor
 from biggraphite.drivers import _downsampling
+from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
 
 log = logging.getLogger(__name__)
@@ -488,6 +489,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__load_balancing_policy = (
             c_policies.TokenAwarePolicy(c_policies.DCAwareRoundRobinPolicy()))
         self.__downsampler = _downsampling.Downsampler()
+        self.__delayed_writer = _delayed_writer.DelayedWriter(self)
         self.__cluster = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
         self.__timeout = timeout
@@ -799,7 +801,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 )
                 for wildcards in range(1, max_wildcards):
                     gs_components = prefix + (["*"] * wildcards) + suffix
-                    gs_query = self.__build_select_metric_names_query(table, gs_components, glob)
+                    gs_query = self.__build_select_metric_names_query(
+                        table, gs_components, glob)
                     queries.append(gs_query)
         else:
             query = self.__build_select_metric_names_query(table, components, glob)
@@ -823,7 +826,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return metric_names
 
     def __build_select_metric_names_query(self, table, components, glob, is_raw=False):
-        """Build a select query to find metric names (table can be directories or metrics though).
+        """Build a select query to find metric names (table can be directories or metrics).
 
         Args:
           table: Table name from which to select the rows.
@@ -864,6 +867,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         return query
 
+    def flush(self):
+        """Flush any internal buffers."""
+        if self.__delayed_writer:
+            self.__delayed_writer.flush()
+
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).insert_points_async(
@@ -871,8 +879,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         log.debug("insert: [%s, %s]", metric.name, datapoints)
 
-        downsampled = self.__downsampler.feed(metric, datapoints)
-        return self.insert_downsampled_points_async(metric, downsampled, on_done)
+        datapoints = self.__downsampler.feed(metric, datapoints)
+        if self.__delayed_writer:
+            datapoints = self.__delayed_writer.feed(metric, datapoints)
+        return self.insert_downsampled_points_async(metric, datapoints, on_done)
 
     def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
         """See bg_accessor.Accessor."""

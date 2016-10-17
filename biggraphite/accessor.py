@@ -688,6 +688,11 @@ class Accessor(object):
         """Return a sorted list of metric directories matching this glob."""
         self._check_connected()
 
+    @abc.abstractmethod
+    def flush(self):
+        """Flush any internal buffers."""
+        pass
+
     def insert_points(self, metric, datapoints):
         """Insert points for a given metric.
 
@@ -711,24 +716,24 @@ class Accessor(object):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
 
-    def insert_downsampled_points(self, metric, downsampled):
+    def insert_downsampled_points(self, metric, datapoints):
         """Insert points for a given metric.
 
         Args:
           metric: The metric definition as per get_metric.
-          downsampled: An iterable of (timestamp in seconds, values as double, count as int, stage)
+          datapoints: An iterable of (timestamp in seconds, values as double, count as int, stage)
         """
         self._check_connected()
         _wait_async_call(
-            self.insert_downsampled_points_async, metric=metric, downsampled=downsampled)
+            self.insert_downsampled_points_async, metric=metric, datapoints=datapoints)
 
     @abc.abstractmethod
-    def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
+    def insert_downsampled_points_async(self, metric, datapoints, on_done=None):
         """Insert points for a given metric.
 
         Args:
           metric: The metric definition as per get_metric.
-          downsampled: An iterable of (timestamp in seconds, values as double, count as int, stage)
+          datapoints: An iterable of (timestamp in seconds, values as double, count as int, stage)
           on_done(e: Exception): called on done, with an exception or None if succesfull
         """
         if not isinstance(metric, Metric):
