@@ -61,15 +61,15 @@ class CommandRepair(command.BaseCommand):
         # of the current arguments and generate them instead based on a number
         # of processes to do a full scan.
 
-        if opts.storage_path:
-            cache = metadata_cache.DiskCache(accessor, opts.storage_path)
+        if opts.storage_dir:
+            cache = metadata_cache.DiskCache(accessor, opts.storage_dir)
             cache.open()
             cache.repair(shard=opts.shard, nshards=opts.nshards,
                          start_key=opts.start_key,
                          end_key=opts.end_key)
         else:
             logging.warning(
-                'Skipping disk cache repair because storage_path is empty')
+                'Skipping disk cache repair because storage_dir is empty')
 
         accessor.repair(shard=opts.shard, nshards=opts.nshards,
                         start_key=opts.start_key,

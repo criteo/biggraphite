@@ -38,6 +38,7 @@ OPTIONS = {
     "cache": str,
     "cache_size": lambda v: None if v is None else int(v),
     "loglevel": str,
+    "storage_dir": str,
 }
 
 
@@ -121,7 +122,7 @@ def add_argparse_arguments(parser):
         "--cache-size",
         help="Metadata cache size.")
     parser.add_argument(
-        "--storage_path", metavar="PATH",
+        "--storage_dir", metavar="PATH",
         help="Storage path (cache, etc..)")
     parser.add_argument(
         "--loglevel", metavar="LEVEL",

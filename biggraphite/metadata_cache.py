@@ -100,7 +100,8 @@ class Cache(object):
             if found:
                 # The metric was found in the database but not cached, let's
                 # cache it now.
-                self.get_metric(metric_name)
+                metric = self.get_metric(metric_name)
+                self._cache_set(metric_name, metric)
         return found
 
     def get_metric(self, metric_name):
