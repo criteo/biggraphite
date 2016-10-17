@@ -21,18 +21,22 @@ import sys
 
 from biggraphite import utils as bg_utils
 
-from biggraphite.cli import command_du
-from biggraphite.cli import command_test
-from biggraphite.cli import command_read
-from biggraphite.cli import command_info
-from biggraphite.cli import command_repair
-from biggraphite.cli import command_shell
-from biggraphite.cli import command_write
+from biggraphite.cli import (
+    command_du,
+    command_info,
+    command_list,
+    command_read,
+    command_repair,
+    command_shell,
+    command_test,
+    command_write,
+)
 
 
 COMMANDS = [
     command_test.CommandTest(),
     command_du.CommandDu(),
+    command_list.CommandList(),
     command_read.CommandRead(),
     command_info.CommandInfo(),
     command_repair.CommandRepair(),
@@ -56,7 +60,7 @@ def _parse_opts(args):
     return parser.parse_args(args)
 
 
-def main(args=None):
+def main(args=None, accessor=None):
     """Entry point for the module."""
     if not args:
         args = sys.argv[1:]
@@ -64,7 +68,7 @@ def main(args=None):
     opts = _parse_opts(args)
     settings = bg_utils.settings_from_args(opts)
     bg_utils.set_log_level(settings)
-    accessor = bg_utils.accessor_from_settings(settings)
+    accessor = accessor or bg_utils.accessor_from_settings(settings)
     opts.func(accessor, opts)
 
 if __name__ == "__main__":
