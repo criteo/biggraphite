@@ -24,6 +24,8 @@ import sortedcontainers
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
+from biggraphite.drivers import _delayed_writer
+
 
 OPTIONS = {}
 
@@ -44,6 +46,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         self._name_to_metric = {}
         self._directory_names = sortedcontainers.SortedSet()
         self.__downsampler = _downsampling.Downsampler()
+        self.__delayed_writer = _delayed_writer.DelayedWriter(self)
 
     @staticmethod
     def _components_from_name(metric_name):
@@ -68,23 +71,33 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         pass
 
+    def flush(self):
+        """Flush any internal buffers."""
+        if self.__delayed_writer:
+            self.__delayed_writer.flush()
+
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).insert_points_async(
             metric, datapoints, on_done)
         assert metric.name in self._name_to_metric
         datapoints = self.__downsampler.feed(metric, datapoints)
+        if self.__delayed_writer:
+            datapoints = self.__delayed_writer.feed(metric, datapoints)
+        return self.insert_downsampled_points_async(metric, datapoints, on_done)
+
+    def insert_downsampled_points_async(self, metric, datapoints, on_done=None):
+        """See the real Accessor for a description."""
+        super(_MemoryAccessor, self).insert_downsampled_points_async(
+            metric, datapoints, on_done)
+        assert metric.name in self._name_to_metric
+
         for datapoint in datapoints:
             timestamp, value, count, stage = datapoint
             points = self._metric_to_points[(metric.name, stage)]
             points[timestamp] = (value, count)
         if on_done:
             on_done(None)
-
-    def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
-        """See the real Accessor for a description."""
-        datapoints = [(ts, value) for ts, value, count, stage in downsampled]
-        return self.insert_points_async(metric, datapoints, on_done)
 
     def drop_all_metrics(self, *args, **kwargs):
         """See the real Accessor for a description."""

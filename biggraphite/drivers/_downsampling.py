@@ -18,8 +18,11 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import array
+import logging
 import math
+import time
 
+log = logging.getLogger(__name__)
 _NaN = float("NaN")
 
 
@@ -27,15 +30,12 @@ class Downsampler(object):
     """Downsampler using MetricAggregates to produce aggregates."""
 
     CAPACITY = 20
+    PURGE_EVERY_S = 3600
 
     slots = (
         "_capacity",
         "_names_to_aggregates"
     )
-
-    # TODO(c.chary):
-    # - Add a cleanup thread.
-    # - Add a thread to write aggregates.
 
     def __init__(self, capacity=CAPACITY):
         """Default constructor."""
@@ -63,6 +63,14 @@ class Downsampler(object):
 
         # Sort points by increasing timestamp, because put expects them in order.
         return self._names_to_aggregates[metric.name].update(sorted(points))
+
+    def purge(self, now=time.time()):
+        """Purge unused data."""
+        for metric_name in list(self._names_to_aggregates):
+            aggregate = self._names_to_aggregates[metric_name]
+            if aggregate.obsolete(now):
+                del self._names_to_aggregates[metric_name]
+                log.info('removing obsolete aggregates for %s' % metric_name)
 
 
 class MetricAggregates(object):
@@ -340,6 +348,16 @@ class MetricAggregates(object):
     def _retention(self):
         """Get retentions."""
         return self._metric_metadata.retention
+
+    def obsolete(self, now):
+        """Check if this aggregate is obsolete."""
+        if not len(self._retention.downsampled_stages):
+            # If there is only one stage, keep it for stage0_capacity periods.
+            keepalive = (self._stage0.precision * self._stage0_capacity)
+        else:
+            # Else, keep it for at least twice the precision of the upper stage.
+            keepalive = (self._retention[1].precision * 2)
+        return self._stage0_timestamp < now - keepalive
 
     @property
     def _stage0_timestamp(self):

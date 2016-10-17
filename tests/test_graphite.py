@@ -59,7 +59,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3600
-    _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s")
+    _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s:48*3600s")
     _POINTS = _make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
     )
@@ -70,6 +70,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.connect()
         self.accessor.create_metric(self._METRIC)
         self.accessor.insert_points(self._METRIC, self._POINTS)
+        self.accessor.flush()
         self.reader = bg_graphite.Reader(self.accessor, self.metadata_cache, _METRIC_NAME)
 
     def fetch(self, *args, **kwargs):
@@ -95,7 +96,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_get_intervals(self):
         # start and end are the expected results, aligned on the precision
-        now_rounded = 10000000 * self._RETENTION[0].precision
+        now_rounded = 10000000 * self._RETENTION[2].precision
         now = now_rounded - 3
         res = self.reader.get_intervals(now=now)
 

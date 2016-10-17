@@ -86,6 +86,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         # Writing twice (the first write is sync and the next one isn't)
         self._plugin.write(_TEST_METRIC, points)
         self._plugin.write(_TEST_METRIC, points)
+        self.accessor.flush()
         metric = self.accessor.get_metric(_TEST_METRIC)
         actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
@@ -96,6 +97,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         points = [(1, 42)]
         self.accessor.create_metric(metric)
         self._plugin.write(metric.name, points)
+        self.accessor.flush()
 
         self.assertEqual(True, self.accessor.has_metric("a.b..c"))
         self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))

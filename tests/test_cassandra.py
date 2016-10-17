@@ -50,6 +50,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
     def test_fetch_empty(self):
         no_such_metric = bg_test_utils.make_metric("no.such.metric")
         self.accessor.insert_points(_METRIC, _POINTS)
+        self.accessor.flush()
         self.accessor.drop_all_metrics()
         self.assertEqual(
             len(self.fetch(no_such_metric, _POINTS_START, _POINTS_END)),
@@ -64,9 +65,11 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         # We've had a regression where inserting empty list would freeze
         # the process
         self.accessor.insert_points(_METRIC, [])
+        self.accessor.flush()
 
     def test_insert_fetch(self):
         self.accessor.insert_points(_METRIC, _POINTS)
+        self.accessor.flush()
         self.addCleanup(self.accessor.drop_all_metrics)
 
         # TODO: Test fetch at different stages for a given metric.
@@ -95,7 +98,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         # that breaking changes aren't introduced to the schema.
         self.accessor.create_metric(_METRIC)
         self.accessor.insert_points(_METRIC, _POINTS)
-
+        self.accessor.flush()
         self.cluster.refresh_schema_metadata()
 
         keyspace = None
@@ -144,7 +147,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         # that breaking changes aren't introduced to the schema.
         self.accessor.create_metric(_METRIC)
         self.accessor.insert_points(_METRIC, _POINTS)
-
+        self.accessor.flush()
         self.cluster.refresh_schema_metadata()
 
         keyspace = None
@@ -269,6 +272,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))
 
         self.accessor.insert_points(metric, points)
+        self.accessor.flush()
         actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
         actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
