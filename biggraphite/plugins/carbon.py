@@ -42,7 +42,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     plugin_name = "biggraphite"
     aggregationMethods = [
-        name for name, _ in list(accessor.Aggregator.__members__.items())]
+        member.value for member in list(accessor.Aggregator)]
 
     # See class pydoc for the rational.
     _SYNC_EVERY_N_WRITE = 10
@@ -149,7 +149,7 @@ class MultiDatabase(database.TimeSeriesDatabase):
             if not self.aggregationMethods:
                 self.aggregationMethods = db.aggregationMethods
             else:
-                self.aggregationMethods = (
+                self.aggregationMethods = list(
                     set(self.aggregationMethods) &
                     set(db.aggregationMethods))
 
