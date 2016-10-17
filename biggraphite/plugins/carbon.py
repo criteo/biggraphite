@@ -41,6 +41,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """
 
     plugin_name = "biggraphite"
+    aggregationMethods = [
+        member.value for member in list(accessor.Aggregator)]
 
     # See class pydoc for the rational.
     _SYNC_EVERY_N_WRITE = 10
@@ -122,6 +124,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # Only used for logging.
         return "/".join(("//biggraphite", self.accessor().backend_name, metric_name))
 
+    def validateArchiveList(self, archiveList):
+        # TODO(c.chary): maybe run repair() ?
+        pass
+
 
 class MultiDatabase(database.TimeSeriesDatabase):
     """Multi Database plugin for Carbon.
@@ -135,6 +141,17 @@ class MultiDatabase(database.TimeSeriesDatabase):
     def __init__(self, dbs):
         assert len(dbs) > 1
         self._dbs = dbs
+        # Support the intersection of both.
+        self.aggregationMethods = []
+        for db in dbs:
+            if not hasattr(db, 'aggregationMethods'):
+                continue
+            if not self.aggregationMethods:
+                self.aggregationMethods = db.aggregationMethods
+            else:
+                self.aggregationMethods = list(
+                    set(self.aggregationMethods) &
+                    set(db.aggregationMethods))
 
     def write(self, metric_name, datapoints):
         for db in self._dbs:
@@ -162,12 +179,17 @@ class MultiDatabase(database.TimeSeriesDatabase):
     def getFilesystemPath(self, metric_name):
         return metric_name
 
+    def validateArchiveList(self, archiveList):
+        for db in self._dbs:
+            db.validateArchiveList(archiveList)
+
 
 if hasattr(database, 'WhisperDatabase'):
     class WhisperAndBigGraphiteDatabase(MultiDatabase):
         """Whisper then BigGraphite."""
 
         plugin_name = "whisper+biggraphite"
+        aggregationMethods = BigGraphiteDatabase.aggregationMethods
 
         def __init__(self, settings):
             self._biggraphite = BigGraphiteDatabase(settings)
@@ -178,6 +200,7 @@ if hasattr(database, 'WhisperDatabase'):
         """BigGraphite then Whisper."""
 
         plugin_name = "biggraphite+whisper"
+        aggregationMethods = BigGraphiteDatabase.aggregationMethods
 
         def __init__(self, settings):
             self._biggraphite = BigGraphiteDatabase(settings)

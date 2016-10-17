@@ -96,6 +96,10 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         points = [(1, 42)]
         self.accessor.create_metric(metric)
         self._plugin.write(metric.name, points)
+
+        self.assertEqual(True, self.accessor.has_metric("a.b..c"))
+        self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))
+
         actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
         actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
