@@ -15,6 +15,8 @@
 from __future__ import print_function
 
 import unittest
+from mock import patch
+from StringIO import StringIO
 
 from biggraphite.cli import bgutil
 from biggraphite import test_utils as bg_test_utils
@@ -22,8 +24,17 @@ from biggraphite import test_utils as bg_test_utils
 
 class TestBgutil(bg_test_utils.TestCaseWithFakeAccessor):
 
-    def test_run(self):
-        bgutil.main(['--driver=memory', 'read', 'foo'])
+    metrics = ['metric1', 'metric2']
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_run(self, mock_stdout):
+        self.accessor.drop_all_metrics()
+        for metric in self.metrics:
+            self.accessor.create_metric(self.make_metric(metric))
+        bgutil.main(['--driver=memory', 'read', '**'], self.accessor)
+        output = mock_stdout.getvalue()
+        for metric in self.metrics:
+            self.assertIn(metric, output)
 
 
 if __name__ == "__main__":
