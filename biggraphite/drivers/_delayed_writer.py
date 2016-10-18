@@ -49,7 +49,7 @@ class DelayedWriter(object):
         self.period_ms = period_ms
         self._queue = []
         self._metrics_per_ms = 0
-        self._last_write_ms = time.time() * 1000
+        self._last_write_ms = 0
         self._points = collections.defaultdict(dict)
 
     def feed(self, metric, datapoints):
@@ -88,6 +88,10 @@ class DelayedWriter(object):
         while self._queue:
             self.write_some(flush=True)
 
+    def size(self):
+        """Number of queued metrics."""
+        return len(self._points)
+
     def write_later(self, metric, datapoints):
         """Queue points for later."""
         for datapoint in datapoints:
@@ -110,9 +114,11 @@ class DelayedWriter(object):
         log.debug("rebuilt the queues: %d metrics, %d per second",
                   len(self._queue), self._metrics_per_ms)
 
-    def write_some(self, flush=False):
+    def write_some(self, flush=False, now=time.time()):
         """Write some points from the queue."""
-        now = time.time() * 1000
+        now *= 1000  # convert to ms.
+        if self._last_write_ms == 0:
+            self._last_write_ms = now
         delta_ms = (now - self._last_write_ms) + 1
         if flush:
             metrics_to_write = len(self._queue)
@@ -125,10 +131,13 @@ class DelayedWriter(object):
         while self._queue and i < metrics_to_write:
             metric = self._queue.pop()
             datapoints = []
+            # collect the points to write them.
             for k, v in self._points[metric].items():
                 stage, timestamp = k
                 value, count = v
                 i += 1
                 datapoints.append((timestamp, value, count, stage))
             self.accessor.insert_downsampled_points_async(metric, datapoints)
+            # remove the points that have been written
+            del self._points[metric]
         self._last_write_ms = now
