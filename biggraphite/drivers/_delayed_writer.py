@@ -114,9 +114,9 @@ class DelayedWriter(object):
         log.debug("rebuilt the queues: %d metrics, %d per second",
                   len(self._queue), self._metrics_per_ms)
 
-    def write_some(self, flush=False, now=time.time()):
+    def write_some(self, flush=False, now=time.time):
         """Write some points from the queue."""
-        now *= 1000  # convert to ms.
+        now = now() * 1000  # convert to ms.
         if self._last_write_ms == 0:
             self._last_write_ms = now
         delta_ms = (now - self._last_write_ms) + 1

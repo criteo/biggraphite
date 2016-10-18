@@ -88,7 +88,9 @@ class TestDelayedWriter(test_utils.TestCaseWithFakeAccessor):
         self.assertEquals(len(list(points)), 0)
 
         # See if we can write the points.
-        self.dw.write_some(now=time.time() + self.dw.period_ms / 1000)
+        def _now():
+            return time.time() + self.dw.period_ms / 1000
+        self.dw.write_some(now=_now)
 
         # Now we should have points written.
         points = self.accessor.fetch_points(
