@@ -119,6 +119,11 @@ class Cache(object):
         return metric
 
     @abc.abstractmethod
+    def clean(self):
+        """Clean the cache from expired metrics."""
+        pass
+
+    @abc.abstractmethod
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
 
@@ -193,6 +198,10 @@ class MemoryCache(Cache):
         """Put metric in the cache."""
         if metric:
             self.__cache[metric_name] = metric
+
+    def clean(self):
+        """Automatically cleaned by cachetools."""
+        pass
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache."""
@@ -402,6 +411,25 @@ class DiskCache(Cache):
             return []
         return payload.split(self._METRIC_SEPARATOR, 2)
 
+    def clean(self):
+        """Remove all expired metrics.
+
+        Note: This will also remove metrics without a timestamp or
+              whose timestamp value is not a digit.
+        """
+        cutoff = int(time.time()) - int(self.__ttl)
+
+        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
+            cursor = txn.cursor()
+            for key, value in cursor:
+                timestamp_str = self.__split_payload(value)[-1]
+                if not timestamp_str.isdigit() or \
+                   int(timestamp_str) < cutoff:
+                    logging.warning(
+                        "Removing expired key '%s' with timestamp %s" % (
+                            key, timestamp_str))
+                    txn.delete(key=key)
+
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
 
@@ -432,7 +460,7 @@ class DiskCache(Cache):
                 metric = self._accessor.get_metric(key)
                 expected_value = self.__value_from_metric(metric) if metric else None
 
-                if self.__split_payload(value)[0:2] !=\
+                if self.__split_payload(value)[0:2] != \
                    self.__split_payload(expected_value)[0:2]:
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
