@@ -32,6 +32,7 @@ import sys
 import threading
 import logging
 import uuid
+import time
 
 import cachetools
 import lmdb
@@ -245,6 +246,7 @@ class DiskCache(Cache):
         self.__env = None
         self.__path = os_path.join(path, "biggraphite", "cache", "version0")
         self.__size = settings.get("size", self.MAP_SIZE)
+        self.__ttl = settings.get("ttl", 24*60*60)
         self.__databases = {
             "metric_to_meta": None
         }
@@ -303,22 +305,30 @@ class DiskCache(Cache):
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
             return bool(txn.get(encoded_metric_name))
 
+    def __expired_timestamp(self, timestamp):
+        """Check if timestamp is expired.
+
+        A timestamp expires when it is older than half the TTL from now
+        """
+        return int(time.time()) > timestamp + int(self.__ttl / 2)
+
     def _cache_get(self, metric_name):
         """Return a Metric from a the cache, None if no such metric."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            id_metadata = txn.get(encoded_metric_name)
+            payload = txn.get(encoded_metric_name)
 
-        if id_metadata == self._EMPTY:
+        if payload == self._EMPTY:
             return None, True
 
-        if not id_metadata:
+        if not payload:
             # cache miss
             return None, False
 
         # found something in the cache
-        split = id_metadata.split(self._METRIC_SEPARATOR, 1)
-        if len(split) != 2:
+        split = payload.split(self._METRIC_SEPARATOR, 2)
+
+        if len(split) != 3:
             # invalid string => evict from cache
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.delete(key=encoded_metric_name)
@@ -326,13 +336,20 @@ class DiskCache(Cache):
 
         # valid value => get id and metadata string
         # TODO: optimization: id is a UUID (known length)
-        id_str, metadata_str = split
+        id_str, metadata_str, timestamp_str = split
         try:
             id = uuid.UUID(id_str)
         except:
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.delete(key=encoded_metric_name)
             return None, False
+
+        # update timestamp if expired
+        if self.__expired_timestamp(int(timestamp_str)):
+            key = encoded_metric_name
+            value = self.__value_from_strings(id_str, metadata_str)
+            with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
+                txn.put(key, value, dupdata=False, overwrite=True)
 
         metadata = self.metadata_from_str(metadata_str)
         return bg_accessor.Metric(metric_name, id, metadata), True
@@ -367,14 +384,23 @@ class DiskCache(Cache):
           - id
           - _METRIC_SEPARATOR
           - metadata
+          - _METRIC_SEPARATOR
+          - timestamp
         """
-        return self._METRIC_SEPARATOR.join([metric_id, metric_metadata])
+        timestamp = str(int(time.time()))
+        return self._METRIC_SEPARATOR.join([metric_id, metric_metadata, timestamp])
 
     def __value_from_metric(self, metric):
         """Build cache value for a metric."""
         if not metric:
             return self._EMPTY
         return self.__value_from_strings(str(metric.id), metric.metadata.as_json())
+
+    def __no_timestamp(self, payload):
+        """Remove timestamp from the cache value."""
+        if not payload:
+            return None
+        return payload.rsplit(self._METRIC_SEPARATOR, 1)[0]
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
@@ -405,7 +431,8 @@ class DiskCache(Cache):
 
                 metric = self._accessor.get_metric(key)
                 expected_value = self.__value_from_metric(metric) if metric else None
-                if value != expected_value:
+
+                if self.__no_timestamp(value) != self.__no_timestamp(expected_value):
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
