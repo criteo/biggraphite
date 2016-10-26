@@ -326,7 +326,7 @@ class DiskCache(Cache):
             return None, False
 
         # found something in the cache
-        split = payload.split(self._METRIC_SEPARATOR, 2)
+        split = self.__split_payload(payload)
 
         if len(split) != 3:
             # invalid string => evict from cache
@@ -396,11 +396,11 @@ class DiskCache(Cache):
             return self._EMPTY
         return self.__value_from_strings(str(metric.id), metric.metadata.as_json())
 
-    def __no_timestamp(self, payload):
-        """Remove timestamp from the cache value."""
+    def __split_payload(self, payload):
+        """Split the payload in components."""
         if not payload:
-            return None
-        return payload.rsplit(self._METRIC_SEPARATOR, 1)[0]
+            return []
+        return payload.split(self._METRIC_SEPARATOR, 2)
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
@@ -432,7 +432,8 @@ class DiskCache(Cache):
                 metric = self._accessor.get_metric(key)
                 expected_value = self.__value_from_metric(metric) if metric else None
 
-                if self.__no_timestamp(value) != self.__no_timestamp(expected_value):
+                if self.__split_payload(value)[0:2] !=\
+                   self.__split_payload(expected_value)[0:2]:
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
