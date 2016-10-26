@@ -135,7 +135,7 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
             self.metadata_cache._DiskCache__metric_to_metadata_db, write=False
         ) as txn:
             payload = txn.get(_TEST_METRIC.name)
-        return payload.rsplit(self.metadata_cache._METRIC_SEPARATOR, 1)[1]
+        return self.metadata_cache._DiskCache__split_payload(payload)[-1]
 
     def test_timestamp_update(self):
         """Check that the timestamp is updated if older than half the TTL.
