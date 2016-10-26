@@ -16,6 +16,7 @@
 from __future__ import print_function
 
 import unittest
+from freezegun import freeze_time
 
 from biggraphite import test_utils as bg_test_utils
 from biggraphite import metadata_cache as bg_metadata_cache
@@ -127,6 +128,36 @@ class CacheBaseTest(object):
 class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
 
     CACHE_CLASS = bg_metadata_cache.DiskCache
+
+    def _get_metric_timestamp(self):
+        """Get the metric timestamp directly from DiskCache."""
+        with self.metadata_cache._DiskCache__env.begin(
+            self.metadata_cache._DiskCache__metric_to_metadata_db, write=False
+        ) as txn:
+            payload = txn.get(_TEST_METRIC.name)
+        return payload.rsplit(self.metadata_cache._METRIC_SEPARATOR, 1)[1]
+
+    def test_timestamp_update(self):
+        """Check that the timestamp is updated if older than half the TTL.
+
+        This test will create a metric at 00:00:00 and then get the same metric
+        at two different points in time to check if it the timestamp is updated
+        only when older than now + half the default TTL.
+        """
+        with freeze_time("2014-01-01 00:00:00"):
+            self.metadata_cache.create_metric(_TEST_METRIC)
+        timestamp_creation = self._get_metric_timestamp()
+
+        with freeze_time("2014-01-01 11:00:00"):
+            self.metadata_cache.get_metric(_TEST_METRIC.name)
+        timestamp_get_within_half_ttl = self._get_metric_timestamp()
+
+        with freeze_time("2014-01-01 14:00:00"):
+            self.metadata_cache.get_metric(_TEST_METRIC.name)
+        timestamp_get_outside_half_ttl = self._get_metric_timestamp()
+
+        self.assertEquals(timestamp_creation, timestamp_get_within_half_ttl)
+        self.assertNotEqual(timestamp_creation, timestamp_get_outside_half_ttl)
 
 
 class TestMemoryCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):

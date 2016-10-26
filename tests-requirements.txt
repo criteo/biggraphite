@@ -1,5 +1,6 @@
 django
 django-tagging
+freezegun
 mock
 pytz
 testing.cassandra
