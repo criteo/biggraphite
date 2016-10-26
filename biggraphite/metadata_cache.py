@@ -347,7 +347,7 @@ class DiskCache(Cache):
         """
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         key = encoded_metric_name
-        value = self.__get_value(metric)
+        value = self.__value_from_metric(metric)
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
             txn.put(key, value, dupdata=False, overwrite=True)
 
@@ -360,17 +360,21 @@ class DiskCache(Cache):
                 ret[name] = txn.stat(database)
         return ret
 
-    def __get_value(self, metric):
-        """Get cache value for a metric.
+    def __value_from_strings(self, metric_id, metric_metadata):
+        """Build cache value from strings.
 
         The cache value is a combination of:
           - id
           - _METRIC_SEPARATOR
           - metadata
         """
+        return self._METRIC_SEPARATOR.join([metric_id, metric_metadata])
+
+    def __value_from_metric(self, metric):
+        """Build cache value for a metric."""
         if not metric:
             return self._EMPTY
-        return str(metric.id) + self._METRIC_SEPARATOR + metric.metadata.as_json()
+        return self.__value_from_strings(str(metric.id), metric.metadata.as_json())
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
@@ -400,7 +404,7 @@ class DiskCache(Cache):
                     continue
 
                 metric = self._accessor.get_metric(key)
-                expected_value = self.__get_value(metric) if metric else None
+                expected_value = self.__value_from_metric(metric) if metric else None
                 if value != expected_value:
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
