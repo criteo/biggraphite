@@ -22,6 +22,7 @@ import sys
 from biggraphite import utils as bg_utils
 
 from biggraphite.cli import (
+    command_clean,
     command_du,
     command_info,
     command_list,
@@ -35,6 +36,7 @@ from biggraphite.cli import (
 
 COMMANDS = [
     command_test.CommandTest(),
+    command_clean.CommandClean(),
     command_du.CommandDu(),
     command_list.CommandList(),
     command_read.CommandRead(),

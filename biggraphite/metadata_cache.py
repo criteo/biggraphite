@@ -431,6 +431,7 @@ class DiskCache(Cache):
               whose timestamp value is not a digit.
         """
         cutoff = int(time.time()) - int(self.__ttl)
+        logging.info("Cleaning cache with cutoff time %d" % cutoff)
 
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
             cursor = txn.cursor()
