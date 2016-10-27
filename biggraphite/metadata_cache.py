@@ -119,6 +119,11 @@ class Cache(object):
         return metric
 
     @abc.abstractmethod
+    def clean(self):
+        """Clean the cache from expired metrics."""
+        pass
+
+    @abc.abstractmethod
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
 
@@ -193,6 +198,10 @@ class MemoryCache(Cache):
         """Put metric in the cache."""
         if metric:
             self.__cache[metric_name] = metric
+
+    def clean(self):
+        """Automatically cleaned by cachetools."""
+        pass
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache."""
@@ -328,7 +337,7 @@ class DiskCache(Cache):
         # found something in the cache
         split = self.__split_payload(payload)
 
-        if len(split) != 3:
+        if split is None:
             # invalid string => evict from cache
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.delete(key=encoded_metric_name)
@@ -336,7 +345,7 @@ class DiskCache(Cache):
 
         # valid value => get id and metadata string
         # TODO: optimization: id is a UUID (known length)
-        id_str, metadata_str, timestamp_str = split
+        id_str, metadata_str, timestamp = split
         try:
             id = uuid.UUID(id_str)
         except:
@@ -345,7 +354,7 @@ class DiskCache(Cache):
             return None, False
 
         # update timestamp if expired
-        if self.__expired_timestamp(int(timestamp_str)):
+        if self.__expired_timestamp(timestamp):
             key = encoded_metric_name
             value = self.__value_from_strings(id_str, metadata_str)
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
@@ -397,10 +406,48 @@ class DiskCache(Cache):
         return self.__value_from_strings(str(metric.id), metric.metadata.as_json())
 
     def __split_payload(self, payload):
-        """Split the payload in components."""
+        """Split the payload in components.
+
+        Returns None if it cannot parse the payload.
+        """
         if not payload:
-            return []
-        return payload.split(self._METRIC_SEPARATOR, 2)
+            return None
+        split = payload.split(self._METRIC_SEPARATOR, 2)
+        # check for exaclt 3 fields
+        if len(split) != 3:
+            return None
+        metric_id, metric_metadata, timestamp_str = split
+        # check timestamp conversion to int
+        try:
+            timestamp = int(timestamp_str)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return (metric_id, metric_metadata, timestamp)
+
+    def clean(self):
+        """Remove all expired metrics.
+
+        Note: This will also remove metrics without a timestamp or
+              whose timestamp value is not a digit.
+        """
+        cutoff = int(time.time()) - int(self.__ttl)
+        logging.info("Cleaning cache with cutoff time %d" % cutoff)
+
+        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
+            cursor = txn.cursor()
+            for key, value in cursor:
+                split = self.__split_payload(value)
+                if split is None:
+                    logging.warning(
+                        "Removing undecodable key '%s' with value %s" % (key, value))
+                    txn.delete(key=key)
+                else:
+                    _, _, timestamp = split
+                    if timestamp < cutoff:
+                        logging.warning(
+                            "Removing expired key '%s' with timestamp %d" % (
+                                key, timestamp))
+                        txn.delete(key=key)
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
@@ -432,8 +479,13 @@ class DiskCache(Cache):
                 metric = self._accessor.get_metric(key)
                 expected_value = self.__value_from_metric(metric) if metric else None
 
-                if self.__split_payload(value)[0:2] !=\
-                   self.__split_payload(expected_value)[0:2]:
+                split = self.__split_payload(value)
+                v_id, v_metadata, _ = split if split is not None else (None, None, None)
+
+                split = self.__split_payload(expected_value)
+                e_id, e_metadata, _ = split if split is not None else (None, None, None)
+
+                if v_id is None or e_id is None or (v_id, v_metadata) != (e_id, e_metadata):
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
