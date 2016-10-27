@@ -337,7 +337,7 @@ class DiskCache(Cache):
         # found something in the cache
         split = self.__split_payload(payload)
 
-        if len(split) != 3:
+        if split is None:
             # invalid string => evict from cache
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.delete(key=encoded_metric_name)
@@ -406,10 +406,16 @@ class DiskCache(Cache):
         return self.__value_from_strings(str(metric.id), metric.metadata.as_json())
 
     def __split_payload(self, payload):
-        """Split the payload in components."""
+        """Split the payload in components.
+
+        Returns None if it cannot parse the payload.
+        """
         if not payload:
-            return []
-        return payload.split(self._METRIC_SEPARATOR, 2)
+            return None
+        split = payload.split(self._METRIC_SEPARATOR, 2)
+        if len(split) != 3:
+            return None
+        return split
 
     def clean(self):
         """Remove all expired metrics.
@@ -422,13 +428,19 @@ class DiskCache(Cache):
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
             cursor = txn.cursor()
             for key, value in cursor:
-                timestamp_str = self.__split_payload(value)[-1]
-                if not timestamp_str.isdigit() or \
-                   int(timestamp_str) < cutoff:
+                split = self.__split_payload(value)
+                if split is None:
                     logging.warning(
-                        "Removing expired key '%s' with timestamp %s" % (
-                            key, timestamp_str))
+                        "Removing undecodable key '%s' with value %s" % (key, value))
                     txn.delete(key=key)
+                else:
+                    _, _, timestamp_str = split
+                    if not timestamp_str.isdigit() or \
+                       int(timestamp_str) < cutoff:
+                        logging.warning(
+                            "Removing expired key '%s' with timestamp %s" % (
+                                key, timestamp_str))
+                        txn.delete(key=key)
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Remove spurious entries from the cache.
@@ -460,8 +472,13 @@ class DiskCache(Cache):
                 metric = self._accessor.get_metric(key)
                 expected_value = self.__value_from_metric(metric) if metric else None
 
-                if self.__split_payload(value)[0:2] != \
-                   self.__split_payload(expected_value)[0:2]:
+                split = self.__split_payload(value)
+                v_id, v_metadata, _ = split if split is not None else (None, None, None)
+
+                split = self.__split_payload(expected_value)
+                e_id, e_metadata, _ = split if split is not None else (None, None, None)
+
+                if v_id is None or e_id is None or (v_id, v_metadata) != (e_id, e_metadata):
                     logging.warning(
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
