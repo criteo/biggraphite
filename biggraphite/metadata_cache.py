@@ -312,7 +312,8 @@ class DiskCache(Cache):
         """Check if metric is cached."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            return bool(txn.get(encoded_metric_name))
+            payload = txn.get(encoded_metric_name)
+            return payload is not None and payload != self._EMPTY
 
     def __expired_timestamp(self, timestamp):
         """Check if timestamp is expired.
