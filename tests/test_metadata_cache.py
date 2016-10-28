@@ -55,6 +55,7 @@ class CacheBaseTest(object):
         name = _TEST_METRIC.name
         self.assertEquals(self.metadata_cache.has_metric(name), False)
         self.assertEquals(self.metadata_cache.get_metric(name), None)
+        self.assertEquals(self.metadata_cache.has_metric(name), False)
 
         self.metadata_cache.create_metric(_TEST_METRIC)
         self.assertEquals(self.metadata_cache.has_metric(name), True)
