@@ -182,6 +182,7 @@ _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
 _METADATA_CREATION_CQL_METRICS = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics ("
     "  name text,"
+    "  parent text,"
     "  id uuid,"
     "  config map<text, text>,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
@@ -191,10 +192,27 @@ _METADATA_CREATION_CQL_METRICS = str(
 _METADATA_CREATION_CQL_DIRECTORIES = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".directories ("
     "  name text,"
+    "  parent text,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
 )
+_METADATA_CREATION_CQL_PARENT_INDEXES = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (parent)"
+    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
+    "  WITH OPTIONS = {"
+    "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
+    "    'case_sensitive': 'true'"
+    "  };" % {"table": t}
+    for t in 'metrics', 'directories'
+]
+_METADATA_CREATION_CQL_ID_INDEXES = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (id)"
+    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
+    "  WITH OPTIONS = {"
+    "    'mode': 'SPARSE'"
+    "  };" % {"table": "metrics"},
+]
 _METADATA_CREATION_CQL_PATH_INDEXES = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (component_%(component)d)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
@@ -205,10 +223,12 @@ _METADATA_CREATION_CQL_PATH_INDEXES = [
     for t in 'metrics', 'directories'
     for n in range(_COMPONENTS_MAX_LEN)
 ]
-_METADATA_CREATION_CQL = [
+_METADATA_CREATION_CQL = ([
     _METADATA_CREATION_CQL_METRICS,
     _METADATA_CREATION_CQL_DIRECTORIES,
 ] + _METADATA_CREATION_CQL_PATH_INDEXES
+  + _METADATA_CREATION_CQL_PARENT_INDEXES
+  + _METADATA_CREATION_CQL_ID_INDEXES)
 
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
@@ -523,11 +543,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
         self.__insert_metrics_statement = self.__session.prepare(
-            "INSERT INTO \"%s\".metrics (name, id, config, %s) VALUES (?, ?, ?, %s);"
+            "INSERT INTO \"%s\".metrics (name, parent, id, config, %s) VALUES (?, ?, ?, ?, %s);"
             % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__insert_directories_statement = self.__session.prepare(
-            "INSERT INTO \"%s\".directories (name, %s) VALUES (?, %s) IF NOT EXISTS;"
+            "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__select_metric_statement = self.__session.prepare(
@@ -625,7 +645,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metadata_dict = metric.metadata.as_string_dict()
         queries.append((
             self.__insert_metrics_statement,
-            [metric.name, metric.id, metadata_dict] + components + padding,
+            [metric.name, parent_dir + ".", metric.id, metadata_dict] + components + padding,
         ))
 
         # We have to run queries in sequence as:
@@ -639,6 +659,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _create_parent_dirs_queries(self, components):
         queries = []
         directory_path = []
+        parent = ""
         for component in components[:-2]:  # -1 for _LAST_COMPONENT, -1 for metric
             directory_path.append(component)
             directory_name = ".".join(directory_path)
@@ -646,8 +667,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             directory_padding = [None] * (_COMPONENTS_MAX_LEN - len(directory_components))
             queries.append((
                 self.__insert_directories_statement,
-                [directory_name] + directory_components + directory_padding,
+                [directory_name, parent + "."] + directory_components + directory_padding,
             ))
+            parent = directory_name
         return queries
 
     @staticmethod
@@ -837,11 +859,21 @@ class _CassandraAccessor(bg_accessor.Accessor):
         Returns:
           Query string that is ready to be executed.
         """
+        if "*" in components:
+            idx = components.index("*")
+            prefix = ".".join(components[0:idx])
+            components = ['*'] * (idx + 1) + components[idx+1:]
+        else:
+            prefix = None
+
         where_parts = [
             "component_%d = %s" % (n, c_encoder.cql_quote(s))
             for n, s in enumerate(components)
             if s != "*"
         ]
+        if prefix:
+            where_parts.append("parent LIKE '%s.%%'" % prefix)
+
         if is_raw or len(where_parts) != len(components):
             if len(where_parts) == 0:
                 # Avoid pesky syntax errors in case someone queries for "**"
@@ -926,6 +958,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         start_token = murmur3.INT64_MIN
         stop_token = murmur3.INT64_MAX
+        batch_size = 1000
 
         if nshards > 1:
             tokens = murmur3.INT64_MAX - murmur3.INT64_MIN
@@ -941,8 +974,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # Step 1: Create missing parent directories.
         statement_str = (
             "SELECT name, token(name) FROM \"%s\".directories "
-            "WHERE token(name) > ? LIMIT 1;" %
-            self.keyspace_metadata)
+            "WHERE token(name) > ? LIMIT %d;" %
+            self.keyspace_metadata, batch_size)
         statement = self.__session.prepare(statement_str)
         statement.consistency_level = cassandra.ConsistencyLevel.QUORUM
         statement.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
