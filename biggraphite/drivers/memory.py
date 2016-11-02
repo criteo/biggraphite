@@ -123,6 +123,11 @@ class _MemoryAccessor(bg_accessor.Accessor):
             path.append(part)
             self._directory_names.add(".".join(path))
 
+    # TODO: implement touch metric for memory driver
+    def touch_metric(self, metric):
+        """See the real Accessor for a description."""
+        pass
+
     @staticmethod
     def __glob_names(names, glob):
         results = bg_glob.glob(names, glob)
