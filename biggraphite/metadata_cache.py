@@ -360,14 +360,19 @@ class DiskCache(Cache):
                 txn.delete(key=encoded_metric_name)
             return None, False
 
+        metadata = self.metadata_from_str(metadata_str)
+
         # update timestamp if expired
         if self.__expired_timestamp(timestamp):
             key = encoded_metric_name
             value = self.__value_from_strings(id_str, metadata_str)
+            # touch metric in backend
+            metric = bg_accessor.Metric(metric_name, id, metadata)
+            self._accessor.touch_metric(metric)
+            # update timestamp in cache
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.put(key, value, dupdata=False, overwrite=True)
 
-        metadata = self.metadata_from_str(metadata_str)
         return bg_accessor.Metric(metric_name, id, metadata), True
 
     def _cache_set(self, metric_name, metric):
