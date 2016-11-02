@@ -975,7 +975,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         statement_str = (
             "SELECT name, token(name) FROM \"%s\".directories "
             "WHERE token(name) > ? LIMIT %d;" %
-            self.keyspace_metadata, batch_size)
+            (self.keyspace_metadata, batch_size))
         statement = self.__session.prepare(statement_str)
         statement.consistency_level = cassandra.ConsistencyLevel.QUORUM
         statement.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
