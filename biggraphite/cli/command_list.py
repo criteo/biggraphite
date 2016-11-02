@@ -51,7 +51,7 @@ class CommandList(command.BaseCommand):
         )
 
     def run(self, accessor, opts):
-        """List metrics and directories
+        """List metrics and directories.
 
         See command.CommandBase.
         """
