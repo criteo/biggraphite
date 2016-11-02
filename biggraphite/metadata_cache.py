@@ -93,7 +93,11 @@ class Cache(object):
         self._cache_set(metric.name, metric)
 
     def has_metric(self, metric_name):
-        """Check if a metric exists."""
+        """Check if a metric exists.
+
+        The result is cached and can be stale. Call get_metric()
+        if you want to go to the database on a miss.
+        """
         found = self._cache_has(metric_name)
         if not found:
             with self._accessor_lock:
@@ -112,6 +116,8 @@ class Cache(object):
             self.hit_count += 1
         else:
             self.miss_count += 1
+        # Check that is still doesn't exists.
+        if not metric:
             with self._accessor_lock:
                 metric = self._accessor.get_metric(metric_name)
                 self._cache_set(metric_name, metric)
