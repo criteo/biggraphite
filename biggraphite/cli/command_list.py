@@ -28,10 +28,6 @@ def list_metrics(accessor, pattern):
     """
     metric_names = accessor.glob_metric_names(pattern)
 
-    if not metric_names:
-        print("Pattern '%s' doesn't match any metric" % pattern)
-        exit(1)
-
     return [
         accessor.get_metric(metric)
         for metric in metric_names
@@ -50,15 +46,18 @@ class CommandList(command.BaseCommand):
         See command.CommandBase.
         """
         parser.add_argument(
-            "metrics",
+            "glob",
             help="One metric name or globbing on metrics names"
         )
 
     def run(self, accessor, opts):
-        """Disk usage of metrics.
+        """List metrics and directories
 
         See command.CommandBase.
         """
         accessor.connect()
-        for metric in list_metrics(accessor, opts.metrics):
-            print(metric.name)
+
+        for directory in accessor.glob_directory_names(opts.glob):
+            print("d %s" % directory)
+        for metric in list_metrics(accessor, opts.glob):
+            print("m %s %s" % (metric.name, metric.metadata.as_string_dict()))
