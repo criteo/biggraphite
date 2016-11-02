@@ -524,6 +524,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__lazy_statements = None  # setup by connect()
         self.__timeout = timeout
         self.__insert_metrics_statement = None  # setup by connect()
+        self.__touch_metrics_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
 
@@ -557,6 +558,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__insert_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__touch_metrics_statement = self.__session.prepare(
+            "INSERT INTO \"%s\".metrics (name, config) VALUES (?, ?);"
+            % (self.keyspace_metadata)
+        )
         self.__insert_directories_statement = self.__session.prepare(
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
@@ -667,6 +672,23 @@ class _CassandraAccessor(bg_accessor.Accessor):
         #  - we do not want directories or metrics without parents (not handled by callee)
         #  - batch queries cannot contain IF NOT EXISTS and involve multiple primary keys
         # We can still end up with empty directories, which will need a reaper job to clean them.
+        for statement, args in queries:
+            self._execute(statement, args)
+
+    def touch_metric(self, metric):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).touch_metric(metric)
+
+        if self.__bulkimport:
+            return
+
+        queries = []
+        metadata_dict = metric.metadata.as_string_dict()
+        queries.append((
+            self.__touch_metrics_statement,
+            [metric.name, metadata_dict],
+        ))
+
         for statement, args in queries:
             self._execute(statement, args)
 
