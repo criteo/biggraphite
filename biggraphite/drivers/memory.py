@@ -123,7 +123,8 @@ class _MemoryAccessor(bg_accessor.Accessor):
             path.append(part)
             self._directory_names.add(".".join(path))
 
-    # TODO: implement touch metric for memory driver
+    # TODO(r.veznaver): implement touch metric for memory driver
+    #                   (requires implementing TTL or timestamp support)
     def touch_metric(self, metric):
         """See the real Accessor for a description."""
         pass
