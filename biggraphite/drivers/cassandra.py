@@ -195,6 +195,7 @@ _METADATA_CREATION_CQL_METRICS = str(
     "  parent text,"
     "  id uuid,"
     "  config map<text, text>,"
+    "  timestamp timestamp,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
@@ -553,15 +554,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
-        self.__insert_metrics_statement = self.__session.prepare(
-            "INSERT INTO \"%s\".metrics (name, parent, id, config, %s) VALUES (?, ?, ?, ?, %s);"
-            % (self.keyspace_metadata, components_names, components_marks)
-        )
+        self.__insert_metrics_statement = self.__session.prepare((
+            "INSERT INTO \"%s\".metrics"
+            " (name, parent, id, config, timestamp, %s)"
+            " VALUES (?, ?, ?, ?, toTimestamp(now()), %s);"
+        ) % (self.keyspace_metadata, components_names, components_marks))
         self.__insert_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
-        self.__touch_metrics_statement = self.__session.prepare(
-            "INSERT INTO \"%s\".metrics (name, config) VALUES (?, ?);"
-            % (self.keyspace_metadata)
-        )
+        self.__touch_metrics_statement = self.__session.prepare((
+            "INSERT INTO \"%s\".metrics"
+            " (name, timestamp)"
+            " VALUES (?, toTimestamp(now()));"
+        ) % (self.keyspace_metadata))
+        self.__touch_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
         self.__insert_directories_statement = self.__session.prepare(
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
@@ -683,10 +687,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         queries = []
-        metadata_dict = metric.metadata.as_string_dict()
         queries.append((
             self.__touch_metrics_statement,
-            [metric.name, metadata_dict],
+            [metric.name],
         ))
 
         for statement, args in queries:
