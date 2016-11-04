@@ -152,6 +152,16 @@ class InvalidGlobError(InvalidArgumentError):
 # they are stored in the database an loaded automatically from
 # here.
 
+# CONSISTENCY PARAMETERS
+# ======================
+# Currently these are explicitely set to the defaults.
+_META_WRITE_CONSISTENCY = cassandra.ConsistencyLevel.ONE
+_META_READ_CONSISTENCY = cassandra.ConsistencyLevel.ONE
+
+_DATA_WRITE_CONSISTENCY = cassandra.ConsistencyLevel.ONE
+_DATA_READ_CONSISTENCY = cassandra.ConsistencyLevel.ONE
+
+
 # HEURISTIC PARAMETERS
 # ====================
 # The following few constants are heuristics that are used to tune
@@ -433,7 +443,7 @@ class _LazyPreparedStatements(object):
             " VALUES (?, ?, ?, ?, ?);"
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
-        statement.consistency_level = cassandra.ConsistencyLevel.ONE
+        statement.consistency_level = _DATA_WRITE_CONSISTENCY
         self.__stage_to_insert[stage] = statement
         return statement, args
 
@@ -453,7 +463,7 @@ class _LazyPreparedStatements(object):
             " LIMIT ?;"
         ) % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
-        statement.consistency_level = cassandra.ConsistencyLevel.ONE
+        statement.consistency_level = _DATA_READ_CONSISTENCY
         self.__stage_to_select[stage] = statement
         return statement, args
 
@@ -546,13 +556,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "INSERT INTO \"%s\".metrics (name, parent, id, config, %s) VALUES (?, ?, ?, ?, %s);"
             % (self.keyspace_metadata, components_names, components_marks)
         )
+        self.__insert_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
         self.__insert_directories_statement = self.__session.prepare(
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
         )
+        self.__insert_directories_statement.consistency_level = _META_WRITE_CONSISTENCY
+        # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_statement = self.__session.prepare(
             "SELECT id, config FROM \"%s\".metrics WHERE name = ?;" % self.keyspace_metadata
         )
+        self.__select_metric_statement.consistency_level = _META_READ_CONSISTENCY
 
         self.is_connected = True
 
@@ -833,6 +847,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metric_names = []
         try:
             for query in queries:
+                statement = c_query.SimpleStatement(query)
+                statement.consistency_level = _META_READ_CONSISTENCY
                 for row in self._execute(query):
                     metric_names.append(row[0])
                 if len(metric_names) > self.max_metrics_per_glob:
@@ -973,7 +989,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         # Step 1: Create missing parent directories.
         statement_str = (
-            "SELECT name, token(name) FROM \"%s\".directories "
+            "SELECT name, parent, token(name) FROM \"%s\".directories "
             "WHERE token(name) > ? LIMIT %d;" %
             (self.keyspace_metadata, batch_size))
         statement = self.__session.prepare(statement_str)
@@ -989,15 +1005,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if len(result.current_rows) == 0:
                 break
             for row in result:
-                parent_dir = row.name.rpartition(".")[0]
+                name, parent, token = row
+                parent_dir = name.rpartition(".")[0]
                 if parent_dir and not self.glob_directory_names(parent_dir):
                     log.warning("Creating missing parent dir '%s'" % parent_dir)
-                    components = self._components_from_name(row.name)
+                    components = self._components_from_name(name)
                     queries = self._create_parent_dirs_queries(components)
                     for i_statement, i_args in queries:
                         self._execute(i_statement, i_args)
 
-                token = row.system_token_name
+                # TODO(c.chary): fix the parent field.
+
+                token = token
 
     def shutdown(self):
         """See bg_accessor.Accessor."""
