@@ -76,7 +76,8 @@ class TestGlobUtilsInternals(unittest.TestCase):
             ('a[0-9]z.b', '*.b'),
         ]
         for (glob, components) in scenarii:
-            self.assertEqual(components, bg_glob._graphite_glob_to_accessor_components(glob))
+            simplified = bg_glob._graphite_glob_to_accessor_components(glob)
+            self.assertEqual(components, simplified)
 
     def test_glob_to_regex(self):
         def filter_metrics(metrics, glob):
@@ -92,10 +93,49 @@ class TestGlobUtilsInternals(unittest.TestCase):
             (['a.b', 'a.b.c', 'a.x.y'], 'a.*.*', ['a.b.c', 'a.x.y']),
             (['a.b', 'a.b.c', 'a.x.y'], 'a.{b,x}.*', ['a.b.c', 'a.x.y']),
             (['a.b', 'a.b.c', 'a.x.y'], 'a.{b,x}.{c,y}', ['a.b.c', 'a.x.y']),
-            (['a.b', 'a.b.c', 'a.x.y', 'a.x.z'], 'a.{b,x}.{c,{y,z}}', ['a.b.c', 'a.x.y', 'a.x.z']),
+            (['a.b', 'a.b.c', 'a.x.y', 'a.x.z'],
+             'a.{b,x}.{c,{y,z}}',
+             ['a.b.c', 'a.x.y', 'a.x.z']),
         ]
         for (full, glob, filtered) in scenarii:
             self.assertEqual(filtered, filter_metrics(full, glob))
+
+    def test_graphite_glob_parser(self):
+        scenarii = [
+            # Positive examples
+            ("a.b", [['a'], ['b']]),
+            ("a?b.c", [['a', bg_glob.AnyChar(), 'b'], ['c']]),
+            ("a.b*c", [['a'], ['b', bg_glob.AnySequence(), 'c']]),
+            ("a.b**c", [['a'], ['b'], bg_glob.Globstar(), ['c']]),
+            ("a.**.c", [['a'], bg_glob.Globstar(), ['c']]),
+            ("a.**", [['a'], bg_glob.Globstar()]),
+            ("a[xyz].b", [['a', bg_glob.AnyChar()], ['b']]),
+            ("a[!rat].b", [['a', bg_glob.AnyChar()], ['b']]),
+            ("pl[a-ox]p", [['pl', bg_glob.AnyChar(), 'p']]),
+            ("a[b-dopx-z]b.c", [['a', bg_glob.AnyChar(), 'b'], ['c']]),
+            ("b[i\\]m", [['b', bg_glob.AnyChar(), 'm']]),
+            ("a[x-xy]b", [['a', bg_glob.AnyChar(), 'b']]),
+            ("a[y-xz]b", [['a', bg_glob.AnyChar(), 'b']]),
+            ("a.b.{c,d}", [['a'], ['b'], [bg_glob.AnySequence()]]),
+            ("a.b.{c,d}-{e,f}",
+             [['a'], ['b'], [bg_glob.AnySequence(), '-', bg_glob.AnySequence()]]),
+            ("a.b.oh{c{d,e,}{a,b},f{g,h}i}ah",
+             [['a'], ['b'], ['oh', bg_glob.AnySequence(), 'ah']]),
+            # Negative examples
+            ("a[.b", [['a['], ['b']]),
+            ("a{.b", [['a{'], ['b']]),
+            ("a{.b.c}", [['a{'], ['b'], ['c}']]),
+        ]
+        parser = bg_glob.GraphiteGlobParser()
+        for (glob, expected) in scenarii:
+            parsed = parser.parse(glob)
+            if isinstance(expected, list):
+                all(self.assertSequenceEqual(*parts)
+                    for parts in zip(expected, parsed))
+            elif isinstance(expected, bg_glob.Globstar):
+                self.assertEqual(expected, parsed)
+            else:
+                self.fail('Unhandled types')
 
 
 class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
@@ -153,6 +193,7 @@ class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
         for (glob, metrics, directories) in scenarii:
             found = bg_glob.graphite_glob(self.accessor, glob)
             self.assertEqual((metrics, directories), found)
+
 
 if __name__ == "__main__":
     unittest.main()

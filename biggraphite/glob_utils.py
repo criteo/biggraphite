@@ -217,3 +217,179 @@ def graphite_glob(accessor, graphite_glob):
     directories = accessor.glob_directory_names(accessor_components)
     directories = filter(glob_re.match, directories)
     return (metrics, directories)
+
+
+class GlobExpression:
+    """Base class for glob expressions."""
+
+    def __repr__(self):
+        return self.__class__.__name__
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__
+
+
+class GlobExpressionWithValues(GlobExpression):
+    """Base class for glob expressions that have values."""
+
+    def __init__(self, values):
+        """Take a list of values, and stores the sorted unique values."""
+        self.values = sorted(set(values))
+
+    def __repr__(self):
+        return "%s(%s)" % (self.__class__.__name__, self.values)
+
+    def __eq__(self, other):
+        return (GlobExpression.__eq__(self, other) and
+                self.values == other.values)
+
+
+class Globstar(GlobExpression):
+    """Represents a globstar wildcard."""
+
+    pass
+
+
+class AnyChar(GlobExpression):
+    """Represents any single character in a glob."""
+
+    pass
+
+
+class AnySequence(GlobExpression):
+    """Represents any sequence of 0 or more characters in a glob."""
+
+    pass
+
+
+class GraphiteGlobParser:
+    """Utility class for parsing graphite glob expressions."""
+
+    def __init__(self):
+        """Build a parser, fill in default values."""
+        self._glob = ''
+        self._reset()
+
+    def _commit_sequence(self):
+        if len(self._sequence) > 0:
+            self._component.append(self._sequence)
+            self._sequence = ''
+
+    def _commit_component(self):
+        self._commit_sequence()
+        if len(self._component) > 0:
+            self._parsed.append(self._component)
+            self._component = []
+
+    def _parse_char_wildcard(self):
+        """Parse single character wildcard."""
+        self._commit_sequence()
+        self._component.append(AnyChar())
+
+    def _parse_wildcard(self, i, n):
+        """Parse multi-character wildcard, and globstar."""
+        self._commit_sequence()
+        # Look-ahead for potential globstar
+        if i < n and self._glob[i] == '*':
+            self._commit_component()
+            self._parsed.append(Globstar())
+            i += 1
+        else:
+            self._component.append(AnySequence())
+
+        return i
+
+    def _parse_char_selector(self, i, n):
+        """Parse character selector, with support for negation and ranges.
+
+        For simplicity (and because it does not seem useful at the moment) we
+        will not be generating the possible values or parsing the ranges, but
+        outputting AnyChar on valid char selector expressions.
+        """
+        j = i
+        if j < n and self._glob[j] == '!':
+            j += 1
+        if j < n and self._glob[j] == ']':
+            j += 1
+        while j < n and self._glob[j] != ']':
+            j += 1
+
+        if j < n:
+            # +1 to skip closing bracket
+            i = j + 1
+            self._commit_sequence()
+            self._component.append(AnyChar())
+        else:
+            # Reached end of string: unbalanced bracket
+            self._sequence += '['
+
+        return i
+
+    def _parse_sequence_selector(self, i, n):
+        """Parse character sequence selector, with nesting.
+
+        For simplicity (and because it does not seem useful at the moment) we
+        will not be generating the possible values, but outputting AnySequence
+        on valid char sequence selector expressions.
+        """
+        depth = 1
+        j = i
+        while j < n and depth > 0:
+            c = self._glob[j]
+            j += 1
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+            elif c == '.':
+                # We have a component separator, this selector is wrong
+                # XXX(d.forest): this is purposefully simplified, but maybe we
+                #                should handle escaped dots, or dots within char
+                #                selectors?
+                break
+
+        if depth == 0:
+            i = j
+            self._commit_sequence()
+            self._component.append(AnySequence())
+        else:
+            # Reached end of string: braces are unbalanced
+            self._sequence += '{'
+
+        return i
+
+    def _reset(self, glob=''):
+        if glob == self._glob:
+            return
+
+        self._glob = glob
+        self._parsed = []
+        self._component = []
+        self._sequence = ''
+
+    def parse(self, glob):
+        """Parse a graphite glob expression into simple components."""
+        self._reset(glob)
+        if self._parsed:
+            return self._parsed
+
+        i = 0
+        n = len(self._glob)
+        while i < n:
+            c = self._glob[i]
+            i += 1
+            if c == '?':
+                self._parse_char_wildcard()
+            elif c == '*':
+                i = self._parse_wildcard(i, n)
+            elif c == '[':
+                i = self._parse_char_selector(i, n)
+            elif c == '{':
+                i = self._parse_sequence_selector(i, n)
+            elif c == '.':
+                self._commit_component()
+            else:
+                self._sequence += c
+
+        self._commit_component()
+        return self._parsed
