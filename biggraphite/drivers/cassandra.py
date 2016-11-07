@@ -148,6 +148,7 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
 class InvalidGlobError(InvalidArgumentError):
     """The provided glob is invalid."""
 
+
 # TODO(c.chary): convert some of these to options, but make sure
 # they are stored in the database an loaded automatically from
 # here.
