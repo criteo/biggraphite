@@ -748,6 +748,11 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
+    def clean(self, cutoff, batch_size=10000):
+        """Clean the metadata from metrics older than the cutoff timestamp."""
+        self._check_connected()
+
+    @abc.abstractmethod
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """Repair potential corruptions in the database.
 

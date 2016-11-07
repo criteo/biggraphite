@@ -985,6 +985,49 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_failure,
                 )
 
+    def clean(self, cutoff, batch_size=10000):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).clean(cutoff, batch_size)
+
+        if not cutoff:
+            log.warn("You must specify a cutoff time for cleanup")
+            return
+
+        # timestamp format in Cassandra is in milliseconds
+        cutoff = int(cutoff * 1000)
+        log.warn("Cleaning with cutoff time %d", cutoff)
+
+        # calculate tokens
+        start_token = murmur3.INT64_MIN
+        stop_token = murmur3.INT64_MAX
+
+        # statements
+        limit = ("LIMIT %d" % batch_size) if batch_size else ""
+        select = self.__session.prepare(
+            "SELECT name FROM \"%s\".metrics"
+            " WHERE timestamp < %d AND token(name) > ?"
+            " %s ALLOW FILTERING;" %
+            (self.keyspace_metadata, cutoff, limit))
+        select.consistency_level = cassandra.ConsistencyLevel.QUORUM
+        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        select.request_timeout = 60
+
+        delete = self.__session.prepare(
+            "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
+            (self.keyspace_metadata))
+
+        # filter the entire table
+        token = start_token
+        while token < stop_token:
+            result = self._execute(select, (token,))
+            for row in result:
+                name, = row
+                log.warn("Cleaning metric %s", name)
+                self._execute(delete, (name,))
+            if not batch_size:
+                return
+            token = token + batch_size
+
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """See bg_accessor.Accessor.
 

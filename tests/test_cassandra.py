@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 import unittest
+import time
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
@@ -262,6 +263,14 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(self.accessor.has_metric(metric.name), False)
         self.accessor.create_metric(metric)
         self.assertEquals(self.accessor.has_metric(metric.name), True)
+
+    def test_clean(self):
+        metric = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric)
+        # set cutoff time in the future to delete all created metrics
+        cutoff = int(time.time() + 3600)
+        self.accessor.clean(cutoff, 0)
+        self.assertEquals(self.accessor.has_metric(metric.name), False)
 
     def test_repair(self):
         # TODO(c.chary): Add better test for repair()

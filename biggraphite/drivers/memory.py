@@ -129,6 +129,12 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         pass
 
+    # TODO(r.veznaver): implement clean metrics for memory driver
+    #                   (requires implementing TTL or timestamp support)
+    def clean(self, *args, **kwargs):
+        """See the real Accessor for a description."""
+        pass
+
     @staticmethod
     def __glob_names(names, glob):
         results = bg_glob.glob(names, glob)
