@@ -265,12 +265,15 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(self.accessor.has_metric(metric.name), True)
 
     def test_clean(self):
-        metric = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric)
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+        metric2 = self.make_metric("g.h.i.j.k.l")
+        self.accessor.create_metric(metric2)
         # set cutoff time in the future to delete all created metrics
         cutoff = int(time.time() + 3600)
-        self.accessor.clean(cutoff, 0)
-        self.assertEquals(self.accessor.has_metric(metric.name), False)
+        self.accessor.clean(cutoff, 10)
+        self.assertEquals(self.accessor.has_metric(metric1.name), False)
+        self.assertEquals(self.accessor.has_metric(metric2.name), False)
 
     def test_repair(self):
         # TODO(c.chary): Add better test for repair()

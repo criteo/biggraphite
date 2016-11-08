@@ -990,7 +990,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         Args:
             cutoff: UNIX time in microseconds. Rows older than it should be deleted.
-            batch_size: The maximum number of results to query per select.
+            batch_size: The maximum number of results to get per query and delete.
         """
         super(_CassandraAccessor, self).clean(cutoff, batch_size)
 
@@ -1000,19 +1000,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         # timestamp format in Cassandra is in milliseconds
         cutoff = int(cutoff * 1000)
-        log.warn("Cleaning with cutoff time %d", cutoff)
+        log.warn("Cleaning with cutoff time %d and batch size %d", cutoff, batch_size)
 
         # calculate tokens
         start_token = murmur3.INT64_MIN
         stop_token = murmur3.INT64_MAX
 
         # statements
-        limit = ("LIMIT %d" % batch_size) if batch_size else ""
         select = self.__session.prepare(
-            "SELECT name FROM \"%s\".metrics"
+            "SELECT name, token(name) FROM \"%s\".metrics"
             " WHERE mtime < %d AND token(name) > ?"
-            " %s ALLOW FILTERING;" %
-            (self.keyspace_metadata, cutoff, limit))
+            " LIMIT %d ALLOW FILTERING;" %
+            (self.keyspace_metadata, cutoff, batch_size))
         select.consistency_level = cassandra.ConsistencyLevel.QUORUM
         select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         select.request_timeout = 60
@@ -1025,13 +1024,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             result = self._execute(select, (token,))
+            if len(result.current_rows) == 0:
+                break
             for row in result:
-                name, = row
+                name, token = row
                 log.warn("Cleaning metric %s", name)
                 self._execute(delete, (name,))
-            if not batch_size:
-                return
-            token = token + batch_size
+                token = token
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """See bg_accessor.Accessor.
