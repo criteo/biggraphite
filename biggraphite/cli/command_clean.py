@@ -14,7 +14,7 @@
 # limitations under the License.
 """Clean Command."""
 
-
+import time
 import logging
 
 from biggraphite.cli import command
@@ -22,21 +22,55 @@ from biggraphite import metadata_cache
 
 
 class CommandClean(command.BaseCommand):
-    """Clean BigGraphite disk cache."""
+    """Clean BigGraphite metric metadata from old metrics."""
 
     NAME = "clean"
-    HELP = "Clean the disk cache."
+    HELP = "Clean the metric metadata."
+
+    def add_arguments(self, parser):
+        """Add custom arguments."""
+        parser.add_argument(
+            "--cache",
+            help="clean cache",
+            action='store_true'
+        )
+        parser.add_argument(
+            "--backend",
+            help="clean backend",
+            action='store_true'
+        )
+        parser.add_argument(
+            "--cutoff",
+            help="specify cutoff time in UNIX time",
+            type=int
+        )
+        parser.add_argument(
+            "--batch-size",
+            help="specify batch size for backend processing",
+            type=int,
+            default=10000,
+        )
 
     def run(self, accessor, opts):
-        """Run some repairs.
+        """Run some cleanup.
 
         See command.BaseCommand
         """
         accessor.connect()
 
-        if opts.storage_dir:
-            cache = metadata_cache.DiskCache(accessor, opts.storage_dir)
-            cache.open()
-            cache.clean()
+        if not opts.cutoff:
+            cutoff = int(time.time()) - 24*60*60
         else:
-            logging.warning('Cannot clean disk cache because storage_dir is empty')
+            cutoff = opts.cutoff
+        logging.info("Setting cutoff time to: %d", cutoff)
+
+        if opts.cache:
+            if opts.storage_dir:
+                cache = metadata_cache.DiskCache(accessor, opts.storage_dir)
+                cache.open()
+                cache.clean()
+            else:
+                logging.warning('Cannot clean disk cache because storage_dir is empty')
+
+        if opts.backend:
+            accessor.clean(cutoff, opts.batch_size)

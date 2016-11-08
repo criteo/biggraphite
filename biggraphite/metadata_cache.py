@@ -125,7 +125,7 @@ class Cache(object):
         return metric
 
     @abc.abstractmethod
-    def clean(self):
+    def clean(self, cutoff=None):
         """Clean the cache from expired metrics."""
         pass
 
@@ -205,7 +205,7 @@ class MemoryCache(Cache):
         if metric:
             self.__cache[metric_name] = metric
 
-    def clean(self):
+    def clean(self, cutoff=None):
         """Automatically cleaned by cachetools."""
         pass
 
@@ -436,13 +436,14 @@ class DiskCache(Cache):
             return None
         return (metric_id, metric_metadata, timestamp)
 
-    def clean(self):
+    def clean(self, cutoff=None):
         """Remove all expired metrics.
 
         Note: This will also remove metrics without a timestamp or
               whose timestamp value is not a digit.
         """
-        cutoff = int(time.time()) - int(self.__ttl)
+        if not cutoff:
+            cutoff = int(time.time()) - int(self.__ttl)
         logging.info("Cleaning cache with cutoff time %d" % cutoff)
 
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
