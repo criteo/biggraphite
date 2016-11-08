@@ -196,7 +196,7 @@ _METADATA_CREATION_CQL_METRICS = str(
     "  parent text,"
     "  id uuid,"
     "  config map<text, text>,"
-    "  timestamp timestamp,"
+    "  mtime timestamp,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
@@ -557,13 +557,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
         self.__insert_metrics_statement = self.__session.prepare((
             "INSERT INTO \"%s\".metrics"
-            " (name, parent, id, config, timestamp, %s)"
+            " (name, parent, id, config, mtime, %s)"
             " VALUES (?, ?, ?, ?, toTimestamp(now()), %s);"
         ) % (self.keyspace_metadata, components_names, components_marks))
         self.__insert_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
         self.__touch_metrics_statement = self.__session.prepare((
             "INSERT INTO \"%s\".metrics"
-            " (name, timestamp)"
+            " (name, mtime)"
             " VALUES (?, toTimestamp(now()));"
         ) % (self.keyspace_metadata))
         self.__touch_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
@@ -986,7 +986,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 )
 
     def clean(self, cutoff, batch_size=10000):
-        """See bg_accessor.Accessor."""
+        """See bg_accessor.Accessor.
+
+        Args:
+            cutoff: UNIX time in microseconds. Rows older than it should be deleted.
+            batch_size: The maximum number of results to query per select.
+        """
         super(_CassandraAccessor, self).clean(cutoff, batch_size)
 
         if not cutoff:
@@ -1005,7 +1010,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         limit = ("LIMIT %d" % batch_size) if batch_size else ""
         select = self.__session.prepare(
             "SELECT name FROM \"%s\".metrics"
-            " WHERE timestamp < %d AND token(name) > ?"
+            " WHERE mtime < %d AND token(name) > ?"
             " %s ALLOW FILTERING;" %
             (self.keyspace_metadata, cutoff, limit))
         select.consistency_level = cassandra.ConsistencyLevel.QUORUM
