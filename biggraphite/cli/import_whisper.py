@@ -215,5 +215,6 @@ def main(args=None):
 
     print("Uploaded", len(paths), "metrics containing", total_points, "points", file=out_fd)
 
+
 if __name__ == "__main__":
     main()

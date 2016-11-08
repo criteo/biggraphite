@@ -67,5 +67,6 @@ class TestCommandDu(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(du._human_size_of_points(1023 / command_du._BYTES_PER_POINT), '1008B')
         self.assertEqual(du._human_size_of_points(1024 / (command_du._BYTES_PER_POINT-1)), '1.0K')
 
+
 if __name__ == "__main__":
     unittest.main()
