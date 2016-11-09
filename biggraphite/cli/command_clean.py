@@ -30,12 +30,12 @@ class CommandClean(command.BaseCommand):
     def add_arguments(self, parser):
         """Add custom arguments."""
         parser.add_argument(
-            "--cache",
+            "--clean-cache",
             help="clean cache",
             action='store_true'
         )
         parser.add_argument(
-            "--backend",
+            "--clean-backend",
             help="clean backend",
             action='store_true'
         )
@@ -68,9 +68,11 @@ class CommandClean(command.BaseCommand):
             if opts.storage_dir:
                 cache = metadata_cache.DiskCache(accessor, opts.storage_dir)
                 cache.open()
-                cache.clean()
+                logging.info('Cleaning cache...')
+                cache.clean(cutoff)
             else:
                 logging.warning('Cannot clean disk cache because storage_dir is empty')
 
         if opts.backend:
+            logging.info('Cleaning backend..')
             accessor.clean(cutoff, opts.batch_size)
