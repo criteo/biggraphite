@@ -33,6 +33,7 @@ from cassandra import policies as c_policies
 from cassandra.io import asyncorereactor as c_asyncorereactor
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
@@ -527,6 +528,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__insert_metrics_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
+        self.__glob_parser = bg_glob.GraphiteGlobParser()
 
     def connect(self, skip_schema_upgrade=False):
         """See bg_accessor.Accessor."""
@@ -807,43 +809,55 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return self.__glob_names("metrics", glob)
 
     def __glob_names(self, table, glob):
-        components = self._components_from_name(glob)
+        components = self.__glob_parser.parse(glob)
         if len(components) > _COMPONENTS_MAX_LEN:
-            msg = "Metric globs can have a maximum of %d dots" % _COMPONENTS_MAX_LEN - 2
-            raise bg_accessor.InvalidGlobError(msg)
+            raise bg_accessor.InvalidGlobError(
+                "Contains %d components, but we support %d at most" % (
+                    len(components),
+                    _COMPONENTS_MAX_LEN,
+                )
+            )
 
         queries = []
-
-        # Handle globstars (any number of wildcards at its position in the path)
-        if GLOBSTAR in components:
-            if components.count(GLOBSTAR) > 1:
-                # For performance reasons, we will not handle more than one of these
-                msg = "Metric globs can have a maximum of one globstar (**)"
-                raise bg_accessor.InvalidGlobError(msg)
-
-            # If the globstar is at the end, just drop the last component marker;
-            # otherwise we have to use iterative deepening with wildcards.
-            gs_index = components.index(GLOBSTAR)
-            before_last = - 2
-            if gs_index == len(components) + before_last:
-                gs_query = self.__build_select_metric_names_query(
-                    table, components[:before_last], glob, is_raw=True)
-                queries.append(gs_query)
-            else:
-                prefix = components[0:gs_index]
-                suffix = components[gs_index+1:]
-                max_wildcards = min(
-                    self.max_wildcards_for_globstar,
-                    _COMPONENTS_MAX_LEN - len(components)
+        globstar = bg_glob.Globstar()
+        if globstar in components:
+            # Handling more than one of these can cause combinatorial explosion.
+            if components.count(globstar) > 1:
+                raise bg_accessor.InvalidGlobError(
+                    "Contains more than one globstar (**) operator"
                 )
+
+            # If the globstar operator is at the end of the pattern, then we can
+            # find corresponding metrics with a prefix search;
+            # otherwise, we have to generate incremental queries that go up to a
+            # certain depth (_COMPONENTS_MAX_LEN - #components).
+            gs_index = components.index(globstar)
+            if gs_index == len(components) - 1:
+                queries.append(
+                    self.__build_select_metric_names_query(
+                        table, components, glob
+                    )
+                )
+            else:
+                prefix = components[:gs_index]
+                suffix = components[gs_index+1:] + [[_LAST_COMPONENT]]
+                max_wildcards = min(self.max_wildcards_for_globstar,
+                                    _COMPONENTS_MAX_LEN - len(components))
                 for wildcards in range(1, max_wildcards):
-                    gs_components = prefix + (["*"] * wildcards) + suffix
-                    gs_query = self.__build_select_metric_names_query(
-                        table, gs_components, glob)
-                    queries.append(gs_query)
+                    gs_components = (prefix +
+                                     ([[bg_glob.AnySequence()]] * wildcards) +
+                                     suffix)
+                    queries.append(
+                        self.__build_select_metric_names_query(
+                            table, gs_components, glob,
+                        )
+                    )
         else:
-            query = self.__build_select_metric_names_query(table, components, glob)
-            queries.append(query)
+            queries.append(
+                self.__build_select_metric_names_query(
+                    table, components + [[_LAST_COMPONENT]], glob,
+                )
+            )
 
         metric_names = []
         try:
@@ -858,63 +872,80 @@ class _CassandraAccessor(bg_accessor.Accessor):
             raise RetryableCassandraError(e)
 
         if len(metric_names) > self.max_metrics_per_glob:
-            msg = "%s yields more than %d results" % (glob, self.max_metrics_per_glob)
-            raise TooManyMetrics(msg)
+            raise TooManyMetrics(
+                "Query yields more than %d results" %
+                (self.max_metrics_per_glob)
+            )
 
         metric_names.sort()
         return metric_names
 
-    def __build_select_metric_names_query(self, table, components, glob, is_raw=False):
-        """Build a select query to find metric names (table can be directories or metrics).
+    def __build_select_metric_names_query(self, table, components, glob):
+        query_select = "SELECT name FROM \"%s\".\"%s\"" % (
+            self.keyspace_metadata,
+            table,
+        )
+        query_limit = "LIMIT %d" % (self.max_metrics_per_glob + 1)
 
-        Args:
-          table: Table name from which to select the rows.
-          components: Individual components from the glob.
-          glob: Globbing pattern we are generating the query for.
-          is_raw: True when we want to force WHERE clause generation without checking.
+        # Handle globstar-only (glob = "**") gracefully.
+        if len(components) == 1 and isinstance(components[0], bg_glob.Globstar):
+            return "%s %s;" % (query_select, query_limit)
 
-        Returns:
-          Query string that is ready to be executed.
-        """
-        if "*" in components:
-            idx = components.index("*")
-            prefix = ".".join(components[0:idx])
-            components = ['*'] * (idx + 1) + components[idx+1:]
-        else:
-            prefix = None
+        # If all components are constant values, then we have no need for index
+        # queries and can skip all the work.
+        if all(len(c) == 1 and isinstance(c[0], str) for c in components):
+            return "%s WHERE name = %s %s;" % (
+                query_select,
+                c_encoder.cql_quote(glob),
+                query_limit,
+            )
 
-        where_parts = [
-            "component_%d = %s" % (n, c_encoder.cql_quote(s))
-            for n, s in enumerate(components)
-            if s != "*"
-        ]
-        if prefix:
-            where_parts.append("parent LIKE '%s.%%'" % prefix)
+        prefix = []
+        is_prefix_finished = False
+        where_clauses = []
+        for n, component in enumerate(components):
+            if len(component) == 0:
+                # Should not happen, but better safe than sorry
+                continue
 
-        if is_raw or len(where_parts) != len(components):
-            if len(where_parts) == 0:
-                # Avoid pesky syntax errors in case someone queries for "**"
-                where = ""
+            # We are currently using prefix indexes, so if we do not have a
+            # prefix value (i.e. it is a wildcard), then the current component
+            # cannot be constrained inside the request.
+            value = component[0]
+            if not isinstance(value, str):
+                is_prefix_finished = True
+                continue
+
+            if len(component) == 1:
+                if is_prefix_finished:
+                    op = '='
+                else:
+                    prefix.append(value)
+                    continue
             else:
-                where = "WHERE " + " AND ".join(where_parts)
-            filtering = True
-        else:
-            # No wildcard, skip indexes
-            where = "WHERE name = " + c_encoder.cql_quote(glob)
-            filtering = False
+                # TODO(d.forest): we could actually use the first string prefix
+                #                 found here to make the parent prefix filter
+                #                 possibly more effective.
+                is_prefix_finished = True
+                op = 'LIKE'
+                value += '%'
 
-        query = (
-            "SELECT name FROM \"%(keyspace)s\".\"%(table)s\""
-            " %(where)s LIMIT %(limit)d %(filtering)s;"
-        ) % {
-            "keyspace": self.keyspace_metadata,
-            "table": table,
-            "where": where,
-            "limit": self.max_metrics_per_glob + 1,
-            "filtering": "ALLOW FILTERING" if filtering else ""
-        }
+            clause = "component_%d %s %s" % (n, op, c_encoder.cql_quote(value))
+            where_clauses.append(clause)
 
-        return query
+        # XXX(d.forest): initial (naive) heuristic to avoid slow-downs due
+        #                to high cardinalities in the parent prefix index.
+        if len(prefix) > 2 or (len(prefix) > 0 and len(where_clauses) == 0):
+            prefix_str = c_encoder.cql_quote('.'.join(prefix) + ".%")
+            where_clauses.append("parent LIKE %s" % (prefix_str))
+
+        where = ""
+        if len(where_clauses) > 0:
+            where = "WHERE " + " AND ".join(where_clauses)
+
+        return "%s %s %s ALLOW FILTERING;" % (
+            query_select, where, query_limit,
+        )
 
     def flush(self):
         """Flush any internal buffers."""

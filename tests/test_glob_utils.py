@@ -65,20 +65,6 @@ class TestGlobUtilsInternals(unittest.TestCase):
         for x in invalid_glob:
             self.assertFalse(bg_glob._is_valid_glob(x))
 
-    def test_graphite_glob_to_accessor_components(self):
-        scenarii = [
-            ('a.*.b', 'a.*.b'),
-            ('a.?.b', 'a.*.b'),
-            ('a?.b',      '*.b'),
-            ('a{x,y}.b',  '*.b'),
-            ('a{x,y}z.b', '*.b'),
-            ('a[0-9].b',  '*.b'),
-            ('a[0-9]z.b', '*.b'),
-        ]
-        for (glob, components) in scenarii:
-            simplified = bg_glob._graphite_glob_to_accessor_components(glob)
-            self.assertEqual(components, simplified)
-
     def test_glob_to_regex(self):
         def filter_metrics(metrics, glob):
             glob_re = re.compile(bg_glob._glob_to_regex(glob))
