@@ -26,16 +26,6 @@ def _is_graphite_glob(metric_component):
     return _GRAPHITE_GLOB_RE.match(metric_component) is None
 
 
-def _graphite_glob_to_accessor_components(graphite_glob):
-    """Transform Graphite glob into Cassandra accessor components."""
-    return ".".join([
-        "**" if c == "**" else
-        "*" if _is_graphite_glob(c) else
-        c
-        for c in graphite_glob.split(".")
-    ])
-
-
 def _is_valid_glob(glob):
     """Check whether a glob pattern is valid.
 
@@ -209,12 +199,11 @@ def graphite_glob(accessor, graphite_glob):
         return ([], [])
 
     glob_re = re.compile(_glob_to_regex(graphite_glob))
-    accessor_components = _graphite_glob_to_accessor_components(graphite_glob)
 
-    metrics = accessor.glob_metric_names(accessor_components)
+    metrics = accessor.glob_metric_names(graphite_glob)
     metrics = filter(glob_re.match, metrics)
 
-    directories = accessor.glob_directory_names(accessor_components)
+    directories = accessor.glob_directory_names(graphite_glob)
     directories = filter(glob_re.match, directories)
     return (metrics, directories)
 
