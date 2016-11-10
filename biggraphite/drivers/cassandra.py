@@ -875,7 +875,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         Returns:
           Query string that is ready to be executed.
         """
-        if "*" in components:
+
+        # Check if it's something like foo.bar.* with a single trailing wildcard.
+        if components.count('*') == 1 and components[-2] == '*':
             idx = components.index("*")
             prefix = ".".join(components[0:idx])
             components = ['*'] * (idx + 1) + components[idx+1:]
