@@ -890,7 +890,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if s != "*"
         ]
         if prefix:
-            where_parts.append("parent LIKE '%s.%%'" % prefix)
+            where_parts.append("parent = '%s.'" % prefix)
 
         if is_raw or len(where_parts) != len(components):
             if len(where_parts) == 0:
