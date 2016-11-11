@@ -240,13 +240,19 @@ class Globstar(GlobExpression):
 
 
 class AnyChar(GlobExpression):
-    """Represents any single character in a glob."""
+    """Represents any single character."""
 
     pass
 
 
 class AnySequence(GlobExpression):
-    """Represents any sequence of 0 or more characters in a glob."""
+    """Represents any sequence of 0 or more characters."""
+
+    pass
+
+
+class SequenceIn(GlobExpressionWithValues):
+    """Represents a choice between different character sequences."""
 
     pass
 
@@ -288,6 +294,20 @@ class GraphiteGlobParser:
 
         return i
 
+    def _find_char_selector_end(self, i, n):
+        """Find where a character selector expression ends."""
+        j = i
+        if j < n and self._glob[j] == '!':
+            j += 1
+        if j < n and self._glob[j] == ']':
+            j += 1
+
+        j = self._glob.find(']', j)
+        if j == -1:
+            return n
+
+        return j
+
     def _parse_char_selector(self, i, n):
         """Parse character selector, with support for negation and ranges.
 
@@ -295,14 +315,7 @@ class GraphiteGlobParser:
         will not be generating the possible values or parsing the ranges, but
         outputting AnyChar on valid char selector expressions.
         """
-        j = i
-        if j < n and self._glob[j] == '!':
-            j += 1
-        if j < n and self._glob[j] == ']':
-            j += 1
-        while j < n and self._glob[j] != ']':
-            j += 1
-
+        j = self._find_char_selector_end(i, n)
         if j < n:
             # +1 to skip closing bracket
             i = j + 1
@@ -315,38 +328,86 @@ class GraphiteGlobParser:
         return i
 
     def _parse_sequence_selector(self, i, n):
-        """Parse character sequence selector, with nesting.
+        """Parse character sequence selector, with support for nesting.
 
-        For simplicity (and because it does not seem useful at the moment) we
-        will not be generating the possible values, but outputting AnySequence
-        on valid char sequence selector expressions.
+        For simplicity, we will be outputting AnySequence in situations where
+        values contain a character selector.
         """
-        depth = 1
-        j = i
-        while j < n and depth > 0:
-            c = self._glob[j]
-            j += 1
-            if c == '{':
-                depth += 1
-            elif c == '}':
-                depth -= 1
-            elif c == '.':
-                # We have a component separator, this selector is wrong
-                #
-                # XXX(d.forest): this is purposefully simplified, but maybe we
-                #                should handle escaped dots, or dots within char
-                #                selectors?
-                break
+        result = self._parse_sequence_selector_values(i, n)
+        if result:
+            has_char_selector, i, values = result
+            if not has_char_selector and len(values) == 1:
+                self._sequence += values[0]
+            else:
+                if has_char_selector:
+                    seq = AnySequence()
+                else:
+                    seq = SequenceIn(values)
 
-        if depth == 0:
-            i = j
-            self._commit_sequence()
-            self._component.append(AnySequence())
+                self._commit_sequence()
+                self._component.append(seq)
         else:
-            # Reached end of string: braces are unbalanced
             self._sequence += '{'
 
         return i
+
+    def _parse_sequence_selector_values(self, i, n):
+        has_char_selector = False
+        values = []
+        curr = []
+        tmp = ''
+        j = i
+        c = ''
+        while j < n and c != '}':
+            c = self._glob[j]
+            j += 1
+            # Parse sub-expression then combine values with prefixes.
+            if c == '{':
+                if tmp != '':
+                    curr.append(tmp)
+                    tmp = ''
+
+                result = self._parse_sequence_selector_values(j, n)
+                if not result:
+                    return None
+
+                has_charsel, j, subvalues = result
+                has_char_selector = has_char_selector or has_charsel
+                curr = [prefix + x for prefix in curr for x in subvalues]
+            # End of current element, combine values with suffix.
+            elif c == ',' or c == '}':
+                if len(curr) > 0:
+                    values += [x + tmp for x in curr]
+                else:
+                    values.append(tmp)
+
+                curr = []
+                tmp = ''
+            # Simplified handling of char selector
+            elif c == '[':
+                # XXX(d.forest): We could keep track of depth and just make sure
+                #                the selector expression is well-formed instead
+                #                of continuing to parse everything.
+                #                This is open for later improvement.
+                k = self._find_char_selector_end(j, n)
+                if k < n:
+                    has_char_selector = True
+                    j = k + 1
+                else:
+                    tmp += '['
+            # Reject dots inside selectors
+            elif c == '.':
+                return None
+            # Append char to the current value.
+            else:
+                tmp += c
+
+        # We have reached the end without finding a closing brace: the braces
+        # are unbalanced, expression cannot be parsed as a sequence selector.
+        if j == n and c != '}':
+            return None
+
+        return has_char_selector, j, values + curr
 
     def _reset(self, glob=''):
         if glob == self._glob:
