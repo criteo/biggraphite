@@ -154,5 +154,6 @@ class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
             found = bg_glob.graphite_glob(self.accessor, glob)
             self.assertEqual((metrics, directories), found)
 
+
 if __name__ == "__main__":
     unittest.main()

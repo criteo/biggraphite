@@ -148,6 +148,7 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
 class InvalidGlobError(InvalidArgumentError):
     """The provided glob is invalid."""
 
+
 # TODO(c.chary): convert some of these to options, but make sure
 # they are stored in the database an loaded automatically from
 # here.
@@ -875,7 +876,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         Returns:
           Query string that is ready to be executed.
         """
-
         # Check if it's something like foo.bar.* with a single trailing wildcard.
         if components.count('*') == 1 and components[-2] == '*':
             idx = components.index("*")
