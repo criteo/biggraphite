@@ -262,8 +262,7 @@ class GraphiteGlobParser:
 
     def __init__(self):
         """Build a parser, fill in default values."""
-        self._glob = ''
-        self._reset()
+        self._reset('')
 
     def _commit_sequence(self):
         if len(self._sequence) > 0:
@@ -409,10 +408,7 @@ class GraphiteGlobParser:
 
         return has_char_selector, j, values + curr
 
-    def _reset(self, glob=''):
-        if glob == self._glob:
-            return
-
+    def _reset(self, glob):
         self._glob = glob
         self._parsed = []
         self._component = []
@@ -421,8 +417,6 @@ class GraphiteGlobParser:
     def parse(self, glob):
         """Parse a graphite glob expression into simple components."""
         self._reset(glob)
-        if self._parsed:
-            return self._parsed
 
         i = 0
         n = len(self._glob)

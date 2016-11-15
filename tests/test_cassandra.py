@@ -176,7 +176,15 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
     def test_glob_metrics(self):
-        metrics = ["a", "a.a", "a.b", "a.a.a", "x.y.z", "x.y.y.z", "x.y.y.y.z"]
+        metrics = [
+            "a", "a.a", "a.b", "a.a.a", "a.b.c", "a.x.y",
+            "x.y.z", "x.y.y.z", "x.y.y.y.z",
+            "super", "superb", "supercomputer", "superconductivity", "superman",
+            "supper", "suppose",
+            "ad.o.g", "af.o.g", "ap.o.g",
+            "zd.o.g", "zf.o.g", "zp.o.g",
+            "-b-.a.t", "-c-.a.t", "-d-.a.t", "-e-.a.t",
+        ]
         metrics.sort()
 
         for name in metrics:
@@ -191,13 +199,50 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         assert_find("a.a", ["a.a"])
         assert_find("A", [])
 
-        # Wildcards
+        # Character wildcard
+        assert_find("?",
+                    [x for x in metrics if x.count('.') == 0])
+        assert_find("sup?er",
+                    [x for x in metrics if x.startswith("sup")])
+
+        # Character selector
+        for pattern in [
+                "a[!dfp].o.g",
+                "a[!dfp]suffix.o.g",
+                "a[nope].o.g",
+                "a[nope]suffix.o.g",
+        ]:
+            assert_find(pattern, ["ad.o.g", "af.o.g", "ap.o.g"])
+
+        # Sequence wildcard
         assert_find("*",
-                    [x for x in metrics if x.count(".") == 0])
+                    [x for x in metrics if x.count('.') == 0])
         assert_find("*.*",
-                    [x for x in metrics if x.count(".") == 1])
+                    [x for x in metrics if x.count('.') == 1])
         assert_find("*.*.*",
-                    [x for x in metrics if x.count(".") == 2])
+                    [x for x in metrics if x.count('.') == 2])
+        assert_find("super*",
+                    [x for x in metrics if x.startswith("super")])
+
+        # Sequence selector
+        assert_find("a.{b,x}.{c,y}",
+                    ["a.b.c", "a.x.y"])
+        assert_find("a{d,f,p}.o.g",
+                    ["a{0}.o.g".format(c) for c in "dfp"])
+        assert_find("{a,z}{d,f,p}.o.g",
+                    ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"])
+        for pattern in [
+                "-{b,c,d}-.a.t",
+                "-{b,c,d}?.a.t",
+                "-{b,c,d}?suffix.a.t",
+                "-{b,c,d}[ha].a.t",
+                "-{b,c,d}[ha]suffix.a.t",
+                "-{b,c,d}[!-].a.t",
+                "-{b,c,d}[!-]suffix.a.t",
+                "-{b,c,d}*.a.t",
+                "-{b,c,d}*suffix.a.t",
+        ]:
+            assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
 
         # Globstars
         assert_find("**",
@@ -207,7 +252,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         assert_find("**.z",
                     [x for x in metrics if x.endswith(".z")])
         assert_find("x.**.z",
-                    [x for x in metrics if x.startswith("x.") and x.endswith(".z")])
+                    [x for x in metrics
+                     if x.startswith("x.") and x.endswith(".z")])
 
         self.accessor.drop_all_metrics()
         assert_find("*", [])
