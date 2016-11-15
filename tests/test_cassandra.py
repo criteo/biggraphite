@@ -249,6 +249,38 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         for k, v in meta_dict.iteritems():
             self.assertEqual(v, getattr(metric_again.metadata, k))
 
+    def test_update_metrics(self):
+        # prepare test
+        meta_dict = {
+            "aggregator": bg_accessor.Aggregator.last,
+            "retention": bg_accessor.Retention.from_string("60*1s:60*60s"),
+            "carbon_xfilesfactor": 0.3,
+        }
+        metadata = bg_accessor.MetricMetadata(**meta_dict)
+        metric_name = "a.b.c.d.e.f"
+        self.accessor.create_metric(
+            self.accessor.make_metric(metric_name, metadata))
+        metric = self.accessor.get_metric(metric_name)
+        for k, v in meta_dict.iteritems():
+            self.assertEqual(v, getattr(metric.metadata, k))
+
+        # test
+        updated_meta_dict = {
+            "aggregator": bg_accessor.Aggregator.maximum,
+            "retention": bg_accessor.Retention.from_string("30*1s:120*30s"),
+            "carbon_xfilesfactor": 0.5,
+        }
+        updated_metadata = bg_accessor.MetricMetadata(**updated_meta_dict)
+        # Setting a known metric name should work
+        self.accessor.update_metric(metric_name, updated_metadata)
+        updated_metric = self.accessor.get_metric(metric_name)
+        for k, v in updated_meta_dict.iteritems():
+            self.assertEqual(v, getattr(updated_metric.metadata, k))
+        # Setting an unknown metric name should fail
+        self.assertRaises(
+            bg_cassandra.InvalidArgumentError,
+            self.accessor.update_metric, "fake.metric.name", updated_metadata)
+
     def test_has_metric(self):
         metric = self.make_metric("a.b.c.d.e.f")
 
