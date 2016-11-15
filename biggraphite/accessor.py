@@ -498,7 +498,7 @@ class MetricMetadata(object):
 
     def __setattr__(self, name, value):
         # carbon_xfilesfactor is the last attribute __init__ sets.
-        if hasattr(self, "carbon_xfilesfactor"):
+        if name not in self.__slots__:
             raise AttributeError("can't set attribute")
         super(MetricMetadata, self).__setattr__(name, value)
 
