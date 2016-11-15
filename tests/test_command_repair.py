@@ -33,5 +33,6 @@ class TestCommandRepair(bg_test_utils.TestCaseWithFakeAccessor):
         opts = parser.parse_args(['--shard=0', '--nshards=5'])
         cmd.run(self.accessor, opts)
 
+
 if __name__ == "__main__":
     unittest.main()
