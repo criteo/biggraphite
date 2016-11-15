@@ -934,17 +934,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
             datapoints = self.__delayed_writer.feed(metric, datapoints)
         return self.insert_downsampled_points_async(metric, datapoints, on_done)
 
-    def insert_downsampled_points_async(self, metric, downsampled, on_done=None):
+    def insert_downsampled_points_async(self, metric, datapoints, on_done=None):
         """See bg_accessor.Accessor."""
-        if not downsampled and on_done:
+        if not datapoints and on_done:
             on_done(None)
             return
 
         count_down = None
         if on_done:
-            count_down = _CountDown(count=len(downsampled), on_zero=on_done)
+            count_down = _CountDown(count=len(datapoints), on_zero=on_done)
 
-        for timestamp, value, count, stage in downsampled:
+        for timestamp, value, count, stage in datapoints:
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _row_size_ms(stage)
             time_start_ms = timestamp_ms - time_offset_ms
