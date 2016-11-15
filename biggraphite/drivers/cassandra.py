@@ -56,18 +56,22 @@ DEFAULT_COMPRESSION = False
 # reply with default settings.
 # TODO: Mesure actual number of metrics for existing queries and estimate a more
 # reasonable limit, also consider other engines.
-DEFAULT_MAX_METRICS_PER_GLOB = 5000
+DEFAULT_MAX_METRICS_PER_PATTERN = 5000
 DEFAULT_TRACE = False
 DEFAULT_BULKIMPORT = False
-DEFAULT_MAX_WILDCARDS_FOR_GLOBSTAR = 32
+DEFAULT_MAX_QUERIES_PER_PATTERN = 42
+DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN = 4
 
 OPTIONS = {
     "keyspace": str,
     "contact_points": _utils.list_from_str,
-    "timeout": float,
+    "port": int,
     "connections": int,
+    "timeout": float,
     "compression": _utils.bool_from_str,
-    "max_metrics_per_glob": int,
+    "max_metrics_per_pattern": int,
+    "max_queries_per_pattern": int,
+    "max_concurrent_queries_per_pattern": int,
     "trace": bool,
     "bulkimport": bool,
 }
@@ -100,13 +104,17 @@ def add_argparse_arguments(parser):
         help="Cassandra network compression.",
         default=DEFAULT_COMPRESSION)
     parser.add_argument(
-        "--cassandra_max_metrics_per_glob",
+        "--cassandra_max_metrics_per_pattern",
         help="Maximum number of metrics returned for a glob query.",
-        default=DEFAULT_MAX_METRICS_PER_GLOB)
+        default=DEFAULT_MAX_METRICS_PER_PATTERN)
     parser.add_argument(
-        "--cassandra_max_queries_for_globstar", type=int,
-        help="Maximum number of wildcards (sub-queries) for globstar queries.",
-        default=DEFAULT_MAX_WILDCARDS_FOR_GLOBSTAR)
+        "--cassandra_max_queries_per_pattern", type=int,
+        help="Maximum number of sub-queries for any pattern-based query.",
+        default=DEFAULT_MAX_QUERIES_PER_PATTERN)
+    parser.add_argument(
+        "--cassandra_max_concurrent_queries_per_pattern", type=int,
+        help="Maximum number of concurrently executed sub-queries for any pattern-based query.",
+        default=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN)
     parser.add_argument(
         "--cassandra_trace",
         help="Enable query traces",
@@ -120,7 +128,8 @@ def add_argparse_arguments(parser):
 MINUTE = 60
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
-GLOBSTAR = "**"
+GLOBSTAR = bg_glob.Globstar()
+ANYSEQUENCE = bg_glob.AnySequence()
 
 
 class Error(bg_accessor.Error):
@@ -140,7 +149,7 @@ class NotConnectedError(CassandraError):
 
 
 class TooManyMetrics(CassandraError):
-    """A name glob yielded more than MAX_METRIC_PER_GLOB metrics."""
+    """A name glob yielded more than MAX_METRIC_PER_PATTERN metrics."""
 
 
 class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
@@ -486,8 +495,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  connections=DEFAULT_CONNECTIONS,
                  timeout=DEFAULT_TIMEOUT,
                  compression=DEFAULT_COMPRESSION,
-                 max_metrics_per_glob=DEFAULT_MAX_METRICS_PER_GLOB,
-                 max_wildcards_for_globstar=DEFAULT_MAX_WILDCARDS_FOR_GLOBSTAR,
+                 max_metrics_per_pattern=DEFAULT_MAX_METRICS_PER_PATTERN,
+                 max_queries_per_pattern=DEFAULT_MAX_QUERIES_PER_PATTERN,
+                 max_concurrent_queries_per_pattern=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN,
                  trace=DEFAULT_TRACE,
                  bulkimport=DEFAULT_BULKIMPORT):
         """Record parameters needed to connect.
@@ -499,7 +509,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
           connections: How many worker threads to use.
           timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
-          max_metrics_per_glob: int, Maximum number of metrics per glob.
+          max_metrics_per_pattern: int, Maximum number of metrics per pattern.
+          max_queries_per_pattern: int, Maximum number of sub-queries per pattern.
+          max_concurrent_queries_per_pattern: int, Maximum number of
+                                              concurrently executed sub-queries per pattern.
           trace: bool, Enabling query tracing.
           bulkimport: bool, Configure the accessor to generate files necessary for
             bulk import.
@@ -510,8 +523,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.keyspace_metadata = keyspace + "_metadata"
         self.contact_points = contact_points
         self.port = port
-        self.max_metrics_per_glob = max_metrics_per_glob
-        self.max_wildcards_for_globstar = max_wildcards_for_globstar
+        self.max_metrics_per_pattern = max_metrics_per_pattern
+        self.max_queries_per_pattern = max_queries_per_pattern
+        self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
         self.__connections = connections
         self.__compression = compression
         self.__trace = trace
@@ -844,74 +858,172 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 )
             )
 
-        queries = []
-        globstar = bg_glob.Globstar()
-        if globstar in components:
-            # Handling more than one of these can cause combinatorial explosion.
-            if components.count(globstar) > 1:
-                raise bg_accessor.InvalidGlobError(
-                    "Contains more than one globstar (**) operator"
-                )
-
-            # If the globstar operator is at the end of the pattern, then we can
-            # find corresponding metrics with a prefix search;
-            # otherwise, we have to generate incremental queries that go up to a
-            # certain depth (_COMPONENTS_MAX_LEN - #components).
-            gs_index = components.index(globstar)
-            if gs_index == len(components) - 1:
-                queries.append(
-                    self.__build_select_names_query(
-                        table, components[:gs_index], glob,
-                    )
-                )
-            else:
-                prefix = components[:gs_index]
-                suffix = components[gs_index+1:] + [[_LAST_COMPONENT]]
-                max_wildcards = min(self.max_wildcards_for_globstar,
-                                    _COMPONENTS_MAX_LEN - len(components))
-                for wildcards in range(1, max_wildcards):
-                    gs_components = (prefix +
-                                     ([[bg_glob.AnySequence()]] * wildcards) +
-                                     suffix)
-                    queries.append(
-                        self.__build_select_names_query(
-                            table, gs_components, glob,
-                        )
-                    )
+        if GLOBSTAR in components:
+            queries = self.__generate_globstar_names_queries(table, components)
         else:
-            queries.append(
-                self.__build_select_names_query(
-                    table, components + [[_LAST_COMPONENT]], glob,
-                )
-            )
+            components.append([_LAST_COMPONENT])
+            queries = self.__generate_normal_names_queries(table, components)
 
         metric_names = []
         try:
-            for query in queries:
-                statement = c_query.SimpleStatement(query)
-                statement.consistency_level = _META_READ_CONSISTENCY
-                for row in self._execute(query):
-                    metric_names.append(row[0])
-                if len(metric_names) > self.max_metrics_per_glob:
+            while len(queries) > 0:
+                statements_with_params = []
+                for query in queries[:self.max_concurrent_queries_per_pattern]:
+                    statement = c_query.SimpleStatement(
+                        query,
+                        consistency_level=_META_READ_CONSISTENCY,
+                    )
+                    statements_with_params.append((statement, ()))
+
+                queries = queries[self.max_concurrent_queries_per_pattern:]
+                for (success, results) in self._execute_concurrent(
+                        statements_with_params,
+                        concurrency=self.max_concurrent_queries_per_pattern,
+                        results_generator=True,
+                        raise_on_first_error=True,
+                ):
+                    for result in results:
+                        metric_names.append(result[0])
+                    if len(metric_names) > self.max_metrics_per_pattern:
+                        break
+
+                if len(metric_names) > self.max_metrics_per_pattern:
                     break
         except Exception as e:
             raise RetryableCassandraError(e)
 
-        if len(metric_names) > self.max_metrics_per_glob:
+        if len(metric_names) > self.max_metrics_per_pattern:
             raise TooManyMetrics(
                 "Query yields more than %d results" %
-                (self.max_metrics_per_glob)
+                (self.max_metrics_per_pattern)
             )
 
         metric_names.sort()
         return metric_names
 
-    def __build_select_names_query(self, table, components, glob):
+    def __generate_normal_names_queries(self, table, components):
+        # Only keep the component parts that enable us to build prefix queries.
+        # This means any uninterrupted sequence of strings or braces selectors.
+        # On the way, we keep the position and value counts of selectors for
+        # further query simplification.
+        idxlens = []
+        combinations = 1
+        for cidx, component in enumerate(components):
+            entry = []
+            end = 0
+            for pidx, part in enumerate(component):
+                if not isinstance(part, (str, bg_glob.SequenceIn)):
+                    break
+                elif isinstance(part, bg_glob.SequenceIn):
+                    count = len(part.values)
+                    combinations *= count
+                    entry.append((pidx, count))
+
+                end = pidx + 1
+
+            idxlens.append(entry)
+            simplified_component = component[:end]
+            if len(simplified_component) < len(component):
+                simplified_component.append(ANYSEQUENCE)
+
+            components[cidx] = simplified_component
+
+        # Skip any additional work if we have a basic query.
+        if combinations == 1:
+            return [self.__build_select_names_query(table, components)]
+
+        # Reduce complexity by dropping the rightmost selector from each
+        # component, starting with the shallowest component, until we have a low
+        # enough combination count.
+        for cidx, entry in enumerate(idxlens):
+            if combinations <= self.max_queries_per_pattern:
+                break
+
+            while combinations > self.max_queries_per_pattern:
+                component = components[cidx]
+                idx, count = entry.pop()
+
+                surrounding_anyseqs = 0
+                if idx > 0 and component[idx-1] == ANYSEQUENCE:
+                    surrounding_anyseqs += 1
+                if idx < len(component) - 1 and component[idx+1] == ANYSEQUENCE:
+                    surrounding_anyseqs += 1
+
+                # If we have surrounding AnySeqs, then drop elements so that
+                # only one remains. Otherwise, replace current part with AnySeq.
+                if surrounding_anyseqs > 0:
+                    while surrounding_anyseqs > 0:
+                        del(component[idx])
+                else:
+                    component[idx] = ANYSEQUENCE
+
+                combinations /= count
+
+        # Pre-compute all possible values for each component.
+        for cidx, component in enumerate(components):
+            suffix = []
+            if component[-1] == ANYSEQUENCE:
+                if len(component) == 1:
+                    components[cidx] = [component]
+                    continue
+                else:
+                    suffix.append(ANYSEQUENCE)
+
+            values = ['']
+            for part in component:
+                if isinstance(part, str):
+                    values = [x + part for x in values]
+                elif isinstance(part, bg_glob.SequenceIn):
+                    values = [x + y
+                              for x in values
+                              for y in part.values]
+                else:
+                    break
+
+            components[cidx] = [[x] + suffix for x in values]
+
+        # Generate queries using the combinations of pre-computed values for the
+        # components.
+        return [
+            self.__build_select_names_query(table, combination)
+            for combination in itertools.product(*components)
+        ]
+
+    def __generate_globstar_names_queries(self, table, components):
+        # Handling more than one of these can cause combinatorial explosion.
+        if components.count(GLOBSTAR) > 1:
+            raise bg_accessor.InvalidGlobError(
+                "Contains more than one globstar (**) operator"
+            )
+
+        # If the globstar operator is at the end of the pattern, then we can
+        # find corresponding metrics with a prefix search;
+        # otherwise, we have to generate incremental queries that go up to a
+        # certain depth (_COMPONENTS_MAX_LEN - #components).
+        gs_index = components.index(GLOBSTAR)
+        if gs_index == len(components) - 1:
+            return [
+                self.__build_select_names_query(table, components[:gs_index])
+            ]
+
+        prefix = components[:gs_index]
+        suffix = components[gs_index+1:] + [[_LAST_COMPONENT]]
+        max_wildcards = min(self.max_queries_per_pattern,
+                            _COMPONENTS_MAX_LEN - len(components))
+        return [
+            self.__build_select_names_query(
+                table,
+                prefix + wildcards * [[bg_glob.AnySequence()]] + suffix,
+            )
+            for wildcards in range(1, max_wildcards)
+        ]
+
+    def __build_select_names_query(self, table, components):
         query_select = "SELECT name FROM \"%s\".\"%s\"" % (
             self.keyspace_metadata,
             table,
         )
-        query_limit = "LIMIT %d" % (self.max_metrics_per_glob + 1)
+        query_limit = "LIMIT %d" % (self.max_metrics_per_pattern + 1)
 
         if len(components) == 0:
             return "%s %s;" % (query_select, query_limit)
@@ -930,15 +1042,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
         ):
             last = components[-2]
             if len(last) == 1 and isinstance(last[0], str):
+                # XXX(d.forest): do not try to optimize by passing the raw glob
+                #                and using it here; because this is invalid in
+                #                cases where the glob contains braces.
+                name = '.'.join(itertools.chain.from_iterable(components[:-1]))
                 return "%s WHERE name = %s %s;" % (
                     query_select,
-                    c_encoder.cql_quote(glob),
+                    c_encoder.cql_quote(name),
                     query_limit,
                 )
             else:
                 if len(last) > 0 and isinstance(last[0], str):
                     prefix_filter = "AND component_%d LIKE %s" % (
-                        len(components) - 1,
+                        len(components) - 2,
                         c_encoder.cql_quote(last[0] + '%'),
                     )
                     allow_filtering = "ALLOW FILTERING"
@@ -957,6 +1073,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 )
 
         where_clauses = []
+
         for n, component in enumerate(components):
             if len(component) == 0:
                 continue
