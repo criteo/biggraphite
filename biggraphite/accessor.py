@@ -616,6 +616,13 @@ class Accessor(object):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
 
+    @abc.abstractmethod
+    def touch_metric(self, metric):
+        """Touch a metric to update its last write timestamp."""
+        if not isinstance(metric, Metric):
+            raise InvalidArgumentError("%s is not a Metric instance" % metric)
+        self._check_connected()
+
     def _check_connected(self):
         if not self.is_connected:
             raise Error("Accessor's connect() wasn't called")
@@ -738,6 +745,11 @@ class Accessor(object):
         """
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
+        self._check_connected()
+
+    @abc.abstractmethod
+    def clean(self, cutoff, batch_size=10000):
+        """Clean the metadata from metrics older than the cutoff timestamp."""
         self._check_connected()
 
     @abc.abstractmethod

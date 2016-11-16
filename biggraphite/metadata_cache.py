@@ -125,7 +125,7 @@ class Cache(object):
         return metric
 
     @abc.abstractmethod
-    def clean(self):
+    def clean(self, cutoff=None):
         """Clean the cache from expired metrics."""
         pass
 
@@ -205,7 +205,7 @@ class MemoryCache(Cache):
         if metric:
             self.__cache[metric_name] = metric
 
-    def clean(self):
+    def clean(self, cutoff=None):
         """Automatically cleaned by cachetools."""
         pass
 
@@ -360,14 +360,19 @@ class DiskCache(Cache):
                 txn.delete(key=encoded_metric_name)
             return None, False
 
+        metadata = self.metadata_from_str(metadata_str)
+
         # update timestamp if expired
         if self.__expired_timestamp(timestamp):
             key = encoded_metric_name
             value = self.__value_from_strings(id_str, metadata_str)
+            # touch metric in backend
+            metric = bg_accessor.Metric(metric_name, id, metadata)
+            self._accessor.touch_metric(metric)
+            # update timestamp in cache
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.put(key, value, dupdata=False, overwrite=True)
 
-        metadata = self.metadata_from_str(metadata_str)
         return bg_accessor.Metric(metric_name, id, metadata), True
 
     def _cache_set(self, metric_name, metric):
@@ -431,13 +436,14 @@ class DiskCache(Cache):
             return None
         return (metric_id, metric_metadata, timestamp)
 
-    def clean(self):
+    def clean(self, cutoff=None):
         """Remove all expired metrics.
 
         Note: This will also remove metrics without a timestamp or
               whose timestamp value is not a digit.
         """
-        cutoff = int(time.time()) - int(self.__ttl)
+        if not cutoff:
+            cutoff = int(time.time()) - int(self.__ttl)
         logging.info("Cleaning cache with cutoff time %d" % cutoff)
 
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:

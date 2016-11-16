@@ -198,6 +198,7 @@ _METADATA_CREATION_CQL_METRICS = str(
     "  parent text,"
     "  id uuid,"
     "  config map<text, text>,"
+    "  mtime timestamp,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
@@ -527,6 +528,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__lazy_statements = None  # setup by connect()
         self.__timeout = timeout
         self.__insert_metrics_statement = None  # setup by connect()
+        self.__touch_metrics_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
         self.__glob_parser = bg_glob.GraphiteGlobParser()
@@ -556,11 +558,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
-        self.__insert_metrics_statement = self.__session.prepare(
-            "INSERT INTO \"%s\".metrics (name, parent, id, config, %s) VALUES (?, ?, ?, ?, %s);"
-            % (self.keyspace_metadata, components_names, components_marks)
-        )
+        self.__insert_metrics_statement = self.__session.prepare((
+            "INSERT INTO \"%s\".metrics"
+            " (name, parent, id, config, mtime, %s)"
+            " VALUES (?, ?, ?, ?, toTimestamp(now()), %s);"
+        ) % (self.keyspace_metadata, components_names, components_marks))
         self.__insert_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__touch_metrics_statement = self.__session.prepare((
+            "INSERT INTO \"%s\".metrics"
+            " (name, mtime)"
+            " VALUES (?, toTimestamp(now()));"
+        ) % (self.keyspace_metadata))
+        self.__touch_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
         self.__insert_directories_statement = self.__session.prepare(
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
@@ -671,6 +680,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
         #  - we do not want directories or metrics without parents (not handled by callee)
         #  - batch queries cannot contain IF NOT EXISTS and involve multiple primary keys
         # We can still end up with empty directories, which will need a reaper job to clean them.
+        for statement, args in queries:
+            self._execute(statement, args)
+
+    def touch_metric(self, metric):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).touch_metric(metric)
+
+        if self.__bulkimport:
+            return
+
+        queries = []
+        queries.append((
+            self.__touch_metrics_statement,
+            [metric.name],
+        ))
+
         for statement, args in queries:
             self._execute(statement, args)
 
@@ -1004,6 +1029,53 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_result,
                     count_down.on_cassandra_failure,
                 )
+
+    def clean(self, cutoff, batch_size=10000):
+        """See bg_accessor.Accessor.
+
+        Args:
+            cutoff: UNIX time in microseconds. Rows older than it should be deleted.
+            batch_size: The maximum number of results to get per query and delete.
+        """
+        super(_CassandraAccessor, self).clean(cutoff, batch_size)
+
+        if not cutoff:
+            log.warn("You must specify a cutoff time for cleanup")
+            return
+
+        # timestamp format in Cassandra is in milliseconds
+        cutoff = int(cutoff * 1000)
+        log.warn("Cleaning with cutoff time %d and batch size %d", cutoff, batch_size)
+
+        # calculate tokens
+        start_token = murmur3.INT64_MIN
+        stop_token = murmur3.INT64_MAX
+
+        # statements
+        select = self.__session.prepare(
+            "SELECT name, token(name) FROM \"%s\".metrics"
+            " WHERE mtime < %d AND token(name) > ?"
+            " LIMIT %d ALLOW FILTERING;" %
+            (self.keyspace_metadata, cutoff, batch_size))
+        select.consistency_level = cassandra.ConsistencyLevel.QUORUM
+        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        select.request_timeout = 60
+
+        delete = self.__session.prepare(
+            "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
+            (self.keyspace_metadata))
+
+        # filter the entire table
+        token = start_token
+        while token < stop_token:
+            result = self._execute(select, (token,))
+            if len(result.current_rows) == 0:
+                break
+            for row in result:
+                name, token = row
+                log.warn("Cleaning metric %s", name)
+                self._execute(delete, (name,))
+                token = token
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
         """See bg_accessor.Accessor.
