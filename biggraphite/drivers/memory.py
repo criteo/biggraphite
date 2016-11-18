@@ -30,6 +30,14 @@ from biggraphite.drivers import _delayed_writer
 OPTIONS = {}
 
 
+class Error(bg_accessor.Error):
+    """Base class for all exceptions from this module."""
+
+
+class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
+    """Callee did not follow requirements on the arguments."""
+
+
 class _MemoryAccessor(bg_accessor.Accessor):
     """A memory acessor that doubles as a memory MetadataCache."""
 
@@ -122,6 +130,18 @@ class _MemoryAccessor(bg_accessor.Accessor):
         for part in components[:-1]:
             path.append(part)
             self._directory_names.add(".".join(path))
+
+    def update_metric(self, name, updated_metadata):
+        """See bg_accessor.Accessor."""
+        super(_MemoryAccessor, self).update_metric(name, updated_metadata)
+        # Cleanup name (avoid double dots)
+        name = ".".join(self._components_from_name(name))
+        metric = self._name_to_metric[name]
+        if not metric:
+            raise InvalidArgumentError(
+                "Unknown metric '%s'" % name)
+        metric.metadata = updated_metadata
+        self._name_to_metric[name] = metric
 
     @staticmethod
     def __glob_names(names, glob):

@@ -109,26 +109,36 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self.cache().create_metric(metric)
 
     def getMetadata(self, metric_name, key):
-        if key != "aggregationMethod":
-            msg = "%s[%s]: Unsupported metadata" % (metric_name, key)
-            raise ValueError(msg)
         metadata = self.cache().get_metric(metric_name=metric_name)
         if not metadata:
             raise ValueError("%s: No such metric" % metric_name)
-        assert metadata.aggregator.carbon_name
-        return metadata.aggregator.carbon_name
+
+        if key == "aggregationMethod":
+            assert metadata.aggregator.carbon_name
+            return metadata.aggregator.carbon_name
+
+        try:
+            return metadata.__getattr__(key)
+        except AttributeError:
+            msg = "%s[%s]: Unsupported metadata" % (metric_name, key)
+            raise ValueError(msg)
 
     def setMetadata(self, metric_name, key, value):
         old_value = self.getMetadata(metric_name, key)
-        # Changing aggregation or xfilesfactor requires invalidating aggregates and caches,
-        # and the meaning of existing data would be ambiguous at best.
-        # Changing retention would be feasible but we'll probably end up restraining
-        # metadata to be by determined by prefix/suffix in the metric name for
-        # efficiency.
         if old_value != value:
-            msg = "%s[%s]=%s: Changing metadata is not supported" % (metric_name, key, value)
-            raise ValueError(msg)
-        return old_value
+            metadata = self.cache().get_metric(metric_name=metric_name)
+            if not metadata:
+                raise ValueError("%s: No such metric" % metric_name)
+
+            try:
+                if key == "aggregationMethod":
+                    metadata.aggregator.carbon_name = value
+                else:
+                    setattr(metadata.metadata, key, value)
+            except AttributeError:
+                msg = "%s[%s]: Unsupported metadata" % (metric_name, key)
+                raise ValueError(msg)
+            self.accessor().update_metric(metric_name, metadata.metadata)
 
     def getFilesystemPath(self, metric_name):
         # Only used for logging.

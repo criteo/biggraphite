@@ -528,6 +528,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__timeout = timeout
         self.__insert_metric_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
+        self.__update_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
         self.__glob_parser = bg_glob.GraphiteGlobParser()
 
@@ -571,6 +572,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "SELECT id, config FROM \"%s\".metrics WHERE name = ?;" % self.keyspace_metadata
         )
         self.__select_metric_statement.consistency_level = _META_READ_CONSISTENCY
+        self.__update_metric_statement = self.__session.prepare(
+            "UPDATE \"%s\".metrics SET config=? WHERE name=?;" % self.keyspace_metadata
+        )
+        self.__update_metric_statement.consistency_level = _META_WRITE_CONSISTENCY
 
         self.is_connected = True
 
@@ -674,6 +679,21 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # We can still end up with empty directories, which will need a reaper job to clean them.
         for statement, args in queries:
             self._execute(statement, args)
+
+    def update_metric(self, name, updated_metadata):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).update_metric(name, updated_metadata)
+
+        if not self.has_metric(name):
+            raise InvalidArgumentError(
+                "Unknown metric '%s'" % name)
+
+        # Cleanup name (avoid double dots)
+        name = ".".join(self._components_from_name(name)[:-1])
+
+        encoded_metric_name = bg_accessor.encode_metric_name(name)
+        metadata_dict = updated_metadata.as_string_dict()
+        self._execute(self.__update_metric_statement, [metadata_dict, encoded_metric_name])
 
     def _create_parent_dirs_queries(self, components):
         queries = []

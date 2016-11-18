@@ -73,13 +73,32 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
             ValueError,
             self._plugin.getMetadata, other_metric, "aggregationMethod")
 
-    def test_set(self):
-        # Setting the same value should work
-        self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
-        # Setting a different value should fail
+    def test_getMetadata(self):
+        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "carbon_xfilesfactor"), 0.5)
         self.assertRaises(
             ValueError,
-            self._plugin.setMetadata, _TEST_METRIC, "aggregationMethod", "avg")
+            self._plugin.getMetadata, _TEST_METRIC, "unsupportedMetadata")
+        # Specific behavior for aggregationMethod metadata
+        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
+
+    def test_setMetadata(self):
+        # Setting the same value should work
+        self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
+        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
+        self.assertEqual(
+            self._plugin.accessor().get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "sum")
+
+        # Setting a different value should work
+        self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "avg")
+        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "avg")
+        self.assertEqual(
+            self._plugin.accessor().get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "avg")
+        self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
+
+        # Setting a name that is not in MetricMetadata.__slots__ should fail
+        self.assertRaises(
+            ValueError,
+            self._plugin.setMetadata, _TEST_METRIC, "unsupportedMetadata", 42)
 
     def test_write(self):
         points = [(1, 42)]

@@ -498,7 +498,7 @@ class MetricMetadata(object):
 
     def __setattr__(self, name, value):
         # carbon_xfilesfactor is the last attribute __init__ sets.
-        if hasattr(self, "carbon_xfilesfactor"):
+        if name not in self.__slots__:
             raise AttributeError("can't set attribute")
         super(MetricMetadata, self).__setattr__(name, value)
 
@@ -614,6 +614,16 @@ class Accessor(object):
         """
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
+        self._check_connected()
+
+    @abc.abstractmethod
+    def update_metric(self, name, updated_metadata):
+        """Update a Metric object from its definition as a Metric object.
+
+        Args:
+          name: metric name.
+          updated_metadata: updated metric metadata.
+        """
         self._check_connected()
 
     def _check_connected(self):
