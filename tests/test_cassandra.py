@@ -365,6 +365,12 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 
+    def test_update_metric_modification_time(self):
+        # TODO Add better test
+        self.accessor.update_metric_modification_time(_METRIC)
+        self.accessor.flush()
+        self.addCleanup(self.accessor.drop_all_metrics)
+
 
 if __name__ == "__main__":
     unittest.main()

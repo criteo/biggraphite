@@ -18,6 +18,7 @@ from __future__ import print_function
 
 import collections
 import uuid
+import logging
 
 import sortedcontainers
 
@@ -26,6 +27,7 @@ from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 
+log = logging.getLogger(__name__)
 
 OPTIONS = {}
 
@@ -186,6 +188,14 @@ class _MemoryAccessor(bg_accessor.Accessor):
         time_end_ms = int(time_end) * 1000
         return bg_accessor.PointGrouper(
             metric, time_start_ms, time_end_ms, stage, query_results)
+
+    def update_metric_modification_time(self, metric):
+        """See the real Accessor for a description."""
+        super(_MemoryAccessor, self).update_metric_modification_time(metric)
+
+        # TODO Implements the function
+        log.warn("%s is not implemented" % self.update_metric_modification_time.__name__)
+        pass
 
 
 def build(*args, **kwargs):
