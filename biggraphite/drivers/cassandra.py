@@ -526,7 +526,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__cluster = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
         self.__timeout = timeout
-        self.__insert_metrics_statement = None  # setup by connect()
+        self.__insert_metric_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__update_metric_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
@@ -557,16 +557,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
-        self.__insert_metrics_statement = self.__session.prepare(
+        self.__insert_metric_statement = self.__session.prepare(
             "INSERT INTO \"%s\".metrics (name, parent, id, config, %s) VALUES (?, ?, ?, ?, %s);"
             % (self.keyspace_metadata, components_names, components_marks)
         )
-        self.__insert_metrics_statement.consistency_level = _META_WRITE_CONSISTENCY
-        self.__insert_directories_statement = self.__session.prepare(
+        self.__insert_metric_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__insert_directory_statement = self.__session.prepare(
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
         )
-        self.__insert_directories_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__insert_directory_statement.consistency_level = _META_WRITE_CONSISTENCY
         # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_statement = self.__session.prepare(
             "SELECT id, config FROM \"%s\".metrics WHERE name = ?;" % self.keyspace_metadata
@@ -664,10 +664,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
             queries.extend(self._create_parent_dirs_queries(components))
 
         # Finally, create the metric
-        padding = [None] * (_COMPONENTS_MAX_LEN - len(components))
+        padding_len = _COMPONENTS_MAX_LEN - len(components)
+        padding = [c_query.UNSET_VALUE] * padding_len
         metadata_dict = metric.metadata.as_string_dict()
         queries.append((
-            self.__insert_metrics_statement,
+            self.__insert_metric_statement,
             [metric.name, parent_dir + ".", metric.id, metadata_dict] + components + padding,
         ))
 
@@ -696,18 +697,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _create_parent_dirs_queries(self, components):
         queries = []
-        directory_path = []
-        parent = ""
-        for component in components[:-2]:  # -1 for _LAST_COMPONENT, -1 for metric
-            directory_path.append(component)
-            directory_name = ".".join(directory_path)
-            directory_components = directory_path + [_LAST_COMPONENT]
-            directory_padding = [None] * (_COMPONENTS_MAX_LEN - len(directory_components))
+        path = []
+        parent = ''
+        # Incrementally construct parents, till we reach the leaf component.
+        # -2 skips leaf (metric name) and _LAST_COMPONENT marker.
+        for component in components[:-2]:
+            path.append(component)
+            name = '.'.join(path)
+            path_components = path + [_LAST_COMPONENT]
+            padding_len = _COMPONENTS_MAX_LEN - len(path_components)
+            padding = [c_query.UNSET_VALUE] * padding_len
             queries.append((
-                self.__insert_directories_statement,
-                [directory_name, parent + "."] + directory_components + directory_padding,
+                self.__insert_directory_statement,
+                [name, parent + '.'] + path_components + padding,
             ))
-            parent = directory_name
+            parent = name
+
         return queries
 
     @staticmethod
