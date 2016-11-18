@@ -44,10 +44,12 @@ By convention:
 # Setup the virtualenv
 export BG_VENV=bg
 virtualenv ${BG_VENV}
-source bg/bin/activate
+source ${BG_VENV}/bin/activate
 
-# Install Graphite dependencies
+# By default carbon and graphite-web are installed in /opt/graphite,
+# We want NO prefix in order to have a good interaction with virtual env.
 export GRAPHITE_NO_PREFIX=true
+
 # Install the libffi-dev package from your distribution before running pip install
 pip install -r requirements.txt
 pip install -r tests-requirements.txt
@@ -65,7 +67,7 @@ Cassandra tests generate a lot of I/O, so if you are planning to run tests you w
 
 ### Running tests
 
-You can use `tox` to run tests:
+You can use `tox` to run tests. You will need dev packages from your distribution for each version of Python used by Tox: python-dev, pypy-dev.
 
 ```bash
 $ pip install tox
