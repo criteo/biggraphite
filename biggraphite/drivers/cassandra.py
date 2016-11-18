@@ -192,6 +192,23 @@ _LAST_COMPONENT = "__END__"
 _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
+
+
+_METADATA_CREATION_CQL_METRICS_MODIFICATION_TIME = str(
+    "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_modification_time ("
+    "  name text,"
+    "  last_update  timestamp,"
+    "  PRIMARY KEY ((name))"
+    ");"
+)
+_METADATA_CREATION_CQL_METRICS_MODIFICATION_TIME_LAST_UPDATE_INDEX = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (last_update)"
+    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
+    "  WITH OPTIONS = {"
+    "    'mode': 'SPARSE'"
+    "  };" % {"table": "metrics_modification_time"},
+]
+
 _METADATA_CREATION_CQL_METRICS = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics ("
     "  name text,"
@@ -217,7 +234,7 @@ _METADATA_CREATION_CQL_PARENT_INDEXES = [
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
     "  };" % {"table": t}
-    for t in 'metrics', 'directories'
+    for t in ('metrics', 'directories')
 ]
 _METADATA_CREATION_CQL_ID_INDEXES = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (id)"
@@ -233,15 +250,18 @@ _METADATA_CREATION_CQL_PATH_INDEXES = [
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
     "  };" % {"table": t, "component": n}
-    for t in 'metrics', 'directories'
+    for t in ('metrics', 'directories')
     for n in range(_COMPONENTS_MAX_LEN)
 ]
 _METADATA_CREATION_CQL = ([
     _METADATA_CREATION_CQL_METRICS,
     _METADATA_CREATION_CQL_DIRECTORIES,
+    _METADATA_CREATION_CQL_METRICS_MODIFICATION_TIME,
 ] + _METADATA_CREATION_CQL_PATH_INDEXES
   + _METADATA_CREATION_CQL_PARENT_INDEXES
-  + _METADATA_CREATION_CQL_ID_INDEXES)
+  + _METADATA_CREATION_CQL_ID_INDEXES
+  + _METADATA_CREATION_CQL_METRICS_MODIFICATION_TIME_LAST_UPDATE_INDEX
+)
 
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
@@ -529,6 +549,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__insert_metric_statement = None  # setup by connect()
         self.__select_metric_statement = None  # setup by connect()
         self.__update_metric_statement = None  # setup by connect()
+        self.__update_metrics_modification_time_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
         self.__glob_parser = bg_glob.GraphiteGlobParser()
 
@@ -576,6 +597,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "UPDATE \"%s\".metrics SET config=? WHERE name=?;" % self.keyspace_metadata
         )
         self.__update_metric_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__update_metrics_modification_time_statement = self.__session.prepare(
+            "UPDATE \"%s\".metrics_modification_time SET last_update=toTimestamp(now())"
+            " WHERE name=?;" % self.keyspace_metadata
+        )
+        self.__update_metrics_modification_time_statement\
+            .consistency_level = _META_WRITE_CONSISTENCY
 
         self.is_connected = True
 
@@ -1119,6 +1146,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         for cql in _METADATA_CREATION_CQL:
             self._execute(cql % {"keyspace": self.keyspace_metadata})
+
+    def update_metric_modification_time(self, metric):
+        """See the real Accessor for a description."""
+        super(_CassandraAccessor, self).update_metric_modification_time(metric)
+
+        if self.__bulkimport:
+            return
+
+        queries = []
+        queries.append((
+            self.__update_metrics_modification_time_statement,
+            [metric.name],
+        ))
+
+        for statement, args in queries:
+            self._execute(statement, args)
 
 
 def build(*args, **kwargs):
