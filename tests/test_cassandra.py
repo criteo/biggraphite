@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 import unittest
+import time
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
@@ -315,6 +316,21 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.update_metric_modification_time(_METRIC)
         self.accessor.flush()
         self.addCleanup(self.accessor.drop_all_metrics)
+
+    def test_delete_expired_metrics(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.update_metric_modification_time(metric1)
+        self.accessor.create_metric(metric1)
+
+        metric2 = self.make_metric("g.h.i.j.k.l")
+        self.accessor.update_metric_modification_time(metric2)
+        self.accessor.create_metric(metric2)
+
+        # set cutoff time in the future to delete all created metrics
+        cutoff = int(time.time() + 3600)
+        self.accessor.delete_expired_metrics(cutoff)
+        self.assertEquals(self.accessor.has_metric(metric1.name), False)
+        self.assertEquals(self.accessor.has_metric(metric2.name), False)
 
 
 if __name__ == "__main__":
