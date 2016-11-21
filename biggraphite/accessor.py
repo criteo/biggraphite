@@ -781,10 +781,8 @@ class Accessor(object):
         pass
 
     @abc.abstractmethod
-    def update_metric_modification_time(self, metric):
+    def update_metric_modification_time(self, metric_name):
         """Update a metric to refresh its last write timestamp."""
-        if not isinstance(metric, Metric):
-            raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
 
     @abc.abstractmethod

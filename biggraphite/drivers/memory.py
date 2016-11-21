@@ -189,9 +189,9 @@ class _MemoryAccessor(bg_accessor.Accessor):
         return bg_accessor.PointGrouper(
             metric, time_start_ms, time_end_ms, stage, query_results)
 
-    def update_metric_modification_time(self, metric):
+    def update_metric_modification_time(self, metric_name):
         """See the real Accessor for a description."""
-        super(_MemoryAccessor, self).update_metric_modification_time(metric)
+        super(_MemoryAccessor, self).update_metric_modification_time(metric_name)
 
         # TODO Implements the function
         log.warn("%s is not implemented" % self.update_metric_modification_time.__name__)
