@@ -12,11 +12,12 @@
  * limitations under the License.
  *
  */
-import static org.junit.Assert.*;
-import biggraphite.*;
+package com.criteo.biggraphite;
+
+import org.junit.Test;
 
 public class BgGenerateCassandraSSTablesTest {
-    @org.junit.Test
+    @Test
     public void mainShouldRun() throws Exception {
         // Just test that we can import simple files.
         String[] args = new String[]{
