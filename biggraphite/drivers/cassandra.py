@@ -721,6 +721,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for statement, args in queries:
             self._execute(statement, args)
 
+        self.update_metric_modification_time(metric.name)
+
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).update_metric(name, updated_metadata)
@@ -1260,9 +1262,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for cql in _METADATA_CREATION_CQL:
             self._execute(cql % {"keyspace": self.keyspace_metadata})
 
-    def update_metric_modification_time(self, metric):
+    def update_metric_modification_time(self, metric_name):
         """See the real Accessor for a description."""
-        super(_CassandraAccessor, self).update_metric_modification_time(metric)
+        super(_CassandraAccessor, self).update_metric_modification_time(metric_name)
 
         if self.__bulkimport:
             return
@@ -1270,7 +1272,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         queries = []
         queries.append((
             self.__update_metrics_modification_time_statement,
-            [metric.name],
+            [metric_name],
         ))
 
         for statement, args in queries:

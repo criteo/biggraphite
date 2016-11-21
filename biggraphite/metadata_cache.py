@@ -362,6 +362,7 @@ class DiskCache(Cache):
 
         # update timestamp if expired
         if self.__expired_timestamp(timestamp):
+            self._accessor.update_metric_modification_time(metric_name)
             key = encoded_metric_name
             value = self.__value_from_strings(id_str, metadata_str)
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
