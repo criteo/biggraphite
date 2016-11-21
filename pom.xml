@@ -29,34 +29,141 @@
     <description>The reactor POM of the Big Graphite project.</description>
     <url>https://github.com/criteo/biggraphite/</url>
     <inceptionYear>2016</inceptionYear>
-    <licenses>
-      <license>
-        <name>Apache License, Version 2.0</name>
-        <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
-        <comments>A business-friendly OSS license</comments>
-      </license>
-    </licenses>
     <organization>
-      <name>Criteo</name>
-      <url>https://github.com/criteo</url>
+        <name>Criteo</name>
+        <url>https://github.com/criteo</url>
     </organization>
-
-    <issueManagement>
-      <system>GitHub</system>
-      <url>https://github.com/criteo/biggraphite/issues</url>
-    </issueManagement>
-    <ciManagement>
-      <system>Travis</system>
-      <url>https://travis-ci.org/criteo/biggraphite</url>
-      <notifiers />
-    </ciManagement>
-    <scm>
-      <connection>scm:git:https://github.com/criteo/biggraphite.git</connection>
-      <tag>HEAD</tag>
-      <url>https://github.com/criteo/biggraphite/tree/master/</url>
-    </scm>
 
     <modules>
         <module>tools/bg-generate-cassandra-sstables</module>
     </modules>
+
+    <properties>
+        <!-- Maven build properties -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>net.sf.supercsv</groupId>
+                <artifactId>super-csv</artifactId>
+                <version>2.4.0</version>
+            </dependency>
+            <!-- Check the compatiblity matrix: https://docs.datastax.com/en/developer/driver-matrix/doc/javaDrivers.html -->
+            <dependency>
+                <groupId>org.apache.cassandra</groupId>
+                <artifactId>cassandra-all</artifactId>
+                <version>3.7</version>
+            </dependency>
+            <!-- The shaded version uses its own version of Netty (that is not the same one than the one used by cassandra-all.
+            cassandra-driver-core.pom should declared its Netty dependencies as optional, but they are not...
+            So we have to exclude them :-( -->
+            <dependency>
+                <groupId>com.datastax.cassandra</groupId>
+                <artifactId>cassandra-driver-core</artifactId>
+                <version>3.1.0</version>
+                <classifier>shaded</classifier>
+                <exclusions>
+                    <exclusion>
+                        <artifactId>netty-buffer</artifactId>
+                        <groupId>io.netty</groupId>
+                    </exclusion>
+                    <exclusion>
+                        <artifactId>netty-codec</artifactId>
+                        <groupId>io.netty</groupId>
+                    </exclusion>
+                    <exclusion>
+                        <artifactId>netty-handler</artifactId>
+                        <groupId>io.netty</groupId>
+                    </exclusion>
+                    <exclusion>
+                        <artifactId>netty-transport</artifactId>
+                        <groupId>io.netty</groupId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>4.12</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.5.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>1.4.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>2.4.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>com.github.edwgiz</groupId>
+                    <artifactId>maven-shade-plugin.log4j2-cachefile-transformer</artifactId>
+                    <version>2.1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-versions</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>3.3.0</version>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>${maven.compiler.source}</version>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <comments>A business-friendly OSS license</comments>
+        </license>
+    </licenses>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/criteo/biggraphite/issues</url>
+    </issueManagement>
+
+    <ciManagement>
+        <system>Travis</system>
+        <url>https://travis-ci.org/criteo/biggraphite</url>
+        <notifiers/>
+    </ciManagement>
+
+    <scm>
+        <connection>scm:git:https://github.com/criteo/biggraphite.git</connection>
+        <tag>HEAD</tag>
+        <url>https://github.com/criteo/biggraphite/tree/master/</url>
+    </scm>
+
 </project>
