@@ -197,6 +197,14 @@ class _MemoryAccessor(bg_accessor.Accessor):
         log.warn("%s is not implemented" % self.update_metric_modification_time.__name__)
         pass
 
+    def delete_expired_metrics(self, cutoff=None):
+        """See bg_accessor.Accessor."""
+        super(_MemoryAccessor, self).delete_expired_metrics(cutoff)
+
+        # TODO Implements the function
+        log.warn("%s is not implemented" % self.delete_expired_metrics.__name__)
+        pass
+
 
 def build(*args, **kwargs):
     """Return a bg_accessor.Accessor using memory."""

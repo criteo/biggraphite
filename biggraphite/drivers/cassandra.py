@@ -1276,6 +1276,44 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for statement, args in queries:
             self._execute(statement, args)
 
+    def delete_expired_metrics(self, cutoff=None):
+        """See bg_accessor.Accessor.
+
+        Args:
+            cutoff: UNIX time in seconds. Rows older than it should be deleted.
+        """
+        super(_CassandraAccessor, self).delete_expired_metrics(cutoff)
+
+        if not cutoff:
+            log.warn("You must specify a cutoff time for cleanup")
+            return
+
+        # timestamp format in Cassandra is in milliseconds
+        cutoff = int(cutoff) * 1000
+        log.info("Cleaning with cutoff time %d", cutoff)
+
+        # statements
+        select = self.__session.prepare(
+            "SELECT name FROM \"%s\".metrics_modification_time"
+            " WHERE last_update <= %d;" %
+            (self.keyspace_metadata, cutoff))
+        select.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
+        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        select.request_timeout = 120
+
+        delete = self.__session.prepare(
+            "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
+            (self.keyspace_metadata))
+        delete_metadata = self.__session.prepare(
+            "DELETE FROM \"%s\".metrics_modification_time WHERE name = ? ;" %
+            (self.keyspace_metadata))
+
+        result = self._execute(select)
+        for row in result:
+            log.info("Cleaning metric %s", row)
+            self._execute(delete, row)  # cleanup metrics
+            self._execute(delete_metadata, row)  # cleanup modification time
+
 
 def build(*args, **kwargs):
     """Return a bg_accessor.Accessor using Casssandra.

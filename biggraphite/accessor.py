@@ -787,6 +787,11 @@ class Accessor(object):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
 
+    @abc.abstractmethod
+    def delete_expired_metrics(self, cutoff=None):
+        """Remove metrics that have expired (not used anymore)."""
+        self._check_connected()
+
 
 class PointGrouper(object):
     """Helper for client-side aggregator.
