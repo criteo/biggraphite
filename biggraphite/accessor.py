@@ -781,12 +781,12 @@ class Accessor(object):
         pass
 
     @abc.abstractmethod
-    def update_metric_modification_time(self, metric_name):
+    def touch_metric(self, metric_name):
         """Update a metric to refresh its last write timestamp."""
         self._check_connected()
 
     @abc.abstractmethod
-    def delete_expired_metrics(self, cutoff=None):
+    def clean(self, cutoff=None):
         """Remove metrics that have expired (not used anymore)."""
         self._check_connected()
 

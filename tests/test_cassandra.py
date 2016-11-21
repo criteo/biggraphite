@@ -311,7 +311,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 
-    def test_delete_expired_metrics(self):
+    def test_clean_expired(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
 
@@ -325,14 +325,14 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         # set cutoff time in the future to delete all created metrics
         cutoff = int(time.time() + 3600)
-        self.accessor.delete_expired_metrics(cutoff)
+        self.accessor.clean(cutoff)
 
         # Check that the metrics are correctly deleted
         self.assertEquals(self.accessor.has_metric(metric1.name), False)
         self.assertEquals(self.accessor.has_metric(metric2.name), False)
         self.addCleanup(self.accessor.drop_all_metrics)
 
-    def test_delete_not_expired_metrics(self):
+    def test_clean_not_expired(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
 
@@ -344,9 +344,9 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(self.accessor.has_metric(metric1.name), True)
         self.assertEquals(self.accessor.has_metric(metric2.name), True)
 
-        # set cutoff time in the future to delete all created metrics
+        # set cutoff time in the pass to delete nothing
         cutoff = int(time.time() - 3600)
-        self.accessor.delete_expired_metrics(cutoff)
+        self.accessor.clean(cutoff)
 
         # Check that the metrics still exist after the cleanup
         self.assertEquals(self.accessor.has_metric(metric1.name), True)
