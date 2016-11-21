@@ -721,7 +721,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for statement, args in queries:
             self._execute(statement, args)
 
-        self.update_metric_modification_time(metric.name)
+        self.touch_metric(metric.name)
 
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
@@ -1262,9 +1262,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for cql in _METADATA_CREATION_CQL:
             self._execute(cql % {"keyspace": self.keyspace_metadata})
 
-    def update_metric_modification_time(self, metric_name):
+    def touch_metric(self, metric_name):
         """See the real Accessor for a description."""
-        super(_CassandraAccessor, self).update_metric_modification_time(metric_name)
+        super(_CassandraAccessor, self).touch_metric(metric_name)
 
         if self.__bulkimport:
             return
@@ -1278,13 +1278,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for statement, args in queries:
             self._execute(statement, args)
 
-    def delete_expired_metrics(self, cutoff=None):
+    def clean(self, cutoff=None):
         """See bg_accessor.Accessor.
 
         Args:
             cutoff: UNIX time in seconds. Rows older than it should be deleted.
         """
-        super(_CassandraAccessor, self).delete_expired_metrics(cutoff)
+        super(_CassandraAccessor, self).clean(cutoff)
 
         if not cutoff:
             log.warn("You must specify a cutoff time for cleanup")
