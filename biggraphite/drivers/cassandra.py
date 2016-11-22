@@ -674,7 +674,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # otherwise creating each parent directory requires a round-trip and the
         # vast majority of metrics have siblings.
         parent_dir = metric.name.rpartition(".")[0]
-        if parent_dir and not self.glob_directory_names(parent_dir):
+        if parent_dir and not self.has_directory(parent_dir):
             queries.extend(self._create_parent_dirs_queries(components))
 
         # Finally, create the metric
@@ -820,10 +820,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # exists because that's what we check to create the directory
         # hierarchy.
         parent_dir = metric_name.rpartition(".")[0]
-        if parent_dir and not self.glob_directory_names(parent_dir):
+        if parent_dir and not self.has_directory(parent_dir):
             return False
 
         return True
+
+    def has_directory(self, directory):
+        return list(self.glob_directory_names(directory))
 
     def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
@@ -864,42 +867,34 @@ class _CassandraAccessor(bg_accessor.Accessor):
             components.append([_LAST_COMPONENT])
             queries = self.__generate_normal_names_queries(table, components)
 
-        metric_names = []
-        try:
-            while len(queries) > 0:
-                statements_with_params = []
-                for query in queries[:self.max_concurrent_queries_per_pattern]:
-                    statement = c_query.SimpleStatement(
-                        query,
-                        consistency_level=_META_READ_CONSISTENCY,
-                    )
-                    statements_with_params.append((statement, ()))
-
-                queries = queries[self.max_concurrent_queries_per_pattern:]
-                for (success, results) in self._execute_concurrent(
-                        statements_with_params,
-                        concurrency=self.max_concurrent_queries_per_pattern,
-                        results_generator=True,
-                        raise_on_first_error=True,
-                ):
-                    for result in results:
-                        metric_names.append(result[0])
-                    if len(metric_names) > self.max_metrics_per_pattern:
-                        break
-
-                if len(metric_names) > self.max_metrics_per_pattern:
-                    break
-        except Exception as e:
-            raise RetryableCassandraError(e)
-
-        if len(metric_names) > self.max_metrics_per_pattern:
-            raise TooManyMetrics(
-                "Query yields more than %d results" %
-                (self.max_metrics_per_pattern)
+        statements_with_params = []
+        for query in queries:
+            statement = c_query.SimpleStatement(
+                query,
+                consistency_level=_META_READ_CONSISTENCY,
             )
+            statements_with_params.append((statement, ()))
 
-        metric_names.sort()
-        return metric_names
+        query_results = self._execute_concurrent(
+            statements_with_params,
+            concurrency=self.max_concurrent_queries_per_pattern,
+            results_generator=True,
+            raise_on_first_error=True,
+        )
+
+        def _extract_results(query_results):
+            n_metrics = 0
+            for success, results in query_results:
+                for result in results:
+                    n_metrics += 1
+                    if n_metrics > self.max_metrics_per_pattern:
+                        raise TooManyMetrics(
+                            "Query yields more than %d results" %
+                            (self.max_metrics_per_pattern)
+                        )
+                    yield result[0]
+
+        return _extract_results(query_results)
 
     def __generate_normal_names_queries(self, table, components):
         # Only keep the component parts that enable us to build prefix queries.
@@ -912,7 +907,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             entry = []
             end = 0
             for pidx, part in enumerate(component):
-                if not isinstance(part, (str, bg_glob.SequenceIn)):
+                if not isinstance(part, (unicode, str, bg_glob.SequenceIn)):
                     break
                 elif isinstance(part, bg_glob.SequenceIn):
                     count = len(part.values)
@@ -971,7 +966,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             values = ['']
             for part in component:
-                if isinstance(part, str):
+                if isinstance(part, (unicode, str)):
                     values = [x + part for x in values]
                 elif isinstance(part, bg_glob.SequenceIn):
                     values = [x + y
@@ -1038,10 +1033,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # too slow/costly at the moment (see #174 for details).
         if (
             components[-1] == [_LAST_COMPONENT] and  # Not a prefix globstar
-            all(len(c) == 1 and isinstance(c[0], str) for c in components[:-2])
+            all(len(c) == 1 and isinstance(c[0], (unicode, str))
+                for c in components[:-2])
         ):
             last = components[-2]
-            if len(last) == 1 and isinstance(last[0], str):
+            if len(last) == 1 and isinstance(last[0], (unicode, str)):
                 # XXX(d.forest): do not try to optimize by passing the raw glob
                 #                and using it here; because this is invalid in
                 #                cases where the glob contains braces.
@@ -1052,7 +1048,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     query_limit,
                 )
             else:
-                if len(last) > 0 and isinstance(last[0], str):
+                if len(last) > 0 and isinstance(last[0], (unicode, str)):
                     prefix_filter = "AND component_%d LIKE %s" % (
                         len(components) - 2,
                         c_encoder.cql_quote(last[0] + '%'),
@@ -1082,7 +1078,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # prefix value (i.e. it is a wildcard), then the current component
             # cannot be constrained inside the request.
             value = component[0]
-            if not isinstance(value, str):
+            if not isinstance(value, (unicode, str)):
                 continue
 
             if len(component) == 1:
@@ -1195,7 +1191,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for row in result:
                 name, parent, token = row
                 parent_dir = name.rpartition(".")[0]
-                if parent_dir and not self.glob_directory_names(parent_dir):
+                if parent_dir and self.has_directory(parent_dir):
                     log.warning("Creating missing parent dir '%s'" % parent_dir)
                     components = self._components_from_name(name)
                     queries = self._create_parent_dirs_queries(components)
