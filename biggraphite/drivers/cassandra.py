@@ -851,6 +851,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         return True
 
+    def __touch_metric_if_expired(self, updated_on, metric_name):
+        if (datetime.today() - updated_on).total_seconds() >= self.__metadata_touch_ttl_sec:
+            self.touch_metric(metric_name)
+
     def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
@@ -862,8 +866,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         id = result[0]
         config = result[1]
         updated_on = result[2]
-        if (datetime.today() - updated_on).total_seconds() >= self.__metadata_touch_ttl_sec:
-            self.touch_metric(metric_name)
+        self.__touch_metric_if_expired(updated_on, metric_name)
 
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
         return bg_accessor.Metric(metric_name, id, metadata)
