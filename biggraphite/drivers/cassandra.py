@@ -1161,7 +1161,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 raise CassandraError("Missing keyspace '%s'." % keyspace)
 
         tables = self.__cluster.metadata.keyspaces[self.keyspace_metadata].tables
-        if 'metrics' in tables and 'directories' in tables:
+        mandatory_tables = ['metrics', 'directories', 'metrics_metadata']
+
+        if reduce(lambda acc, val: acc and val in tables, mandatory_tables):
             return
 
         for cql in _METADATA_CREATION_CQL:
