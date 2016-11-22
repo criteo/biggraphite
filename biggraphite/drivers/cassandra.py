@@ -194,6 +194,7 @@ _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
 
+_METADATA_TOUCH_TTL_SEC = 1 * 60 * 60
 
 _METADATA_CREATION_CQL_METRICS_METADATA = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
@@ -537,7 +538,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__compression = compression
         self.__trace = trace
         self.__bulkimport = bulkimport
-        self.__metadata_touch_ttl_sec = 1 * 60 * 60
+        self.__metadata_touch_ttl_sec = _METADATA_TOUCH_TTL_SEC
         # For some reason this isn't enabled yet for pypy, even if it seems to
         # be working properly.
         # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188

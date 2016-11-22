@@ -311,6 +311,49 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 
+    def test_metrics_ttl_correctly_refreshed(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+
+        # Set ttl to a lower value
+        self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
+
+        # Setting up the moc function
+        isUpdated = [False]
+
+        def touch_metric_moc(*args, **kwargs):
+            isUpdated[0] = True
+
+        old_touch_fn = self.accessor.touch_metric
+        self.accessor.touch_metric = touch_metric_moc
+
+        time.sleep(3)
+        self.accessor.get_metric(metric1.name)
+        self.assertEquals(isUpdated[0], True)
+
+        self.accessor.touch_metric = old_touch_fn
+        self.addCleanup(self.accessor.drop_all_metrics)
+
+    def test_metrics_ttl_not_refreshed(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+
+        # Setting up the moc function
+        isUpdated = [False]
+
+        def touch_metric_moc(*args, **kwargs):
+            isUpdated[0] = True
+
+        old_touch_fn = self.accessor.touch_metric
+        self.accessor.touch_metric = touch_metric_moc
+
+        time.sleep(3)
+        self.accessor.get_metric(metric1.name)
+        self.assertEquals(isUpdated[0], False)
+
+        self.accessor.touch_metric = old_touch_fn
+        self.addCleanup(self.accessor.drop_all_metrics)
+
     def test_clean_expired(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
