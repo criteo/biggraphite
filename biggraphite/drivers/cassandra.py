@@ -23,6 +23,7 @@ import uuid
 import os
 from os import path as os_path
 import multiprocessing
+from datetime import datetime
 
 import cassandra
 from cassandra import murmur3
@@ -201,12 +202,30 @@ _LAST_COMPONENT = "__END__"
 _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
+
+_METADATA_TOUCH_TTL_SEC = 3 * DAY
+
+_METADATA_CREATION_CQL_METRICS_METADATA = str(
+    "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
+    "  name text,"
+    "  updated_on  timestamp,"
+    "  id uuid,"
+    "  config map<text, text>,"
+    "  PRIMARY KEY ((name))"
+    ");"
+)
+_METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (updated_on)"
+    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
+    "  WITH OPTIONS = {"
+    "    'mode': 'SPARSE'"
+    "  };" % {"table": "metrics_metadata"},
+]
+
 _METADATA_CREATION_CQL_METRICS = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics ("
     "  name text,"
     "  parent text,"
-    "  id uuid,"
-    "  config map<text, text>,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
     "  PRIMARY KEY (name)"
     ");"
@@ -226,14 +245,14 @@ _METADATA_CREATION_CQL_PARENT_INDEXES = [
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
     "  };" % {"table": t}
-    for t in 'metrics', 'directories'
+    for t in ('metrics', 'directories')
 ]
 _METADATA_CREATION_CQL_ID_INDEXES = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (id)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'mode': 'SPARSE'"
-    "  };" % {"table": "metrics"},
+    "  };" % {"table": "metrics_metadata"},
 ]
 _METADATA_CREATION_CQL_PATH_INDEXES = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (component_%(component)d)"
@@ -242,15 +261,18 @@ _METADATA_CREATION_CQL_PATH_INDEXES = [
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
     "  };" % {"table": t, "component": n}
-    for t in 'metrics', 'directories'
+    for t in ('metrics', 'directories')
     for n in range(_COMPONENTS_MAX_LEN)
 ]
 _METADATA_CREATION_CQL = ([
     _METADATA_CREATION_CQL_METRICS,
     _METADATA_CREATION_CQL_DIRECTORIES,
+    _METADATA_CREATION_CQL_METRICS_METADATA,
 ] + _METADATA_CREATION_CQL_PATH_INDEXES
   + _METADATA_CREATION_CQL_PARENT_INDEXES
-  + _METADATA_CREATION_CQL_ID_INDEXES)
+  + _METADATA_CREATION_CQL_ID_INDEXES
+  + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
+)
 
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
@@ -530,6 +552,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__compression = compression
         self.__trace = trace
         self.__bulkimport = bulkimport
+        self.__metadata_touch_ttl_sec = _METADATA_TOUCH_TTL_SEC
         # For some reason this isn't enabled yet for pypy, even if it seems to
         # be working properly.
         # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188
@@ -541,8 +564,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__lazy_statements = None  # setup by connect()
         self.__timeout = timeout
         self.__insert_metric_statement = None  # setup by connect()
-        self.__select_metric_statement = None  # setup by connect()
-        self.__update_metric_statement = None  # setup by connect()
+        self.__select_metric_metadata_statement = None  # setup by connect()
+        self.__update_metric_metadata_statement = None  # setup by connect()
+        self.__touch_metrics_metadata_statement = None  # setup by connect()
         self.__session = None  # setup by connect()
         self.__glob_parser = bg_glob.GraphiteGlobParser()
 
@@ -572,7 +596,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
         self.__insert_metric_statement = self.__session.prepare(
-            "INSERT INTO \"%s\".metrics (name, parent, id, config, %s) VALUES (?, ?, ?, ?, %s);"
+            "INSERT INTO \"%s\".metrics (name, parent, %s) VALUES (?, ?, %s);"
             % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__insert_metric_statement.consistency_level = _META_WRITE_CONSISTENCY
@@ -582,14 +606,26 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
         self.__insert_directory_statement.consistency_level = _META_WRITE_CONSISTENCY
         # We do not set the serial_consistency, it defautls to SERIAL.
-        self.__select_metric_statement = self.__session.prepare(
-            "SELECT id, config FROM \"%s\".metrics WHERE name = ?;" % self.keyspace_metadata
+        self.__select_metric_metadata_statement = self.__session.prepare(
+            "SELECT id, config, updated_on FROM \"%s\".metrics_metadata WHERE name = ?;"
+            % self.keyspace_metadata
         )
-        self.__select_metric_statement.consistency_level = _META_READ_CONSISTENCY
-        self.__update_metric_statement = self.__session.prepare(
-            "UPDATE \"%s\".metrics SET config=? WHERE name=?;" % self.keyspace_metadata
+        self.__select_metric_metadata_statement.consistency_level = _META_READ_CONSISTENCY
+        self.__update_metric_metadata_statement = self.__session.prepare(
+            "UPDATE \"%s\".metrics_metadata SET config=?, updated_on=toTimestamp(now())"
+            " WHERE name=?;" % self.keyspace_metadata
         )
-        self.__update_metric_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__update_metric_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__touch_metrics_metadata_statement = self.__session.prepare(
+            "UPDATE \"%s\".metrics_metadata SET updated_on=toTimestamp(now())"
+            " WHERE name=?;" % self.keyspace_metadata
+        )
+        self.__touch_metrics_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
+        self.__insert_metrics_metadata_statement = self.__session.prepare(
+            "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
+            " VALUES (?, toTimestamp(now()), ?, ?);" % self.keyspace_metadata
+        )
+        self.__insert_metrics_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
 
         self.is_connected = True
 
@@ -683,7 +719,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metadata_dict = metric.metadata.as_string_dict()
         queries.append((
             self.__insert_metric_statement,
-            [metric.name, parent_dir + ".", metric.id, metadata_dict] + components + padding,
+            [metric.name, parent_dir + "."] + components + padding,
+        ))
+        queries.append((
+            self.__insert_metrics_metadata_statement,
+            [metric.name, metric.id, metadata_dict],
         ))
 
         # We have to run queries in sequence as:
@@ -707,7 +747,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         encoded_metric_name = bg_accessor.encode_metric_name(name)
         metadata_dict = updated_metadata.as_string_dict()
-        self._execute(self.__update_metric_statement, [metadata_dict, encoded_metric_name])
+        self._execute(self.__update_metric_metadata_statement, [metadata_dict, encoded_metric_name])
 
     def _create_parent_dirs_queries(self, components):
         queries = []
@@ -803,7 +843,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """Fetch metric metadata."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         result = list(self._execute(
-            self.__select_metric_statement, (encoded_metric_name, )))
+            self.__select_metric_metadata_statement, (encoded_metric_name, )))
         if not result:
             return None
         return result[0]
@@ -828,6 +868,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def has_directory(self, directory):
         return list(self.glob_directory_names(directory))
 
+    def __touch_metadata_on_need(self, metric_name, updated_on):
+        if (datetime.today() - updated_on).total_seconds() >= self.__metadata_touch_ttl_sec:
+            self.touch_metric(metric_name)
+
     def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
@@ -838,6 +882,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return None
         id = result[0]
         config = result[1]
+        updated_on = result[2]
+
+        self.__touch_metadata_on_need(metric_name, updated_on)
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
         return bg_accessor.Metric(metric_name, id, metadata)
 
@@ -1227,11 +1274,67 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 raise CassandraError("Missing keyspace '%s'." % keyspace)
 
         tables = self.__cluster.metadata.keyspaces[self.keyspace_metadata].tables
-        if 'metrics' in tables and 'directories' in tables:
+        mandatory_tables = ['metrics', 'directories', 'metrics_metadata']
+
+        if reduce(lambda acc, val: acc and val in tables, mandatory_tables):
             return
 
         for cql in _METADATA_CREATION_CQL:
             self._execute(cql % {"keyspace": self.keyspace_metadata})
+
+    def touch_metric(self, metric_name):
+        """See the real Accessor for a description."""
+        super(_CassandraAccessor, self).touch_metric(metric_name)
+
+        if self.__bulkimport:
+            return
+
+        queries = []
+        queries.append((
+            self.__touch_metrics_metadata_statement,
+            [metric_name],
+        ))
+
+        for statement, args in queries:
+            self._execute(statement, args)
+
+    def clean(self, cutoff=None):
+        """See bg_accessor.Accessor.
+
+        Args:
+            cutoff: UNIX time in seconds. Rows older than it should be deleted.
+        """
+        super(_CassandraAccessor, self).clean(cutoff)
+
+        if not cutoff:
+            log.warn("You must specify a cutoff time for cleanup")
+            return
+
+        # timestamp format in Cassandra is in milliseconds
+        cutoff = int(cutoff) * 1000
+        log.info("Cleaning with cutoff time %d", cutoff)
+
+        # statements
+        select = self.__session.prepare(
+            "SELECT name FROM \"%s\".metrics_metadata"
+            " WHERE updated_on <= %d;" %
+            (self.keyspace_metadata, cutoff))
+        select.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
+        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        select.request_timeout = 120
+
+        delete = self.__session.prepare(
+            "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
+            (self.keyspace_metadata))
+        delete_metadata = self.__session.prepare(
+            "DELETE FROM \"%s\".metrics_metadata WHERE name = ? ;" %
+            (self.keyspace_metadata))
+
+        result = self._execute(select)
+        for row in result:
+            log.info("Cleaning metric %s", row)
+            self._execute(delete, row)  # cleanup metrics
+            self._execute(delete_metadata, row)  # cleanup modification time
 
 
 def build(*args, **kwargs):

@@ -780,6 +780,16 @@ class Accessor(object):
         """
         pass
 
+    @abc.abstractmethod
+    def touch_metric(self, metric_name):
+        """Update a metric to refresh its last write timestamp."""
+        self._check_connected()
+
+    @abc.abstractmethod
+    def clean(self, cutoff=None):
+        """Remove metrics that have expired (not used anymore)."""
+        self._check_connected()
+
 
 class PointGrouper(object):
     """Helper for client-side aggregator.
