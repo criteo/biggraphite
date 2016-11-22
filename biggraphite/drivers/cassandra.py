@@ -69,7 +69,6 @@ OPTIONS = {
     "port": int,
     "connections": int,
     "timeout": float,
-    "connections": int,
     "compression": _utils.bool_from_str,
     "max_metrics_per_pattern": int,
     "max_queries_per_pattern": int,
@@ -869,6 +868,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def has_directory(self, directory):
         return list(self.glob_directory_names(directory))
 
+    def __touch_metadata_on_need(self, metric_name, updated_on):
+        if (datetime.today() - updated_on).total_seconds() >= self.__metadata_touch_ttl_sec:
+            self.touch_metric(metric_name)
+
     def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
@@ -880,9 +883,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         id = result[0]
         config = result[1]
         updated_on = result[2]
-        if (datetime.today() - updated_on).total_seconds() >= self.__metadata_touch_ttl_sec:
-            self.touch_metric(metric_name)
 
+        self.__touch_metadata_on_need(metric_name, updated_on)
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
         return bg_accessor.Metric(metric_name, id, metadata)
 
