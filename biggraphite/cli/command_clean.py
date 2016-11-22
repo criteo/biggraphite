@@ -16,27 +16,58 @@
 
 
 import logging
+import time
 
 from biggraphite.cli import command
 from biggraphite import metadata_cache
 
 
 class CommandClean(command.BaseCommand):
-    """Clean BigGraphite disk cache."""
+    """Clean BigGraphite metric metadata from old metrics."""
 
     NAME = "clean"
-    HELP = "Clean the disk cache."
+    HELP = "Clean the metric metadata."
+
+    def add_arguments(self, parser):
+        """Add custom arguments."""
+        parser.add_argument(
+            "--clean-cache",
+            help="clean cache",
+            action='store_true'
+        )
+        parser.add_argument(
+            "--cache-directory",
+            help="location of the cache path",
+            action='store'
+        )
+        parser.add_argument(
+            "--clean-backend",
+            help="clean backend",
+            action='store_true'
+        )
+        parser.add_argument(
+            "--backend-cutoff",
+            help="specify cutoff time in UNIX time",
+            type=int,
+            default=int(time.time()) - 24 * 60 * 60,
+            action='store'
+        )
 
     def run(self, accessor, opts):
-        """Run some repairs.
+        """Run some cleanups.
 
         See command.BaseCommand
         """
-        accessor.connect()
+        with accessor as bg_acc:
+            if opts.clean_cache:
+                if opts.cache_directory:
+                    logging.info("Cleaning cache from %s", opts.cache_directory)
 
-        if opts.storage_dir:
-            cache = metadata_cache.DiskCache(accessor, opts.storage_dir)
-            cache.open()
-            cache.clean()
-        else:
-            logging.warning('Cannot clean disk cache because storage_dir is empty')
+                    with metadata_cache.DiskCache(bg_acc, opts.cache_directory) as cache:
+                        cache.clean()
+                else:
+                    logging.error('Cannot clean disk cache because storage_dir is empty')
+
+            if opts.clean_backend:
+                logging.info("Cleaning backend, removing things before %d", opts.backend_cutoff)
+                bg_acc.clean(opts.backend_cutoff)
