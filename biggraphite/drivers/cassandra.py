@@ -69,6 +69,7 @@ OPTIONS = {
     "port": int,
     "connections": int,
     "timeout": float,
+    "connections": int,
     "compression": _utils.bool_from_str,
     "max_metrics_per_pattern": int,
     "max_queries_per_pattern": int,
