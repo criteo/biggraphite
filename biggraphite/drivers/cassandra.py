@@ -194,7 +194,7 @@ _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
 
-_METADATA_TOUCH_TTL_SEC = 1 * 60 * 60
+_METADATA_TOUCH_TTL_SEC = 3 * DAY
 
 _METADATA_CREATION_CQL_METRICS_METADATA = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
