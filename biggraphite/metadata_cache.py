@@ -74,6 +74,14 @@ class Cache(object):
         """
         pass
 
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, typ, value, traceback):
+        self.close()
+        return False
+
     @abc.abstractmethod
     def close(self):
         """Free resources allocated by open().
@@ -279,7 +287,8 @@ class DiskCache(Cache):
             os.makedirs(self.__path)
         except OSError:
             pass  # Directory already exists
-        logging.info('Opening cache %s' % self.__path)
+
+        logging.info('Opening cache %s', self.__path)
         self.__env = lmdb.open(
             self.__path,
             map_size=self.__size,

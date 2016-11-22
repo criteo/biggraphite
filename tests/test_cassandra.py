@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 import unittest
+import time
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
@@ -194,7 +195,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
-            self.assertEqual(expected_matches, self.accessor.glob_metric_names(glob))
+            matches = sorted(list(self.accessor.glob_metric_names(glob)))
+            self.assertEqual(expected_matches, matches)
 
         # Exact matches
         assert_find("a.a", ["a.a"])
@@ -209,6 +211,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         # Character selector
         for pattern in [
                 "a[!dfp].o.g",
+                u"a[!dfp].o.g",
                 "a[!dfp]suffix.o.g",
                 "a[nope].o.g",
                 "a[nope]suffix.o.g",
@@ -237,6 +240,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
                     ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"])
         for pattern in [
                 "-{b,c,d}-.a.t",
+                u"-{b,c,d}-.a.t",
                 "-{b,c,d}?.a.t",
                 "-{b,c,d}?suffix.a.t",
                 "-{b,c,d}[ha].a.t",
@@ -245,6 +249,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
                 "-{b,c,d}[!-]suffix.a.t",
                 "-{b,c,d}*.a.t",
                 "-{b,c,d}*suffix.a.t",
+                u"-{b,c,d}*suffix.a.t",
         ]:
             assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
 
@@ -270,7 +275,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
-            self.assertEqual(expected_matches, self.accessor.glob_directory_names(glob))
+            self.assertEqual(expected_matches, list(self.accessor.glob_directory_names(glob)))
 
         assert_find("x.y", ["x.y"])  # Test exact match
         assert_find("A", [])  # Test case mismatch
@@ -349,7 +354,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.create_metric(metric)
         self.accessor.create_metric(metric_1)
 
-        self.assertEqual(['a.b.c'], self.accessor.glob_metric_names("a.b.*"))
+        self.assertEqual(['a.b.c'],
+                         list(self.accessor.glob_metric_names("a.b.*")))
         self.assertEqual(True, self.accessor.has_metric("a.b..c"))
         self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))
 
@@ -359,6 +365,91 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(points, list(actual_points))
         actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
+
+    def test_metrics_ttl_correctly_refreshed(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+
+        # Set ttl to a lower value
+        self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
+
+        # Setting up the moc function
+        isUpdated = [False]
+
+        def touch_metric_moc(*args, **kwargs):
+            isUpdated[0] = True
+
+        old_touch_fn = self.accessor.touch_metric
+        self.accessor.touch_metric = touch_metric_moc
+
+        time.sleep(3)
+        self.accessor.get_metric(metric1.name)
+        self.assertEquals(isUpdated[0], True)
+
+        self.accessor.touch_metric = old_touch_fn
+        self.addCleanup(self.accessor.drop_all_metrics)
+
+    def test_metrics_ttl_not_refreshed(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+
+        # Setting up the moc function
+        isUpdated = [False]
+
+        def touch_metric_moc(*args, **kwargs):
+            isUpdated[0] = True
+
+        old_touch_fn = self.accessor.touch_metric
+        self.accessor.touch_metric = touch_metric_moc
+
+        time.sleep(3)
+        self.accessor.get_metric(metric1.name)
+        self.assertEquals(isUpdated[0], False)
+
+        self.accessor.touch_metric = old_touch_fn
+        self.addCleanup(self.accessor.drop_all_metrics)
+
+    def test_clean_expired(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+
+        metric2 = self.make_metric("g.h.i.j.k.l")
+        self.accessor.create_metric(metric2)
+        self.accessor.flush()
+
+        # Check that the metrics exist before the cleanup
+        self.assertEquals(self.accessor.has_metric(metric1.name), True)
+        self.assertEquals(self.accessor.has_metric(metric2.name), True)
+
+        # set cutoff time in the future to delete all created metrics
+        cutoff = int(time.time() + 3600)
+        self.accessor.clean(cutoff)
+
+        # Check that the metrics are correctly deleted
+        self.assertEquals(self.accessor.has_metric(metric1.name), False)
+        self.assertEquals(self.accessor.has_metric(metric2.name), False)
+        self.addCleanup(self.accessor.drop_all_metrics)
+
+    def test_clean_not_expired(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+
+        metric2 = self.make_metric("g.h.i.j.k.l")
+        self.accessor.create_metric(metric2)
+        self.accessor.flush()
+
+        # Check that the metrics exist before the cleanup
+        self.assertEquals(self.accessor.has_metric(metric1.name), True)
+        self.assertEquals(self.accessor.has_metric(metric2.name), True)
+
+        # set cutoff time in the pass to delete nothing
+        cutoff = int(time.time() - 3600)
+        self.accessor.clean(cutoff)
+
+        # Check that the metrics still exist after the cleanup
+        self.assertEquals(self.accessor.has_metric(metric1.name), True)
+        self.assertEquals(self.accessor.has_metric(metric2.name), True)
+        self.addCleanup(self.accessor.drop_all_metrics)
 
 
 if __name__ == "__main__":

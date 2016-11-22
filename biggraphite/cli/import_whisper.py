@@ -69,6 +69,9 @@ class _Worker(object):
     @staticmethod
     def _read_metadata(metric_name, path):
         info = whisper.info(path)
+        if not info:
+            return None
+
         retentions = bg_accessor.Retention([
             bg_accessor.Stage(precision=a["secondsPerPoint"], points=a["points"])
             for a in info["archives"]
@@ -133,6 +136,9 @@ class _Worker(object):
 
         name = metric_name_from_wsp(self._opts.root_directory, path)
         metadata = self._read_metadata(name, path)
+        if not metadata:
+            return 0
+
         metric = self._accessor.make_metric(name, metadata)
         self._accessor.create_metric(metric)
 
