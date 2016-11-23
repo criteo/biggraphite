@@ -13,11 +13,10 @@
  *
  * Inspired from https://github.com/yukim/cassandra-bulkload-example/
  */
-package biggraphite;
+package com.criteo.biggraphite;
 
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.io.sstable.CQLSSTableWriter;
 import org.supercsv.io.CsvListReader;
 import org.supercsv.prefs.CsvPreference;
@@ -35,13 +34,13 @@ import java.util.UUID;
 public class BgGenerateCassandraSSTables
 {
     /** Default output directory */
-    public static final String DEFAULT_OUTPUT_DIR = "./data";
+    private static final String DEFAULT_OUTPUT_DIR = "./data";
 
     /**
      * INSERT statement to bulk load.
      * It is like prepared statement. You fill in place holder for each data.
      */
-    public static final String INSERT_STMT = "INSERT INTO %s.%s " +
+    private static final String INSERT_STMT = "INSERT INTO %s.%s " +
            "(metric, time_start_ms, offset, value, count)" +
             " VALUES (?, ?, ?, ?, ?);";
 
@@ -55,7 +54,7 @@ public class BgGenerateCassandraSSTables
      * @throws NullPointerException if the string is null
      * @throws NumberFormatException if the string does not contain a parsable double.
      */
-    public static double parseDouble(String s) throws NumberFormatException
+    private static double parseDouble(String s) throws NumberFormatException
     {
         switch(s) {
             case "-inf":
@@ -67,6 +66,12 @@ public class BgGenerateCassandraSSTables
         }
     }
 
+    /**
+     * Utility to write Cassandra SSTables.
+     *
+     * @param args <KEYSPACE> <TABLE> <CQL> <CSV>
+     * @throws IOException if an I/O error occurs reading from the stream
+     */
     public static void main(String[] args) throws IOException {
 
         if (args.length != 4)
@@ -84,18 +89,17 @@ public class BgGenerateCassandraSSTables
         Config.setClientMode(true);
 
         // Create output directory that has keyspace and table name in the path
-        final File outputDir = new File(DEFAULT_OUTPUT_DIR + File.separator + keyspace + File.separator + table);
+        final File outputDir = Paths.get(DEFAULT_OUTPUT_DIR, keyspace, table).toFile();
         if (!outputDir.exists() && !outputDir.mkdirs())
         {
             throw new RuntimeException("Cannot create output directory: " + outputDir);
         }
 
         // Prepare SSTable writer
-        final CQLSSTableWriter.Builder builder = CQLSSTableWriter.builder();
-        // set output directory
-        builder.inDirectory(outputDir)
-                .forTable(schema)
-                .using(insert_stmt)
+        final CQLSSTableWriter.Builder builder = CQLSSTableWriter.builder()
+                .inDirectory(outputDir) // the directory where to write the sstables
+                .forTable(schema) // the schema (CREATE TABLE statement) for the table for which sstable are to be created
+                .using(insert_stmt) // the INSERT statement defining the order of the values to add for a given CQL row
                 .withPartitioner(new Murmur3Partitioner());
 
         try (
@@ -104,7 +108,6 @@ public class BgGenerateCassandraSSTables
                 CsvListReader csvReader = new CsvListReader(reader, CsvPreference.STANDARD_PREFERENCE)
         )
         {
-
             // import_whisper don't generate any header, so we should NOT skip the first line
             //csvReader.getHeader(true);
 
