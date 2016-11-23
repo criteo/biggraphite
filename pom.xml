@@ -99,7 +99,7 @@
             <plugins>
                 <plugin>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.5.1</version>
+                    <version>3.6.0</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-enforcer-plugin</artifactId>
@@ -128,7 +128,7 @@
                         <configuration>
                             <rules>
                                 <requireMavenVersion>
-                                    <version>3.3.0</version>
+                                    <version>3.1.1</version>
                                 </requireMavenVersion>
                                 <requireJavaVersion>
                                     <version>${maven.compiler.source}</version>
