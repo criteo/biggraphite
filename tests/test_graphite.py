@@ -80,6 +80,16 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
             result = result.waitForResults()
         return result
 
+    def test_fetch_non_existing(self):
+        self.reader._metric_name = 'broken.name'
+        (start, end, step), points = self.fetch(
+            start_time=self._POINTS_START+3,
+            end_time=self._POINTS_END-3,
+            now=self._POINTS_END+10,
+        )
+        # Check that this returns at least one None.
+        self.assertEqual(points[0], None)
+
     def test_fresh_read(self):
         (start, end, step), points = self.fetch(
             start_time=self._POINTS_START+3,

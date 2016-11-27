@@ -60,4 +60,5 @@ class CommandList(command.BaseCommand):
         for directory in accessor.glob_directory_names(opts.glob):
             print("d %s" % directory)
         for metric in list_metrics(accessor, opts.glob):
-            print("m %s %s" % (metric.name, metric.metadata.as_string_dict()))
+            if metric:
+                print("m %s %s" % (metric.name, metric.metadata.as_string_dict()))
