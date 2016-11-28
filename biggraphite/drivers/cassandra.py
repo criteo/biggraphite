@@ -936,8 +936,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     n_metrics += 1
                     if n_metrics > self.max_metrics_per_pattern:
                         raise TooManyMetrics(
-                            "Query yields more than %d results" %
-                            (self.max_metrics_per_pattern)
+                            "Query %s on %s yields more than %d results" %
+                            (glob, table, self.max_metrics_per_pattern)
                         )
                     yield result[0]
 
