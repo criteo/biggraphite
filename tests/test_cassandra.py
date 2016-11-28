@@ -288,6 +288,17 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.drop_all_metrics()
         assert_find("*", [])
 
+    def test_glob_too_many_directories(self):
+        for name in "a", "a.b", "x.y.z":
+            metric = bg_test_utils.make_metric(name)
+            self.accessor.create_metric(metric)
+
+        old_value = self.accessor.max_metrics_per_pattern
+        self.accessor.max_metrics_per_pattern = 1
+        with self.assertRaises(bg_cassandra.TooManyMetrics):
+            list(self.accessor.glob_directory_names('**'))
+        self.accessor.max_metrics_per_pattern = old_value
+
     def test_create_metrics(self):
         meta_dict = {
             "aggregator": bg_accessor.Aggregator.last,
