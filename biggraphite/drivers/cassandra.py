@@ -981,7 +981,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if combinations <= self.max_queries_per_pattern:
                 break
 
-            while combinations > self.max_queries_per_pattern:
+            while len(entry) > 0 and combinations > self.max_queries_per_pattern:
                 component = components[cidx]
                 idx, count = entry.pop()
 
@@ -996,6 +996,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 if surrounding_anyseqs > 0:
                     while surrounding_anyseqs > 0:
                         del(component[idx])
+                        surrounding_anyseqs -= 1
                 else:
                     component[idx] = ANYSEQUENCE
 

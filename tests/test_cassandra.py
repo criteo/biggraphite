@@ -253,6 +253,13 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         ]:
             assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
 
+        # Ensure the query optimizer works as expected by having a high
+        # combinatorial pattern.
+        assert_find(
+            "-{b,c,d}*suffix.a.t{,u}{,v}{,w}{,x}{,y}{,z}",
+            ["-{0}-.a.t".format(c) for c in "bcde"],
+        )
+
         # Globstars
         assert_find("**",
                     metrics)
