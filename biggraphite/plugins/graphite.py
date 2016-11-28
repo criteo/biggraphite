@@ -52,10 +52,11 @@ class Reader(object):
 
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
+        self.__refresh_metric()
         if self._metric and self._metric.retention:
             retention = self._metric.retention
         else:
-            retention = bg_accessor.Retention.from_string("1*60s")
+            retention = bg_accessor.Retention.from_string("60*60s")
 
         return retention.align_time_window(start_time, end_time, now)
 
@@ -75,6 +76,8 @@ class Reader(object):
           A tuple made of (rounded start time, rounded end time, stage precision), points
           Points is a list for which missing points are set to None.
         """
+        self.__refresh_metric()
+
         fetch_start = time.time()
         log.rendering('fetch(%s, %d, %d) - start' % (
             self._metric_name, start_time, end_time))
@@ -84,16 +87,19 @@ class Reader(object):
             now = time.time()
 
         start_time, end_time, stage = self.__get_time_info(start_time, end_time, now)
-
-        # This returns a generator which we can iterate on later.
-        ts_and_points = self._accessor.fetch_points(
-            self._metric, start_time, end_time, stage)
-
         start_step = stage.step(start_time)
+        points_num = stage.step(end_time) - start_step
+
+        if not self._metric:
+            # The metric doesn't exist, let's fail gracefully.
+            ts_and_points = []
+        else:
+            # This returns a generator which we can iterate on later.
+            ts_and_points = self._accessor.fetch_points(
+                self._metric, start_time, end_time, stage)
 
         def read_points():
             read_start = time.time()
-            points_num = stage.step(end_time) - start_step
             # TODO: Consider wrapping an array (using NaN for None) for
             # speed&memory efficiency
             points = [None] * points_num
@@ -121,7 +127,6 @@ class Reader(object):
         Returns:
           A list of interval.Intervals for which we have data.
         """
-        self.__refresh_metric()
         if now is None:
             now = time.time()
         # Call __get_time_info with the widest conceivable range will make it be
