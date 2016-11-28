@@ -899,6 +899,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return self.__glob_names("metrics", glob)
 
     def __glob_names(self, table, glob):
+        if glob == "":
+            return []
+
         components = self.__glob_parser.parse(glob)
         if len(components) > _COMPONENTS_MAX_LEN:
             raise bg_accessor.InvalidGlobError(

@@ -198,6 +198,9 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             matches = sorted(list(self.accessor.glob_metric_names(glob)))
             self.assertEqual(expected_matches, matches)
 
+        # Empty query
+        assert_find("", [])
+
         # Exact matches
         assert_find("a.a", ["a.a"])
         assert_find("A", [])
