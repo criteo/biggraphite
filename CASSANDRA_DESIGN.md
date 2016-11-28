@@ -10,8 +10,21 @@ We recommend using the following settings: [schema.cql](share/schema.cql).
 
 
 # Data tables
-For the full CQL please see [cassandra.py](biggraphite/drivers/cassandra.py).
 
+For the full CQL please see [cassandra.py](biggraphite/drivers/cassandra.py), but it looks like:
+
+```sql
+CREATE TABLE IF NOT EXISTS datapoints_<stage.duration>_<stage.resolution>s (
+  metric uuid,           # Metric UUID.
+  time_start_ms bigint,  # Lower bound for this row.
+  offset smallint,       # time_start_ms + offset * precision = timestamp
+  value double,          # Value for the point.
+  count int,             # If value is sum, divide by count to get the avg.
+  PRIMARY KEY ((metric, time_start_ms), offset)"
+)  WITH CLUSTERING ORDER BY (offset DESC)
+   AND default_time_to_live = <stage.duration>
+   AND memtable_flush_period_in_ms = 300000"
+```
 
 ## Primary key
 
