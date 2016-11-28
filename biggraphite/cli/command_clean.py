@@ -41,7 +41,7 @@ class CommandClean(command.BaseCommand):
             action='store_true'
         )
         parser.add_argument(
-            "--backend-cutoff",
+            "--cutoff",
             help="specify cutoff time in UNIX time",
             type=int,
             default=int(time.time()) - 24 * 60 * 60,
@@ -56,13 +56,14 @@ class CommandClean(command.BaseCommand):
         with accessor as bg_acc:
             if opts.clean_cache:
                 if opts.storage_dir:
-                    logging.info("Cleaning cache from %s", opts.storage_dir)
+                    settings = {"path": opts.storage_dir, "ttl": opts.cutoff}
 
-                    with metadata_cache.DiskCache(bg_acc, {"path": opts.storage_dir}) as cache:
+                    logging.info("Cleaning cache from %s", settings)
+                    with metadata_cache.DiskCache(bg_acc, settings) as cache:
                         cache.clean()
                 else:
                     logging.error('Cannot clean disk cache because storage_dir is empty')
 
             if opts.clean_backend:
-                logging.info("Cleaning backend, removing things before %d", opts.backend_cutoff)
-                bg_acc.clean(opts.backend_cutoff)
+                logging.info("Cleaning backend, removing things before %d", opts.cutoff)
+                bg_acc.clean(opts.cutoff)
