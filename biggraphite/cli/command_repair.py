@@ -64,8 +64,8 @@ class CommandRepair(command.BaseCommand):
         if opts.storage_dir:
             with metadata_cache.DiskCache(accessor, opts.storage_dir) as cache:
                 cache.repair(shard=opts.shard, nshards=opts.nshards,
-                            start_key=opts.start_key,
-                            end_key=opts.end_key)
+                    start_key=opts.start_key,
+                    end_key=opts.end_key)
         else:
             logging.warning('Skipping disk cache repair because storage_dir is empty')
 
