@@ -12,25 +12,27 @@ from biggraphite import metadata_cache
 
 
 
-# TODO Add logging into http response
-# TODO Clean stuff
 class CommandDaemon(command.BaseCommand):
     """Check that you can use BigGraphite."""
 
     NAME = "daemon"
     HELP = "Run clean and repair at a given frequency"
+    _logger_path = "graphite.log"
+
 
     def add_arguments(self, parser):
         """Add custom arguments."""
         parser.add_argument(
             "--clean-frequency",
             help="Start key.",
-            default=24 * 60 * 60
+            default=24 * 60 * 60,
+            type=int
         )
         parser.add_argument(
             "--repair-frequency",
             help="End key.",
-            default=24 * 60 * 60
+            default=24 * 60 * 60,
+            type=int
         )
         parser.add_argument(
             "--listen-on",
@@ -52,22 +54,24 @@ class CommandDaemon(command.BaseCommand):
 
     @run_for_ever
     def __run_repair(self, state, accessor, opts):
-        state.append("Repair started at %s" % time.strftime("%c"))
+        logging.info("Repair started at %s" % time.strftime("%c"))
 
         repair = command_repair.CommandRepair()
         repair.run(accessor, opts)
 
-        state.append("Repair finished at %s" % time.strftime("%c"))
+        logging.info("Repair finished at %s" % time.strftime("%c"))
+        logging.info("Going to sleep for %d seconds " % opts.repair_frequency)
         time.sleep(opts.repair_frequency)
 
     @run_for_ever
     def __run_clean(self, state, accessor, opts):
-        state.append("Clean started at %s" % time.strftime("%c"))
+        logging.info("Clean started at %s" % time.strftime("%c"))
 
         clean = command_clean.CommandClean()
         clean.run(accessor, opts)
 
-        state.append("Clean finished at %s" % time.strftime("%c"))
+        logging.info("Clean finished at %s" % time.strftime("%c"))
+        logging.info("Going to sleep for %d seconds" % opts.clean_frequency)
         time.sleep(opts.clean_frequency)
 
     def __run_webserver(self, workers, accessor, opts):
@@ -82,6 +86,7 @@ class CommandDaemon(command.BaseCommand):
                 request.wfile.write('\n'.join(worker["state"]))
                 request.wfile.write('\n\n')
 
+
         http_handler = SimpleHTTPServer.SimpleHTTPRequestHandler
         http_handler.do_GET = get_handler
 
@@ -91,15 +96,35 @@ class CommandDaemon(command.BaseCommand):
 
         http_server.serve_forever()
 
+    def __logger_init(self, workers):
+
+        class HandlerWrapper(logging.Handler):
+            def emit(self, record):
+                w = workers.get(record.threadName, None)
+                if w == None:
+                    return
+
+                w["state"].append(record.getMessage())
+
+
+        class LoggerWrapper(logging.Logger):
+            def __init__(this, name):
+                super(LoggerWrapper, this).__init__(name)
+                this.addHandler(HandlerWrapper())
+                this.propagate = True
+                this.setLevel(logging.INFO)
+
+
+        logging.setLoggerClass(LoggerWrapper)
+        logging.getLogger().propagate = True
+        logging.getLogger().addHandler(HandlerWrapper())
+
     def run(self, accessor, opts):
         """Run clean and repair at a given frequency.
 
         See command.BaseCommand
         """
 
-        accessor.connect()
-        accessor.connect = lambda: None
-        accessor.close = lambda: None
 
         workers = {
             "repair": { "name": "repair",
@@ -113,6 +138,9 @@ class CommandDaemon(command.BaseCommand):
                         "thread": None
             },
         }
+
+        self.__logger_init(workers)
+        accessor.connect()
 
         # Spawn workers
         for worker in workers.values():
