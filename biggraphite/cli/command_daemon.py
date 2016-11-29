@@ -69,20 +69,21 @@ class CommandDaemon(command.BaseCommand):
         """Add custom arguments."""
         parser.add_argument(
             "--clean-frequency",
-            help="Start key.",
+            help="How much time to wait between two clean.",
             default=24 * 60 * 60,
             type=int
         )
         parser.add_argument(
             "--repair-frequency",
-            help="End key.",
+            help="How much time to wait between two repair.",
             default=24 * 60 * 60,
             type=int
         )
         parser.add_argument(
             "--listen-on",
             help="Port on which the http server will listen",
-            default=8080
+            default=8080,
+            type=int
         )
         command_repair.CommandRepair.add_arguments(command_repair.CommandRepair(), parser)
         command_clean.CommandClean.add_arguments(command_clean.CommandClean(), parser)
