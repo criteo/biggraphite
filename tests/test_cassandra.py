@@ -198,6 +198,9 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             matches = sorted(list(self.accessor.glob_metric_names(glob)))
             self.assertEqual(expected_matches, matches)
 
+        # Empty query
+        assert_find("", [])
+
         # Exact matches
         assert_find("a.a", ["a.a"])
         assert_find("A", [])
@@ -252,6 +255,13 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
                 u"-{b,c,d}*suffix.a.t",
         ]:
             assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
+
+        # Ensure the query optimizer works as expected by having a high
+        # combinatorial pattern.
+        assert_find(
+            "-{b,c,d}*suffix.a.t{,u}{,v}{,w}{,x}{,y}{,z}",
+            ["-{0}-.a.t".format(c) for c in "bcde"],
+        )
 
         # Globstars
         assert_find("**",
