@@ -17,8 +17,6 @@ class CommandDaemon(command.BaseCommand):
 
     NAME = "daemon"
     HELP = "Run clean and repair at a given frequency"
-    _logger_path = "graphite.log"
-
 
     def add_arguments(self, parser):
         """Add custom arguments."""
