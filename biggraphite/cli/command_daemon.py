@@ -1,3 +1,20 @@
+#!/usr/bin/env python
+# Copyright 2016 Criteo
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Daemon Command."""
+
+
 import logging
 import threading
 import time
@@ -5,11 +22,8 @@ import SimpleHTTPServer
 import SocketServer
 import collections
 
-
 from biggraphite.cli import command
 from biggraphite.cli import command_clean, command_repair
-from biggraphite import metadata_cache
-
 
 
 class CommandDaemon(command.BaseCommand):
@@ -40,7 +54,7 @@ class CommandDaemon(command.BaseCommand):
         command_repair.CommandRepair.add_arguments(command_repair.CommandRepair(), parser)
         command_clean.CommandClean.add_arguments(command_clean.CommandClean(), parser)
 
-    def run_for_ever(fn):
+    def __run_for_ever(fn):
         def wrapper(*args, **kwargs):
             while True:
                 try:
@@ -50,7 +64,7 @@ class CommandDaemon(command.BaseCommand):
 
         return wrapper
 
-    @run_for_ever
+    @__run_for_ever
     def __run_repair(self, state, accessor, opts):
         logging.info("Repair started at %s" % time.strftime("%c"))
 
@@ -61,7 +75,7 @@ class CommandDaemon(command.BaseCommand):
         logging.info("Going to sleep for %d seconds " % opts.repair_frequency)
         time.sleep(opts.repair_frequency)
 
-    @run_for_ever
+    @__run_for_ever
     def __run_clean(self, state, accessor, opts):
         logging.info("Clean started at %s" % time.strftime("%c"))
 
@@ -75,7 +89,7 @@ class CommandDaemon(command.BaseCommand):
     def __run_webserver(self, workers, accessor, opts):
         def get_handler(request):
             worker = workers.get(request.path.strip("/"), None)
-            workers_to_display = workers.values() if worker == None else [worker]
+            workers_to_display = [worker] if worker else workers.values()
 
             request.send_response(200)
             request.end_headers()
@@ -83,7 +97,6 @@ class CommandDaemon(command.BaseCommand):
                 request.wfile.write(worker["name"] + " ::::::::::::::::::::::\n")
                 request.wfile.write('\n'.join(worker["state"]))
                 request.wfile.write('\n\n')
-
 
         http_handler = SimpleHTTPServer.SimpleHTTPRequestHandler
         http_handler.do_GET = get_handler
@@ -99,11 +112,10 @@ class CommandDaemon(command.BaseCommand):
         class HandlerWrapper(logging.Handler):
             def emit(self, record):
                 w = workers.get(record.threadName, None)
-                if w == None:
+                if not w:
                     return
 
                 w["state"].append(record.getMessage())
-
 
         class LoggerWrapper(logging.Logger):
             def __init__(this, name):
@@ -111,7 +123,6 @@ class CommandDaemon(command.BaseCommand):
                 this.addHandler(HandlerWrapper())
                 this.propagate = True
                 this.setLevel(logging.INFO)
-
 
         logging.setLoggerClass(LoggerWrapper)
         logging.getLogger().propagate = True
@@ -122,19 +133,16 @@ class CommandDaemon(command.BaseCommand):
 
         See command.BaseCommand
         """
-
-
         workers = {
-            "repair": { "name": "repair",
-                        "fn": lambda x: self.__run_repair(x, accessor, opts),
-                        "state": collections.deque(maxlen=4096),
-                        "thread": None
-            },
-            "clean" : { "name": "clean",
-                        "fn": lambda x: self.__run_clean(x, accessor, opts),
-                        "state": collections.deque(maxlen=4096),
-                        "thread": None
-            },
+            "repair": {"name": "repair",
+                       "fn": lambda x: self.__run_repair(x, accessor, opts),
+                       "state": collections.deque(maxlen=4096),
+                       "thread": None},
+
+            "clean": {"name": "clean",
+                      "fn": lambda x: self.__run_clean(x, accessor, opts),
+                      "state": collections.deque(maxlen=4096),
+                      "thread": None},
         }
 
         self.__logger_init(workers)
