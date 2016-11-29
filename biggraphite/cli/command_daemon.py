@@ -2,7 +2,7 @@
 # Copyright 2016 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
+# you may not use self file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
@@ -24,6 +24,40 @@ import collections
 
 from biggraphite.cli import command
 from biggraphite.cli import command_clean, command_repair
+
+
+def _init_logger(workers):
+    """Init logger to be able to intercept message from each command."""
+    class HandlerWrapper(logging.Handler):
+        def emit(self, record):
+            w = workers.get(record.threadName, None)
+            if not w:
+                return
+
+            w["state"].append(record.getMessage())
+
+    class LoggerWrapper(logging.Logger):
+        def __init__(self, name):
+            super(LoggerWrapper, self).__init__(name)
+            self.addHandler(HandlerWrapper())
+            self.propagate = True
+            self.setLevel(logging.INFO)
+
+    logging.setLoggerClass(LoggerWrapper)
+    logging.getLogger().propagate = True
+    logging.getLogger().addHandler(HandlerWrapper())
+
+
+def _run_for_ever(fn):
+    """Forever call in loop a function."""
+    def wrapper(*args, **kwargs):
+        while True:
+            try:
+                fn(*args, **kwargs)
+            except Exception as e:
+                logging.error(e)
+
+    return wrapper
 
 
 class CommandDaemon(command.BaseCommand):
@@ -54,18 +88,8 @@ class CommandDaemon(command.BaseCommand):
         command_repair.CommandRepair.add_arguments(command_repair.CommandRepair(), parser)
         command_clean.CommandClean.add_arguments(command_clean.CommandClean(), parser)
 
-    def __run_for_ever(fn):
-        def wrapper(*args, **kwargs):
-            while True:
-                try:
-                    fn(*args, **kwargs)
-                except Exception as e:
-                    logging.error(e)
-
-        return wrapper
-
-    @__run_for_ever
-    def __run_repair(self, state, accessor, opts):
+    @_run_for_ever
+    def _run_repair(self, state, accessor, opts):
         logging.info("Repair started at %s" % time.strftime("%c"))
 
         repair = command_repair.CommandRepair()
@@ -75,8 +99,8 @@ class CommandDaemon(command.BaseCommand):
         logging.info("Going to sleep for %d seconds " % opts.repair_frequency)
         time.sleep(opts.repair_frequency)
 
-    @__run_for_ever
-    def __run_clean(self, state, accessor, opts):
+    @_run_for_ever
+    def _run_clean(self, state, accessor, opts):
         logging.info("Clean started at %s" % time.strftime("%c"))
 
         clean = command_clean.CommandClean()
@@ -86,7 +110,7 @@ class CommandDaemon(command.BaseCommand):
         logging.info("Going to sleep for %d seconds" % opts.clean_frequency)
         time.sleep(opts.clean_frequency)
 
-    def __run_webserver(self, workers, accessor, opts):
+    def _run_webserver(self, workers, accessor, opts):
         def get_handler(request):
             worker = workers.get(request.path.strip("/"), None)
             workers_to_display = [worker] if worker else workers.values()
@@ -107,27 +131,6 @@ class CommandDaemon(command.BaseCommand):
 
         http_server.serve_forever()
 
-    def __logger_init(self, workers):
-
-        class HandlerWrapper(logging.Handler):
-            def emit(self, record):
-                w = workers.get(record.threadName, None)
-                if not w:
-                    return
-
-                w["state"].append(record.getMessage())
-
-        class LoggerWrapper(logging.Logger):
-            def __init__(this, name):
-                super(LoggerWrapper, this).__init__(name)
-                this.addHandler(HandlerWrapper())
-                this.propagate = True
-                this.setLevel(logging.INFO)
-
-        logging.setLoggerClass(LoggerWrapper)
-        logging.getLogger().propagate = True
-        logging.getLogger().addHandler(HandlerWrapper())
-
     def run(self, accessor, opts):
         """Run clean and repair at a given frequency.
 
@@ -135,17 +138,17 @@ class CommandDaemon(command.BaseCommand):
         """
         workers = {
             "repair": {"name": "repair",
-                       "fn": lambda x: self.__run_repair(x, accessor, opts),
+                       "fn": lambda x: self._run_repair(x, accessor, opts),
                        "state": collections.deque(maxlen=4096),
                        "thread": None},
 
             "clean": {"name": "clean",
-                      "fn": lambda x: self.__run_clean(x, accessor, opts),
+                      "fn": lambda x: self._run_clean(x, accessor, opts),
                       "state": collections.deque(maxlen=4096),
                       "thread": None},
         }
 
-        self.__logger_init(workers)
+        _init_logger(workers)
         accessor.connect()
 
         # Spawn workers
@@ -155,4 +158,4 @@ class CommandDaemon(command.BaseCommand):
             th.start()
             worker["thread"] = th
 
-        self.__run_webserver(workers, accessor, opts)
+        self._run_webserver(workers, accessor, opts)
