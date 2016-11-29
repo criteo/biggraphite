@@ -41,7 +41,6 @@ def _init_logger(workers):
             super(LoggerWrapper, self).__init__(name)
             self.addHandler(HandlerWrapper())
             self.propagate = True
-            self.setLevel(logging.INFO)
 
     logging.setLoggerClass(LoggerWrapper)
     logging.getLogger().propagate = True
