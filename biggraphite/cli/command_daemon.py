@@ -176,6 +176,7 @@ class CommandDaemon(command.BaseCommand):
         for worker in workers.values():
             logging.info("starting %s worker" % worker["name"])
             th = threading.Thread(name=worker["name"], target=worker["fn"], args=(worker["state"],))
+            th.daemon = True
             th.start()
             worker["thread"] = th
 
