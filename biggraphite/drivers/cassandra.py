@@ -1335,7 +1335,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "DELETE FROM \"%s\".metrics_metadata WHERE name = ? ;" %
             (self.keyspace_metadata))
         delete_metadata.consistency_level = _META_WRITE_CONSISTENCY
-        delete.consistency_level = _DATA_WRITE_CONSISTENCY
+        delete.consistency_level = _META_WRITE_CONSISTENCY
 
         result = self._execute(select)
         for row in result:
