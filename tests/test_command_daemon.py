@@ -19,22 +19,12 @@ import time
 import unittest
 import argparse
 
-from biggraphite.cli import command_repair
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
 from biggraphite.cli import command_daemon
 
 
 class TestCommandDaemon(bg_test_utils.TestCaseWithFakeAccessor):
-
-    def test_run(self):
-        cmd = command_repair.CommandRepair()
-
-        parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
-        cmd.add_arguments(parser)
-        opts = parser.parse_args(['--shard=0', '--nshards=5'])
-        cmd.run(self.accessor, opts)
 
     def test_run_daemon(self):
         self.accessor.drop_all_metrics()
