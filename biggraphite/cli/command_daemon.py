@@ -59,6 +59,48 @@ def _run_for_ever(fn):
     return wrapper
 
 
+def _run_webserver(workers, accessor, opts):
+    def handle_health_request(request):
+        path = request.path.strip("/")
+        if path != "health":
+            return False
+
+        statusOk = all(w["thread"].is_alive() for w in workers.values())
+        if statusOk:
+            request.send_response(200)
+            request.end_headers()
+            request.wfile.write("OK")
+        else:
+            request.send_response(503)
+            request.end_headers()
+            request.wfile.write("FAILURE: some thread(s) are down\n")
+            for worker in workers.values():
+                request.wfile.write("%s is %s\n" % (worker["name"],
+                                                    "OK" if worker["thread"].is_alive() else "KO"))
+
+        return True
+
+    def handle_worker_request(request):
+        worker = workers.get(request.path.strip("/"), None)
+        workers_to_display = [worker] if worker else workers.values()
+
+        request.send_response(200)
+        request.end_headers()
+        for worker in workers_to_display:
+            request.wfile.write(worker["name"] + " ::::::::::::::::::::::\n")
+            request.wfile.write('\n'.join(worker["state"]))
+            request.wfile.write('\n\n')
+
+    http_handler = SimpleHTTPServer.SimpleHTTPRequestHandler
+    http_handler.do_GET = lambda req: handle_health_request(req) or handle_worker_request(req)
+
+    logging.info("Starting http server on %s" % opts.listen_on)
+    SocketServer.TCPServer.allow_reuse_address = True
+    http_server = SocketServer.TCPServer(("", opts.listen_on), http_handler)
+
+    http_server.serve_forever()
+
+
 class CommandDaemon(command.BaseCommand):
     """Check that you can use BigGraphite."""
 
@@ -110,27 +152,6 @@ class CommandDaemon(command.BaseCommand):
         logging.info("Going to sleep for %d seconds" % opts.clean_frequency)
         time.sleep(opts.clean_frequency)
 
-    def _run_webserver(self, workers, accessor, opts):
-        def get_handler(request):
-            worker = workers.get(request.path.strip("/"), None)
-            workers_to_display = [worker] if worker else workers.values()
-
-            request.send_response(200)
-            request.end_headers()
-            for worker in workers_to_display:
-                request.wfile.write(worker["name"] + " ::::::::::::::::::::::\n")
-                request.wfile.write('\n'.join(worker["state"]))
-                request.wfile.write('\n\n')
-
-        http_handler = SimpleHTTPServer.SimpleHTTPRequestHandler
-        http_handler.do_GET = get_handler
-
-        logging.info("Starting http server on %s" % opts.listen_on)
-        SocketServer.TCPServer.allow_reuse_address = True
-        http_server = SocketServer.TCPServer(("", opts.listen_on), http_handler)
-
-        http_server.serve_forever()
-
     def run(self, accessor, opts):
         """Run clean and repair at a given frequency.
 
@@ -158,4 +179,4 @@ class CommandDaemon(command.BaseCommand):
             th.start()
             worker["thread"] = th
 
-        self._run_webserver(workers, accessor, opts)
+        _run_webserver(workers, accessor, opts)
