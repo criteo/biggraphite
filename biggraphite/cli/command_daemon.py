@@ -34,8 +34,9 @@ def _init_logger(workers):
             if not w:
                 return
 
-            w["state"].append("{:<7} {:<20} :: {}".format(record.levelname,
-                                                          record.filename,
+            w["state"].append("{:<7} {:<25} :: {}".format(record.levelname,
+                                                          record.filename + ':'
+                                                          + str(record.lineno),
                                                           record.getMessage()))
 
     class LoggerWrapper(logging.Logger):
