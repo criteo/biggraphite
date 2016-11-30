@@ -17,13 +17,13 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import time
 import itertools
 import logging
 import uuid
 import os
 from os import path as os_path
 import multiprocessing
-from datetime import datetime
 
 import cassandra
 from cassandra import murmur3
@@ -208,7 +208,7 @@ _METADATA_TOUCH_TTL_SEC = 3 * DAY
 _METADATA_CREATION_CQL_METRICS_METADATA = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
     "  name text,"
-    "  updated_on  timestamp,"
+    "  updated_on  timeuuid,"
     "  id uuid,"
     "  config map<text, text>,"
     "  PRIMARY KEY ((name))"
@@ -607,23 +607,24 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__insert_directory_statement.consistency_level = _META_WRITE_CONSISTENCY
         # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_metadata_statement = self.__session.prepare(
-            "SELECT id, config, updated_on FROM \"%s\".metrics_metadata WHERE name = ?;"
+            "SELECT id, config, unixTimestampOf(updated_on)"
+            " FROM \"%s\".metrics_metadata WHERE name = ?;"
             % self.keyspace_metadata
         )
         self.__select_metric_metadata_statement.consistency_level = _META_READ_CONSISTENCY
         self.__update_metric_metadata_statement = self.__session.prepare(
-            "UPDATE \"%s\".metrics_metadata SET config=?, updated_on=toTimestamp(now())"
+            "UPDATE \"%s\".metrics_metadata SET config=?, updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
         )
         self.__update_metric_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
         self.__touch_metrics_metadata_statement = self.__session.prepare(
-            "UPDATE \"%s\".metrics_metadata SET updated_on=toTimestamp(now())"
+            "UPDATE \"%s\".metrics_metadata SET updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
         )
         self.__touch_metrics_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
         self.__insert_metrics_metadata_statement = self.__session.prepare(
             "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
-            " VALUES (?, toTimestamp(now()), ?, ?);" % self.keyspace_metadata
+            " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
         )
         self.__insert_metrics_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
 
@@ -869,7 +870,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return list(self.glob_directory_names(directory))
 
     def __touch_metadata_on_need(self, metric_name, updated_on):
-        if (datetime.today() - updated_on).total_seconds() >= self.__metadata_touch_ttl_sec:
+        if (int(time.time()) - int(updated_on / 1000)) >= self.__metadata_touch_ttl_sec:
             self.touch_metric(metric_name)
 
     def get_metric(self, metric_name):
@@ -1321,7 +1322,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # statements
         select = self.__session.prepare(
             "SELECT name FROM \"%s\".metrics_metadata"
-            " WHERE updated_on <= %d;" %
+            " WHERE updated_on <= maxTimeuuid(%d);" %
             (self.keyspace_metadata, cutoff))
         select.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
@@ -1333,6 +1334,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         delete_metadata = self.__session.prepare(
             "DELETE FROM \"%s\".metrics_metadata WHERE name = ? ;" %
             (self.keyspace_metadata))
+        delete_metadata.consistency_level = cassandra.ConsistencyLevel.ALL
+        delete.consistency_level = cassandra.ConsistencyLevel.ALL
 
         result = self._execute(select)
         for row in result:
