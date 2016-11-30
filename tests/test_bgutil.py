@@ -14,14 +14,11 @@
 # limitations under the License.
 from __future__ import print_function
 
-import multiprocessing
-import time
 import unittest
 from mock import patch
 from StringIO import StringIO
 
 from biggraphite.cli import bgutil
-from biggraphite.cli import command_daemon
 from biggraphite import test_utils as bg_test_utils
 
 
@@ -38,25 +35,6 @@ class TestBgutil(bg_test_utils.TestCaseWithFakeAccessor):
         output = mock_stdout.getvalue()
         for metric in self.metrics:
             self.assertIn(metric, output)
-
-    def test_run_daemon(self):
-        self.accessor.drop_all_metrics()
-
-        cmd = filter(lambda x: type(x) is command_daemon.CommandDaemon, bgutil.COMMANDS)[0]
-        cmd._run_webserver = lambda x, y, z: time.sleep(555)
-
-        def run():
-            bgutil.main(['--driver=memory', '--cache=memory',
-                         'daemon',
-                         '--clean-backend', '--clean-cache', '--cutoff=12'],
-                        self.accessor)
-
-        p = multiprocessing.Process(target=run)
-
-        p.start()
-        time.sleep(2)
-        assert(p.is_alive())
-        p.terminate()
 
 
 if __name__ == "__main__":
