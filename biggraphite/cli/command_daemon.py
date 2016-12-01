@@ -34,7 +34,10 @@ def _init_logger(workers):
             if not w:
                 return
 
-            w["state"].append(record.getMessage())
+            w["state"].append("{:<7} {:<25} :: {}".format(record.levelname,
+                                                          record.filename + ':'
+                                                          + str(record.lineno),
+                                                          record.getMessage()))
 
     class LoggerWrapper(logging.Logger):
         def __init__(self, name):
@@ -176,6 +179,7 @@ class CommandDaemon(command.BaseCommand):
         for worker in workers.values():
             logging.info("starting %s worker" % worker["name"])
             th = threading.Thread(name=worker["name"], target=worker["fn"], args=(worker["state"],))
+            th.daemon = True
             th.start()
             worker["thread"] = th
 
