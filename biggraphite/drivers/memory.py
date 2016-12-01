@@ -197,9 +197,9 @@ class _MemoryAccessor(bg_accessor.Accessor):
         log.warn("%s is not implemented" % self.touch_metric.__name__)
         pass
 
-    def clean(self, cutoff=None):
+    def clean(self, expiration_age=None):
         """See bg_accessor.Accessor."""
-        super(_MemoryAccessor, self).clean(cutoff)
+        super(_MemoryAccessor, self).clean(expiration_age)
 
         # TODO Implements the function
         log.warn("%s is not implemented" % self.clean.__name__)

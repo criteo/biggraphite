@@ -1303,20 +1303,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for statement, args in queries:
             self._execute(statement, args)
 
-    def clean(self, cutoff=None):
+    def clean(self, expiration_age=None):
         """See bg_accessor.Accessor.
 
         Args:
             cutoff: UNIX time in seconds. Rows older than it should be deleted.
         """
-        super(_CassandraAccessor, self).clean(cutoff)
+        super(_CassandraAccessor, self).clean(expiration_age)
 
-        if not cutoff:
+        if not expiration_age:
             log.warn("You must specify a cutoff time for cleanup")
             return
 
         # timestamp format in Cassandra is in milliseconds
-        cutoff = int(cutoff) * 1000
+        cutoff = (int(time.time()) - expiration_age) * 1000
         log.info("Cleaning with cutoff time %d", cutoff)
 
         # statements

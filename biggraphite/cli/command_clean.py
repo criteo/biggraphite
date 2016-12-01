@@ -16,7 +16,6 @@
 
 
 import logging
-import time
 
 from biggraphite.cli import command
 from biggraphite import metadata_cache
@@ -41,10 +40,11 @@ class CommandClean(command.BaseCommand):
             action='store_true'
         )
         parser.add_argument(
-            "--cutoff",
-            help="specify cutoff time in UNIX time",
+            "--expiration-age",
+            help="Specify the age of metrics in seconds to evict"
+                 " (ie: 3600 to delete older than one hour metrics)",
             type=int,
-            default=int(time.time()) - 24 * 60 * 60,
+            default=24 * 60 * 60,
             action='store'
         )
 
@@ -56,7 +56,7 @@ class CommandClean(command.BaseCommand):
         with accessor as bg_acc:
             if opts.clean_cache:
                 if opts.storage_dir:
-                    settings = {"path": opts.storage_dir, "ttl": opts.cutoff}
+                    settings = {"path": opts.storage_dir, "ttl": opts.expiration_age}
 
                     logging.info("Cleaning cache from %s", settings)
                     with metadata_cache.DiskCache(bg_acc, settings) as cache:
@@ -65,5 +65,5 @@ class CommandClean(command.BaseCommand):
                     logging.error('Cannot clean disk cache because storage_dir is empty')
 
             if opts.clean_backend:
-                logging.info("Cleaning backend, removing things before %d", opts.cutoff)
-                bg_acc.clean(opts.cutoff)
+                logging.info("Cleaning backend, removing things before %d", opts.expiration_age)
+                bg_acc.clean(opts.expiration_age)

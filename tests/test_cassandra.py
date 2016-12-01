@@ -443,7 +443,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(self.accessor.has_metric(metric2.name), True)
 
         # set cutoff time in the future to delete all created metrics
-        cutoff = int(time.time() + 3600)
+        cutoff = -3600
         self.accessor.clean(cutoff)
 
         # Check that the metrics are correctly deleted
@@ -463,8 +463,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(self.accessor.has_metric(metric1.name), True)
         self.assertEquals(self.accessor.has_metric(metric2.name), True)
 
-        # set cutoff time in the pass to delete nothing
-        cutoff = int(time.time() - 3600)
+        # set cutoff time in the past to delete nothing
+        cutoff = 3600
         self.accessor.clean(cutoff)
 
         # Check that the metrics still exist after the cleanup

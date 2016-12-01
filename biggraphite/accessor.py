@@ -786,7 +786,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def clean(self, cutoff=None):
+    def clean(self, expiration_age=None):
         """Remove metrics that have expired (not used anymore)."""
         self._check_connected()
 
