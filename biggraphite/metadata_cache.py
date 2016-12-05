@@ -138,7 +138,7 @@ class Cache(object):
         pass
 
     @abc.abstractmethod
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache.
 
         During the repair the keyspace is split in nshards and
@@ -217,7 +217,7 @@ class MemoryCache(Cache):
         """Automatically cleaned by cachetools."""
         pass
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache."""
         i = 0
         for key in self.__cache:
@@ -236,6 +236,11 @@ class MemoryCache(Cache):
                     "Removing invalid key '%s': expected: %s cached: %s" % (
                         key, expected_metric, metric))
                 del self.__cache[key]
+
+            if callback_on_progress:
+                done = key - start_key if start_key else key
+                total = end_key - start_key if start_key and end_key else None
+                callback_on_progress(done, total)
 
 
 class DiskCache(Cache):
@@ -465,7 +470,7 @@ class DiskCache(Cache):
                                 key, timestamp))
                         txn.delete(key=key)
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache.
 
         During the repair the keyspace is split in nshards and
@@ -478,6 +483,7 @@ class DiskCache(Cache):
           end_key: string, stop at key < end_key.
           shard: int, shard to repair.
           nshards: int, number of shards.
+          callback_on_progress: Take 2 parameters, current key, last_key to check
         """
         i = 0
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
@@ -506,3 +512,8 @@ class DiskCache(Cache):
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
                     txn.delete(key=key)
+
+                if callback_on_progress:
+                    done = key - start_key if start_key else key
+                    total = end_key - start_key if start_key and end_key else None
+                    callback_on_progress(done, total)

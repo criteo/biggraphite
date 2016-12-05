@@ -69,6 +69,11 @@ class CommandRepair(command.BaseCommand):
         else:
             logging.warning('Skipping disk cache repair because storage_dir is empty')
 
+        def log_progress(done, total):
+            logging.info("Repair done at %d %%"
+                         % (done * 100 / total))
+
         accessor.repair(shard=opts.shard, nshards=opts.nshards,
                         start_key=opts.start_key,
-                        end_key=opts.end_key)
+                        end_key=opts.end_key,
+                        callback_on_progress=log_progress)
