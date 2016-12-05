@@ -751,7 +751,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Repair potential corruptions in the database.
 
         This operation can potentially be very slow.

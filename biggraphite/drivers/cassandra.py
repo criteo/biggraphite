@@ -63,6 +63,8 @@ DEFAULT_BULKIMPORT = False
 DEFAULT_MAX_QUERIES_PER_PATTERN = 42
 DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN = 4
 
+DIRECTORY_SEPARATOR = '.'
+
 OPTIONS = {
     "keyspace": str,
     "contact_points": _utils.list_from_str,
@@ -758,13 +760,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # -2 skips leaf (metric name) and _LAST_COMPONENT marker.
         for component in components[:-2]:
             path.append(component)
-            name = '.'.join(path)
+            name = DIRECTORY_SEPARATOR.join(path)
             path_components = path + [_LAST_COMPONENT]
             padding_len = _COMPONENTS_MAX_LEN - len(path_components)
             padding = [c_query.UNSET_VALUE] * padding_len
             queries.append((
                 self.__insert_directory_statement,
-                [name, parent + '.'] + path_components + padding,
+                [name, parent + DIRECTORY_SEPARATOR] + path_components + padding,
             ))
             parent = name
 
@@ -1093,7 +1095,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 # XXX(d.forest): do not try to optimize by passing the raw glob
                 #                and using it here; because this is invalid in
                 #                cases where the glob contains braces.
-                name = '.'.join(itertools.chain.from_iterable(components[:-1]))
+                name = DIRECTORY_SEPARATOR.join(itertools.chain.from_iterable(components[:-1]))
                 return "%s WHERE name = %s %s;" % (
                     query_select,
                     c_encoder.cql_quote(name),
@@ -1111,7 +1113,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     allow_filtering = ''
 
                 parent = itertools.chain.from_iterable(components[:-2])
-                parent = '.'.join(parent) + '.'
+                parent = DIRECTORY_SEPARATOR.join(parent) + DIRECTORY_SEPARATOR
                 return "%s WHERE parent = %s %s %s %s;" % (
                     query_select,
                     c_encoder.cql_quote(parent),
@@ -1195,27 +1197,34 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_failure,
                 )
 
-    def repair(self, batch_size=1000, max_concurrent_reqs=1000, start_at_percent=0,
-               callback_on_repair=None):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
         tokens directly.
         """
-        super(_CassandraAccessor, self).repair()
+        super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
 
         partitioner = self.__cluster.metadata.partitioner
         if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
             log.warn("Partitioner '%s' not supported for repairs" % partitioner)
             return
 
-        start_token = murmur3.INT64_MIN
-        stop_token = murmur3.INT64_MAX
+        start_token = murmur3.INT64_MIN if not start_key else int(start_key)
+        stop_token = murmur3.INT64_MAX if not end_key else int(end_key)
+        batch_size = 1000
+        max_concurrent_reqs = 1000
+
+        if nshards > 1:
+            tokens = stop_token - start_token
+            my_tokens = tokens / nshards
+            start_token += my_tokens * shard
+            stop_token = start_token + my_tokens
 
         dir_query = self.__session.prepare("SELECT name, token(name) FROM \"%s\".directories"
                                            " WHERE token(name) > ? LIMIT %d;"
                                            % (self.keyspace_metadata, batch_size))
-        dir_query.consistency_level = cassandra.ConsistencyLevel.QUORUM
+        dir_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         dir_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         dir_query.request_timeout = 60
 
@@ -1223,52 +1232,52 @@ class _CassandraAccessor(bg_accessor.Accessor):
                                                      " WHERE name = ? LIMIT 1;"
                                                      % self.keyspace_metadata)
         # force read repair to occur in cassandra
-        has_directory_query.consistency_level = cassandra.ConsistencyLevel.QUORUM
+        has_directory_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         has_directory_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         has_directory_query.request_timeout = 60
 
-        token = start_token + int((stop_token - start_token) * (start_at_percent / 100.0))
+        def directories_to_check(result):
+            for row in result:
+                name, next_token = row
+                parent_dir = name.rpartition(".")[0]
+                if parent_dir:
+                    yield has_directory_query, (parent_dir,)
+
+        def directories_to_create(result):
+            for response in result:
+                if not response.success or not list(response.result_or_exc):
+                    dir_name = response.result_or_exc.response_future.query.values[0]
+                    log.info("Scheduling repair for '%s'" % dir_name)
+                    components = self._components_from_name(dir_name + DIRECTORY_SEPARATOR + '_')
+                    queries = self._create_parent_dirs_queries(components)
+                    for query in queries:
+                        yield query
+
+        log.info("Starting repair")
+        token = start_token
         while token < stop_token:
             result = self._execute(dir_query, (token,))
             if len(result.current_rows) == 0:
                 break
 
-            # Check that directories actually exist
-            check_parent_dir_queries = []
-            for row in result:
-                name, next_token = row
-                parent_dir = name.rpartition(".")[0]
-                if parent_dir:
-                    check_parent_dir_queries.append((has_directory_query, (parent_dir,)))
-
-                # Update token range for the next iteration
-                token = next_token
+            # Update token range for the next iteration
+            token = result[-1][1]
 
             # Compute the progress so far over the total search space
             progress = 100 - ((stop_token - token) * 100 / (stop_token - start_token))
 
-            # Use generator here to keep the order of the requests,
-            # so we can iter over the two in parallel
-            parent_dirs = c_concurrent.execute_concurrent(self.__session, check_parent_dir_queries,
+            parent_dirs = c_concurrent.execute_concurrent(self.__session,
+                                                          directories_to_check(result),
                                                           concurrency=max_concurrent_reqs,
                                                           raise_on_first_error=False,
                                                           results_generator=True)
-            queries = []
-            for response, req in itertools.izip(parent_dirs, check_parent_dir_queries):
-                if not response.success or not list(response.result_or_exc):
-                    dir_name = req[1][0]
-                    log.info("Scheduling repair for '%s'" % dir_name)
-                    components = self._components_from_name(dir_name)
-                    queries.extend(self._create_parent_dirs_queries(components))
 
-            if queries:
-                ret = c_concurrent.execute_concurrent(self.__session, queries,
-                                                      concurrency=max_concurrent_reqs,
-                                                      raise_on_first_error=False)
-                if callback_on_repair:
-                    callback_on_repair(ret, progress)
-
-            log.info("Repair done at %d %%" % progress)
+            c_concurrent.execute_concurrent(self.__session,
+                                            directories_to_create(parent_dirs),
+                                            concurrency=max_concurrent_reqs,
+                                            raise_on_first_error=False)
+            if callback_on_progress:
+                callback_on_progress(progress, result[0][1], result[-1][1])
 
     def shutdown(self):
         """See bg_accessor.Accessor."""
