@@ -138,7 +138,7 @@ class Cache(object):
         pass
 
     @abc.abstractmethod
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache.
 
         During the repair the keyspace is split in nshards and
@@ -217,8 +217,14 @@ class MemoryCache(Cache):
         """Automatically cleaned by cachetools."""
         pass
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache."""
+        def get_progress(key, start_key, end_key):
+            if not start_key or not end_key:
+                return None
+
+            return 100 - ((end_key - key) * 100 / (end_key - start_key))
+
         i = 0
         for key in self.__cache:
             if start_key is not None and key < start_key:
@@ -236,6 +242,9 @@ class MemoryCache(Cache):
                     "Removing invalid key '%s': expected: %s cached: %s" % (
                         key, expected_metric, metric))
                 del self.__cache[key]
+
+            if callback_on_progress:
+                callback_on_progress(get_progress(key, start_key, end_key), key, end_key)
 
 
 class DiskCache(Cache):
@@ -465,7 +474,7 @@ class DiskCache(Cache):
                                 key, timestamp))
                         txn.delete(key=key)
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache.
 
         During the repair the keyspace is split in nshards and
@@ -478,7 +487,15 @@ class DiskCache(Cache):
           end_key: string, stop at key < end_key.
           shard: int, shard to repair.
           nshards: int, number of shards.
+          callback_on_progress: Take 3 parameters, progress (None for now),
+                                current key, last_key to check
         """
+        def get_progress(key, start_key, end_key):
+            if not start_key or not end_key:
+                return None
+
+            return 100 - ((end_key - key) * 100 / (end_key - start_key))
+
         i = 0
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
             cursor = txn.cursor()
@@ -506,3 +523,6 @@ class DiskCache(Cache):
                         "Removing invalid key '%s': expected: %s cached: %s" % (
                             key, expected_value, value))
                     txn.delete(key=key)
+
+                if callback_on_progress:
+                    callback_on_progress(get_progress(key, start_key, end_key), key, end_key)
