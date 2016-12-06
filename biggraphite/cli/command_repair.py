@@ -16,9 +16,14 @@
 
 
 import logging
+import os
+import sys
+import progressbar
 
 from biggraphite.cli import command
 from biggraphite import metadata_cache
+
+_DEV_NULL = open(os.devnull, "w")
 
 
 class CommandRepair(command.BaseCommand):
@@ -27,11 +32,19 @@ class CommandRepair(command.BaseCommand):
     NAME = "repair"
     HELP = "Run some repairs."
 
+    def __init__(self):
+        """Constructor."""
+        self.pbar = None
+
     def add_arguments(self, parser):
         """Add custom arguments."""
         parser.add_argument(
             "--start-key",
             help="Start key.",
+        )
+        parser.add_argument(
+            "--quiet", action="store_const", default=False, const=True,
+            help="Show no output unless there are problems."
         )
         parser.add_argument(
             "--end-key",
@@ -50,7 +63,7 @@ class CommandRepair(command.BaseCommand):
             default=1,
         )
 
-    def run(self, accessor, opts):
+    def run(self, accessor, opts, on_progress=None):
         """Run some repairs.
 
         See command.BaseCommand
@@ -69,11 +82,23 @@ class CommandRepair(command.BaseCommand):
         else:
             logging.warning('Skipping disk cache repair because storage_dir is empty')
 
-        def log_progress(done, total):
-            logging.info("Repair done at %d %%"
-                         % (done * 100 / total))
+        out_fd = sys.stderr
+        if opts.quiet:
+            out_fd = _DEV_NULL
+
+        if self.pbar is None:
+            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=True)
+        self.pbar.start()
+
+        if on_progress is None:
+            def _on_progress(done, total):
+                self.pbar.max_value = total
+                self.pbar.update(done)
+            on_progress = _on_progress
 
         accessor.repair(shard=opts.shard, nshards=opts.nshards,
                         start_key=opts.start_key,
                         end_key=opts.end_key,
-                        callback_on_progress=log_progress)
+                        callback_on_progress=on_progress)
+
+        self.pbar.finish()
