@@ -311,6 +311,11 @@ class DiskCache(Cache):
             max_spare_txns=128,
         )
 
+        # Clean stale readers
+        # This can happen if a previous instance crashed or was killed abruptly
+        cleaned_stale_reader = self.__env.reader_check()
+        logging.info("%d stale readers cleared." % cleaned_stale_reader)
+
         databases = {}
         for name in self.__databases:
             databases[name] = self.__env.open_db(name)
