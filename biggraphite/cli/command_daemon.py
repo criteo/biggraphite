@@ -21,6 +21,8 @@ import time
 import SimpleHTTPServer
 import SocketServer
 import collections
+import progressbar
+import StringIO
 
 from biggraphite.cli import command
 from biggraphite.cli import command_clean, command_repair
@@ -34,10 +36,9 @@ def _init_logger(workers):
             if not w:
                 return
 
-            w["state"].append("{:<7} {:<25} :: {}".format(record.levelname,
-                                                          record.filename + ':'
-                                                          + str(record.lineno),
-                                                          record.getMessage()))
+            w["output"].append("{:<7} {:<25} :: {}".format(
+                record.levelname, record.filename + ':' + str(record.lineno),
+                record.getMessage()))
 
     class LoggerWrapper(logging.Logger):
         def __init__(self, name):
@@ -57,7 +58,7 @@ def _run_for_ever(fn):
             try:
                 fn(*args, **kwargs)
             except Exception as e:
-                logging.error(e)
+                logging.exception(e)
 
     return wrapper
 
@@ -91,7 +92,9 @@ def _run_webserver(workers, accessor, opts):
         request.end_headers()
         for worker in workers_to_display:
             request.wfile.write(worker["name"] + " ::::::::::::::::::::::\n")
-            request.wfile.write('\n'.join(worker["state"]))
+            if worker["status"]:
+                request.wfile.write('\nStatus: ' + worker["status"] + '\n')
+            request.wfile.write('\n'.join(worker["output"]))
             request.wfile.write('\n\n')
 
     http_handler = SimpleHTTPServer.SimpleHTTPRequestHandler
@@ -134,18 +137,28 @@ class CommandDaemon(command.BaseCommand):
         command_clean.CommandClean.add_arguments(command_clean.CommandClean(), parser)
 
     @_run_for_ever
-    def _run_repair(self, state, accessor, opts):
+    def _run_repair(self, worker, accessor, opts):
         logging.info("Repair started at %s" % time.strftime("%c"))
 
+        fake_stderr = StringIO.StringIO()
+        pbar = progressbar.ProgressBar(fd=fake_stderr)
+
+        def on_progress(done, total):
+            fake_stderr.seek(0)
+            pbar.max_value = total
+            pbar.update(done)
+            worker["status"] = fake_stderr.getvalue()
+
         repair = command_repair.CommandRepair()
-        repair.run(accessor, opts)
+        repair.pbar = pbar
+        repair.run(accessor, opts, on_progress=on_progress)
 
         logging.info("Repair finished at %s" % time.strftime("%c"))
         logging.info("Going to sleep for %d seconds " % opts.repair_frequency)
         time.sleep(opts.repair_frequency)
 
     @_run_for_ever
-    def _run_clean(self, state, accessor, opts):
+    def _run_clean(self, worker, accessor, opts):
         logging.info("Clean started at %s" % time.strftime("%c"))
 
         clean = command_clean.CommandClean()
@@ -163,12 +176,14 @@ class CommandDaemon(command.BaseCommand):
         workers = {
             "repair": {"name": "repair",
                        "fn": lambda x: self._run_repair(x, accessor, opts),
-                       "state": collections.deque(maxlen=4096),
+                       "output": collections.deque(maxlen=4096),
+                       "status": "",
                        "thread": None},
 
             "clean": {"name": "clean",
                       "fn": lambda x: self._run_clean(x, accessor, opts),
-                      "state": collections.deque(maxlen=4096),
+                      "output": collections.deque(maxlen=4096),
+                      "status": "",
                       "thread": None},
         }
 
@@ -178,7 +193,7 @@ class CommandDaemon(command.BaseCommand):
         # Spawn workers
         for worker in workers.values():
             logging.info("starting %s worker" % worker["name"])
-            th = threading.Thread(name=worker["name"], target=worker["fn"], args=(worker["state"],))
+            th = threading.Thread(name=worker["name"], target=worker["fn"], args=(worker,))
             th.daemon = True
             th.start()
             worker["thread"] = th

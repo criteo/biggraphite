@@ -1262,7 +1262,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             # Update token range for the next iteration
             token = result[-1][1]
-
             parent_dirs = self._execute_concurrent(directories_to_check(result),
                                                    concurrency=max_concurrent_reqs,
                                                    raise_on_first_error=False,
