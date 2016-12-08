@@ -700,7 +700,7 @@ class Accessor(object):
 
     @abc.abstractmethod
     def background(self):
-        """Performs background operations, should be called every minute."""
+        """Perform background operations, should be called every minute."""
         pass
 
     @abc.abstractmethod
