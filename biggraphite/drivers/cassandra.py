@@ -420,13 +420,15 @@ class _LazyPreparedStatements(object):
         elif _COMPACTION_STRATEGY == "TimeWindowCompactionStrategy":
             # TODO(c.chary): Tweak this once we have an actual 3.9 setup.
 
-            window_size = max(
+            window_size = min(
                 # Documentation says that we should no more than 50 buckets.
                 time_to_live / 50,
-                # But we don't want multiple sstables per hour.
-                HOUR,
-                # Also try to optimize for reads
-                fresh_time
+                max(
+                    # But we don't want multiple sstables per hour.
+                    HOUR,
+                    # Also try to optimize for reads
+                    fresh_time
+                )
             )
 
             # Make it readable.

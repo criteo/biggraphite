@@ -170,8 +170,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(
             options['compaction']['class'],
             'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
-        self.assertEquals(options['compaction']['compaction_window_unit'], 'DAYS')
-        self.assertEquals(options['compaction']['compaction_window_size'], '1')
+        self.assertEquals(options['compaction']['compaction_window_unit'], 'HOURS')
+        self.assertEquals(options['compaction']['compaction_window_size'], '3')
         self.assertEquals(options['default_time_to_live'], 605700)
 
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
