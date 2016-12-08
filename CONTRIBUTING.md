@@ -107,8 +107,8 @@ Change (or append) the following settings to the `carbon.conf` file:
 [cache]
 BG_CASSANDRA_KEYSPACE = biggraphite
 BG_CASSANDRA_CONTACT_POINTS = 127.0.0.1
-BG_DRIVER = 'cassandra'
-BG_CACHE = 'memory'
+BG_DRIVER = cassandra
+BG_CACHE = memory
 DATABASE = biggraphite
 STORAGE_DIR = /tmp
 ```
