@@ -756,8 +756,8 @@ class Accessor(object):
 
         This operation can potentially be very slow.
 
-        During the repair the keyspace is split in nshards and
-        this function will only take car of 1/n th of the data
+        During the repair the keyspace is split in n shards and
+        this function will only take care of 1/n th of the data
         as specified by shard. This allows the caller to parallelize
         the repair if needed.
 

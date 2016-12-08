@@ -140,7 +140,7 @@ class TestCaseWithTempDir(unittest.TestCase):
     """A TestCase with a temporary directory."""
 
     def setUp(self):
-        """Create a new temporary diractory in self.tempdir."""
+        """Create a new temporary directory in self.tempdir."""
         super(TestCaseWithTempDir, self).setUp()
         self.tempdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tempdir)
