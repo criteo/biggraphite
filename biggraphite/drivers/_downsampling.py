@@ -41,6 +41,7 @@ class Downsampler(object):
         """Default constructor."""
         self._capacity = capacity
         self._names_to_aggregates = {}
+        self._last_purge = 0
 
     def feed(self, metric, points):
         """Feed the downsampler and produce points.
@@ -66,6 +67,11 @@ class Downsampler(object):
 
     def purge(self, now=time.time()):
         """Purge unused data."""
+        print (now - self._last_purge)
+        if now - self._last_purge <= self.PURGE_EVERY_S:
+            return
+
+        self._last_purge = now
         for metric_name in list(self._names_to_aggregates):
             aggregate = self._names_to_aggregates[metric_name]
             if aggregate.obsolete(now):

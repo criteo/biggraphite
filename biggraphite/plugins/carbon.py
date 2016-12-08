@@ -55,13 +55,20 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._sync_countdown = 0
 
         # Flush before shutdown.
-        def flush():
+        def _flush():
             log.cache("flushing the accessor")
             if self._accessor:
                 self.accessor().flush()
-        from twisted.internet import reactor
-        reactor.addSystemEventTrigger('before', 'shutdown', flush)
-        # TODO(c.chary): schedule other periodic actions here.
+
+        def _background():
+            log.cache("background operations")
+            if self._accessor:
+                self.accessor().background()
+
+        from twisted.internet import reactor, task
+        reactor.addSystemEventTrigger('before', 'shutdown', _flush)
+        self._lc = task.LoopingCall(_background)
+        self._lc.start(60)
 
     def accessor(self):
         if not self._accessor:

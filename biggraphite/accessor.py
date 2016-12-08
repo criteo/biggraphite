@@ -699,6 +699,11 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
+    def background(self):
+        """Performs background operations, should be called every minute."""
+        pass
+
+    @abc.abstractmethod
     def flush(self):
         """Flush any internal buffers."""
         pass

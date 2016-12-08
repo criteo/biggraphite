@@ -81,6 +81,13 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         pass
 
+    def background(self):
+        """Perform periodic background operations."""
+        if self.__downsampler:
+            self.__downsampler.purge()
+        if self.__delayed_writer:
+            self.__delayed_writer.write_some()
+
     def flush(self):
         """Flush any internal buffers."""
         if self.__delayed_writer:

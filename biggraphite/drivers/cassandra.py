@@ -1155,6 +1155,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             query_limit
         )
 
+    def background(self):
+        """Perform periodic background operations."""
+        if self.__downsampler:
+            self.__downsampler.purge()
+        if self.__delayed_writer:
+            self.__delayed_writer.write_some()
+
     def flush(self):
         """Flush any internal buffers."""
         if self.__delayed_writer:
