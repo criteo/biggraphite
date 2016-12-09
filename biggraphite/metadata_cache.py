@@ -311,8 +311,9 @@ class DiskCache(Cache):
             max_spare_txns=128,
         )
 
-        # Clean stale readers
-        # This can happen if a previous instance crashed or was killed abruptly
+        # Clean stale readers. This can be needed if a previous instance crashed or
+        # was killed abruptly (HUP, TERM, KILL...) and the lock file was always used
+        # typically by other UWSGI workers.
         cleaned_stale_reader = self.__env.reader_check()
         logging.info("%d stale readers cleared." % cleaned_stale_reader)
 
