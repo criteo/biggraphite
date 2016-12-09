@@ -67,7 +67,6 @@ class Downsampler(object):
 
     def purge(self, now=time.time()):
         """Purge unused data."""
-
         if now - self._last_purge <= self.PURGE_EVERY_S:
             return
 

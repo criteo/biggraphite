@@ -140,7 +140,6 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
     def test_create_databapoints_table_twcs(self):
         """Validate that we can create table."""
-
         min_version = version.LooseVersion('3.8')
         if self._get_version() < min_version:
             print('Skipping TWCS test, incompatible version')
