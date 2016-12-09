@@ -196,6 +196,8 @@ class TestDownsampler(unittest.TestCase):
         points = [
             (1, 1),
         ]
+        self.ds.PURGE_EVERY_S = 0
+
         self.ds.feed(self.metric_sum, points)
 
         # Should no remove anything.

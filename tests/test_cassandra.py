@@ -16,6 +16,7 @@ from __future__ import print_function
 
 import unittest
 import time
+from distutils import version
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
@@ -88,10 +89,20 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             return string
         return string[:string.rindex(".")]
 
+    def _get_version(self):
+        for host in self.cluster.metadata.all_hosts():
+            return version.LooseVersion(host.release_version)
+        return None
+
     def test_create_databapoints_table_dtcs(self):
         """Validate that we can create table."""
         orig_cs = bg_cassandra._COMPACTION_STRATEGY
         bg_cassandra._COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
+
+        max_version = version.LooseVersion('3.8')
+        if self._get_version() > max_version:
+            print('Skipping DTCS test, incompatible version')
+            return
 
         self._reset_keyspace(self.session, self.KEYSPACE)
 
@@ -129,15 +140,10 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
     def test_create_databapoints_table_twcs(self):
         """Validate that we can create table."""
-        from distutils import version
-
         min_version = version.LooseVersion('3.8')
-        for host in self.cluster.metadata.all_hosts():
-            host_version = version.LooseVersion(host.release_version)
-            if host_version < min_version:
-                print('Skipping TWCS test, incompatible version "%s"'
-                      % host.release_version)
-                return
+        if self._get_version() < min_version:
+            print('Skipping TWCS test, incompatible version')
+            return
 
         orig_cs = bg_cassandra._COMPACTION_STRATEGY
         bg_cassandra._COMPACTION_STRATEGY = "TimeWindowCompactionStrategy"
@@ -170,8 +176,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(
             options['compaction']['class'],
             'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
-        self.assertEquals(options['compaction']['compaction_window_unit'], 'DAYS')
-        self.assertEquals(options['compaction']['compaction_window_size'], '1')
+        self.assertEquals(options['compaction']['compaction_window_unit'], 'HOURS')
+        self.assertEquals(options['compaction']['compaction_window_size'], '3')
         self.assertEquals(options['default_time_to_live'], 605700)
 
         bg_cassandra._COMPACTION_STRATEGY = orig_cs

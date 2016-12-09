@@ -363,6 +363,12 @@ class _LazyPreparedStatements(object):
         self.__stage_to_select = {}
         self.__data_files = {}
 
+        release_version = session.get_pools()[0].host.release_version
+        if release_version >= '3.9':
+            self._COMPACTION_STRATEGY = 'TimeWindowCompactionStrategy'
+        else:
+            self._COMPACTION_STRATEGY = _COMPACTION_STRATEGY
+
     def __bulkimport_filename(self, filename):
         current = multiprocessing.current_process()
         uid = str(current._identity[0]) if len(current._identity) else "0"
@@ -398,13 +404,13 @@ class _LazyPreparedStatements(object):
         # Estimate the age of the oldest data we still expect to read.
         fresh_time = stage.precision * _EXPECTED_POINTS_PER_READ
 
-        cs_template = _DATAPOINTS_CREATION_CQL_CS_TEMPLATE.get(_COMPACTION_STRATEGY)
+        cs_template = _DATAPOINTS_CREATION_CQL_CS_TEMPLATE.get(self._COMPACTION_STRATEGY)
         if not cs_template:
             raise InvalidArgumentError(
-                "Unknown compaction strategy '%s'" % _COMPACTION_STRATEGY)
+                "Unknown compaction strategy '%s'" % self._COMPACTION_STRATEGY)
         cs_kwargs = {}
 
-        if _COMPACTION_STRATEGY == "DateTieredCompactionStrategy":
+        if self._COMPACTION_STRATEGY == "DateTieredCompactionStrategy":
             # Time it takes to receive a step
             arrival_time = stage.precision + _OUT_OF_ORDER_S
 
@@ -417,16 +423,18 @@ class _LazyPreparedStatements(object):
 
             cs_kwargs["base_time_seconds"] = arrival_time
             cs_kwargs["max_window_size_seconds"] = max_window_size_seconds
-        elif _COMPACTION_STRATEGY == "TimeWindowCompactionStrategy":
+        elif self._COMPACTION_STRATEGY == "TimeWindowCompactionStrategy":
             # TODO(c.chary): Tweak this once we have an actual 3.9 setup.
 
-            window_size = max(
+            window_size = min(
                 # Documentation says that we should no more than 50 buckets.
                 time_to_live / 50,
-                # But we don't want multiple sstables per hour.
-                HOUR,
-                # Also try to optimize for reads
-                fresh_time
+                max(
+                    # But we don't want multiple sstables per hour.
+                    HOUR,
+                    # Also try to optimize for reads
+                    fresh_time
+                )
             )
 
             # Make it readable.
@@ -446,7 +454,7 @@ class _LazyPreparedStatements(object):
             "default_time_to_live": time_to_live,
             "memtable_flush_period_in_ms": _FLUSH_MEMORY_EVERY_S * 1000,
             "comment": "{\"created_by\": \"biggraphite\", \"schema_version\": 0}",
-            "compaction_strategy": _COMPACTION_STRATEGY,
+            "compaction_strategy": self._COMPACTION_STRATEGY,
             "compaction_options": compaction_options,
         }
 
@@ -609,7 +617,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__insert_directory_statement.consistency_level = _META_WRITE_CONSISTENCY
         # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_metadata_statement = self.__session.prepare(
-            "SELECT id, config, unixTimestampOf(updated_on)"
+            "SELECT id, config, toUnixTimestamp(updated_on)"
             " FROM \"%s\".metrics_metadata WHERE name = ?;"
             % self.keyspace_metadata
         )
@@ -1152,6 +1160,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " AND ".join(where_clauses),
             query_limit
         )
+
+    def background(self):
+        """Perform periodic background operations."""
+        if self.__downsampler:
+            self.__downsampler.purge()
+        if self.__delayed_writer:
+            self.__delayed_writer.write_some()
 
     def flush(self):
         """Flush any internal buffers."""

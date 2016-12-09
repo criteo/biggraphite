@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 class DelayedWriter(object):
     """Delay writes."""
 
-    DEFAULT_PERIOD_MS = 300000
+    DEFAULT_PERIOD_MS = 900000
 
     def __init__(self, accessor, period_ms=DEFAULT_PERIOD_MS):
         """Create a DelayedWriter.
