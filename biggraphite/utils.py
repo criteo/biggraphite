@@ -37,6 +37,7 @@ OPTIONS = {
     "driver": str,
     "cache": str,
     "cache_size": lambda v: None if v is None else int(v),
+    "cache_ttl": lambda v: None if v is None else int(v),
     "loglevel": str,
     "storage_dir": str,
 }
@@ -93,9 +94,10 @@ def cache_from_settings(accessor, settings):
     cache_settings = {
         'path': settings.get('storage_dir'),
     }
-    size = settings.get('cache_size')
-    if size:
-        cache_settings['size'] = size
+    for opt in ['size', 'ttl']:
+        value = settings.get('cache_%s' % opt)
+        if value:
+            cache_settings[opt] = value
 
     for name, cache in CACHES:
         if name == cache_name:

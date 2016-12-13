@@ -33,6 +33,8 @@ class TestGraphiteUtils(unittest.TestCase):
         import types
         settings = types.ModuleType("settings")
         settings.BG_CACHE = "memory"
+        settings.BG_CACHE_SIZE = 10
+        settings.BG_CACHE_TTL = 60
         cache = bg_graphite_utils.cache_from_settings('fake', settings)
         self.assertNotEquals(cache, None)
 
