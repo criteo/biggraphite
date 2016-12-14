@@ -85,6 +85,8 @@ def list_from_str(value):
         value = [s.strip() for s in value.split(",")]
     elif type(value) in (list, set):
         value = list(value)
+    elif value is None:
+        value = []
     else:
         raise Error("Unkown type for '%s'" % (value))
     return value

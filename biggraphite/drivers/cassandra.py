@@ -31,7 +31,6 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
-from cassandra import policies as c_policies
 from cassandra.io import asyncorereactor as c_asyncorereactor
 
 from biggraphite import accessor as bg_accessor
@@ -53,8 +52,8 @@ DEFAULT_CONNECTIONS = 4
 # Disable compression per default as this is clearly useless for writes and
 # reads do not generate that much traffic.
 DEFAULT_COMPRESSION = False
-# Current value is based on Cassandra page settings, so that everything fits in a single
-# reply with default settings.
+# Current value is based on Cassandra page settings, so that everything fits in
+# a single reply with default settings.
 # TODO: Mesure actual number of metrics for existing queries and estimate a more
 # reasonable limit, also consider other engines.
 DEFAULT_MAX_METRICS_PER_PATTERN = 5000
@@ -68,7 +67,9 @@ DIRECTORY_SEPARATOR = '.'
 OPTIONS = {
     "keyspace": str,
     "contact_points": _utils.list_from_str,
+    "contact_points_metadata": _utils.list_from_str,
     "port": int,
+    "port_metadata": lambda k: 0 if k is None else int(k),
     "connections": int,
     "timeout": float,
     "compression": _utils.bool_from_str,
@@ -91,9 +92,17 @@ def add_argparse_arguments(parser):
         help="Hosts used for discovery.",
         default=DEFAULT_CONTACT_POINTS)
     parser.add_argument(
+        "--cassandra_contact_points_metadata", metavar="HOST", nargs="+",
+        help="Hosts used for discovery.",
+        default=None)
+    parser.add_argument(
         "--cassandra_port", metavar="PORT", type=int,
         help="The native port to connect to.",
         default=DEFAULT_PORT)
+    parser.add_argument(
+        "--cassandra_port_metadata", metavar="PORT", type=int,
+        help="The native port to connect to.",
+        default=None)
     parser.add_argument(
         "--cassandra_connections", metavar="N", type=int,
         help="Number of connections per Cassandra host per process.",
@@ -524,6 +533,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  keyspace='biggraphite',
                  contact_points=DEFAULT_CONTACT_POINTS,
                  port=DEFAULT_PORT,
+                 contact_points_metadata=None,
+                 port_metadata=None,
                  connections=DEFAULT_CONNECTIONS,
                  timeout=DEFAULT_TIMEOUT,
                  compression=DEFAULT_COMPRESSION,
@@ -538,6 +549,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
           keyspace: Base names of Cassandra keyspaces dedicated to BigGraphite.
           contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
           port: The port to connect to, as an int.
+          contact_points_metadata: list of strings, the hostnames or IP to use
+            to discover Cassandra.
+          port_metadata: The port to connect to, as an int.
           connections: How many worker threads to use.
           timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
@@ -551,10 +565,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
+
+        if not contact_points_metadata:
+            contact_points_metadata = contact_points
+        if not port_metadata:
+            port_metadata = port
+
         self.keyspace = keyspace
         self.keyspace_metadata = keyspace + "_metadata"
-        self.contact_points = contact_points
+        self.contact_points_data = contact_points
+        self.contact_points_metadata = contact_points_metadata
         self.port = port
+        self.port_metadata = port_metadata
         self.max_metrics_per_pattern = max_metrics_per_pattern
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
@@ -563,84 +585,104 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__trace = trace
         self.__bulkimport = bulkimport
         self.__metadata_touch_ttl_sec = _METADATA_TOUCH_TTL_SEC
-        # For some reason this isn't enabled yet for pypy, even if it seems to
-        # be working properly.
-        # See https://github.com/datastax/python-driver/blob/master/cassandra/cluster.py#L188
-        self.__load_balancing_policy = (
-            c_policies.TokenAwarePolicy(c_policies.DCAwareRoundRobinPolicy()))
         self.__downsampler = _downsampling.Downsampler()
         self.__delayed_writer = _delayed_writer.DelayedWriter(self)
-        self.__cluster = None  # setup by connect()
+        self.__cluster_data = None  # setup by connect()
+        self.__cluster_metadata = None  # setup by connect()
         self.__lazy_statements = None  # setup by connect()
         self.__timeout = timeout
         self.__insert_metric_statement = None  # setup by connect()
         self.__select_metric_metadata_statement = None  # setup by connect()
         self.__update_metric_metadata_statement = None  # setup by connect()
         self.__touch_metrics_metadata_statement = None  # setup by connect()
-        self.__session = None  # setup by connect()
+        self.__session_data = None  # setup by connect()
+        self.__session_metadata = None  # setup by connect()
         self.__glob_parser = bg_glob.GraphiteGlobParser()
 
     def connect(self, skip_schema_upgrade=False):
         """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).connect(skip_schema_upgrade=skip_schema_upgrade)
-        self.__cluster = c_cluster.Cluster(
-            self.contact_points, self.port,
+        super(_CassandraAccessor, self).connect(
+            skip_schema_upgrade=skip_schema_upgrade)
+        self._connect_metadata(skip_schema_upgrade=skip_schema_upgrade)
+        if self.contact_points_data != self.contact_points_metadata:
+            self._connect_data()
+        else:
+            self.__session_data = self.__session_metadata
+            self.__cluster_data = self.__cluster_metadata
+
+        self.__lazy_statements = _LazyPreparedStatements(
+            self.__session_data, self.keyspace, self.__bulkimport)
+
+        self.is_connected = True
+
+    def _connect_metadata(self, skip_schema_upgrade=False):
+        cluster = self.__cluster_metadata = c_cluster.Cluster(
+            self.contact_points_metadata, self.port_metadata,
             executor_threads=self.__connections,
-            compression=self.__compression,
-            load_balancing_policy=self.__load_balancing_policy,
-            # TODO(c.chary): export these metrics somewhere.
             metrics_enabled=True,
         )
-        self.__cluster.connection_class = _CappedConnection  # Limits in flight requests
-        self.__session = self.__cluster.connect()
-        self.__session.row_factory = c_query.tuple_factory  # Saves 2% CPU
+
+        # Limits in flight requests
+        cluster.connection_class = _CappedConnection
+        session = self.__session_metadata = cluster.connect()
         if self.__timeout:
-            self.__session.default_timeout = self.__timeout
+            session.default_timeout = self.__timeout
+
         if not skip_schema_upgrade:
             self._upgrade_schema()
 
-        self.__lazy_statements = _LazyPreparedStatements(
-            self.__session, self.keyspace, self.__bulkimport)
+        def __prepare(cql, consistency=_META_WRITE_CONSISTENCY):
+            statement = session.prepare(cql)
+            statement.consistency = consistency
+            return statement
 
         # Metadata (metrics and directories)
         components_names = ", ".join("component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
-        self.__insert_metric_statement = self.__session.prepare(
+        self.__insert_metric_statement = __prepare(
             "INSERT INTO \"%s\".metrics (name, parent, %s) VALUES (?, ?, %s);"
             % (self.keyspace_metadata, components_names, components_marks)
         )
-        self.__insert_metric_statement.consistency_level = _META_WRITE_CONSISTENCY
-        self.__insert_directory_statement = self.__session.prepare(
+        self.__insert_directory_statement = __prepare(
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
         )
-        self.__insert_directory_statement.consistency_level = _META_WRITE_CONSISTENCY
         # We do not set the serial_consistency, it defautls to SERIAL.
-        self.__select_metric_metadata_statement = self.__session.prepare(
+        self.__select_metric_metadata_statement = __prepare(
             "SELECT id, config, toUnixTimestamp(updated_on)"
             " FROM \"%s\".metrics_metadata WHERE name = ?;"
-            % self.keyspace_metadata
+            % self.keyspace_metadata,
+            _META_READ_CONSISTENCY
         )
-        self.__select_metric_metadata_statement.consistency_level = _META_READ_CONSISTENCY
-        self.__update_metric_metadata_statement = self.__session.prepare(
+        self.__update_metric_metadata_statement = __prepare(
             "UPDATE \"%s\".metrics_metadata SET config=?, updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
         )
-        self.__update_metric_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
-        self.__touch_metrics_metadata_statement = self.__session.prepare(
+        self.__touch_metrics_metadata_statement = __prepare(
             "UPDATE \"%s\".metrics_metadata SET updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
         )
-        self.__touch_metrics_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
-        self.__insert_metrics_metadata_statement = self.__session.prepare(
+        self.__insert_metrics_metadata_statement = __prepare(
             "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
             " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
         )
-        self.__insert_metrics_metadata_statement.consistency_level = _META_WRITE_CONSISTENCY
 
-        self.is_connected = True
+    def _connect_data(self):
+        cluster = self.__cluster_data = c_cluster.Cluster(
+            self.contact_points_data, self.port,
+            executor_threads=self.__connections,
+            compression=self.__compression,
+            metrics_enabled=True,
+        )
+        # Limits in flight requests
+        cluster.connection_class = _CappedConnection
 
-    def _execute(self, *args, **kwargs):
+        session = self.__session_data = self.__cluster_data.connect()
+        session.row_factory = c_query.tuple_factory  # Saves 2% CPU
+        if self.__timeout:
+            session.default_timeout = self.__timeout
+
+    def _execute(self, session, *args, **kwargs):
         """Wrapper for __session.execute_async()."""
         if self.__bulkimport:
             return []
@@ -649,7 +691,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             kwargs["trace"] = True
 
         log.debug(' '.join([str(arg) for arg in args]))
-        result = self.__session.execute(*args, **kwargs)
+        result = session.execute(*args, **kwargs)
 
         if self.__trace:
             trace = result.get_query_trace()
@@ -657,7 +699,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 log.debug("%s: %s" % (e.source_elapsed, str(e)))
         return result
 
-    def _execute_async(self, *args, **kwargs):
+    def _execute_data(self, *args, **kwargs):
+        return self._execute(self.__session_data, *args, **kwargs)
+
+    def _execute_metadata(self, *args, **kwargs):
+        return self._execute(self.__session_metadata, *args, **kwargs)
+
+    def _execute_async(self, session, *args, **kwargs):
         """Wrapper for __session.execute_async()."""
         if self.__bulkimport:
             class _FakeFuture(object):
@@ -669,7 +717,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             kwargs["trace"] = True
 
         log.debug(' '.join([str(arg) for arg in args]))
-        future = self.__session.execute_async(*args, **kwargs)
+        future = session.execute_async(*args, **kwargs)
 
         if self.__trace:
             trace = future.get_query_trace()
@@ -677,7 +725,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 log.debug(e.source_elapsed, e.description)
         return future
 
-    def _execute_concurrent(self, statements_and_parameters, **kwargs):
+    def _execute_async_data(self, *args, **kwargs):
+        return self._execute_async(self.__session_data, *args, **kwargs)
+
+    def _execute_async_metadata(self, *args, **kwargs):
+        return self._execute_async(self.__session_metadata, *args, **kwargs)
+
+    def _execute_concurrent(self, session, statements_and_parameters, **kwargs):
         """Wrapper for concurrent.execute_concurrent()."""
         if self.__bulkimport:
             return []
@@ -686,18 +740,26 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         if not self.__trace:
             return c_concurrent.execute_concurrent(
-                self.__session, statements_and_parameters, **kwargs)
+                session, statements_and_parameters, **kwargs)
 
         query_results = []
         for statement, params in statements_and_parameters:
             try:
-                result = self._execute(statement, params, trace=True)
+                result = self._execute(session, statement, params, trace=True)
                 success = True
             except Exception as e:
+                if kwargs.get('raise_on_first_error') is True:
+                    raise e
                 result = e
                 success = False
             query_results.append((success, result))
         return query_results
+
+    def _execute_concurrent_data(self, *args, **kwargs):
+        return self._execute_concurrent(self.__session_data, *args, **kwargs)
+
+    def _execute_concurrent_metadata(self, *args, **kwargs):
+        return self._execute_concurrent(self.__session_metadata, *args, **kwargs)
 
     def make_metric(self, name, metadata):
         """See bg_accessor.Accessor."""
@@ -743,7 +805,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         #  - batch queries cannot contain IF NOT EXISTS and involve multiple primary keys
         # We can still end up with empty directories, which will need a reaper job to clean them.
         for statement, args in queries:
-            self._execute(statement, args)
+            self._execute_metadata(statement, args)
 
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
@@ -758,7 +820,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         encoded_metric_name = bg_accessor.encode_metric_name(name)
         metadata_dict = updated_metadata.as_string_dict()
-        self._execute(self.__update_metric_metadata_statement, [metadata_dict, encoded_metric_name])
+        self._execute_metadata(
+            self.__update_metric_metadata_statement,
+            [metadata_dict, encoded_metric_name])
 
     def _create_parent_dirs_queries(self, components):
         queries = []
@@ -790,10 +854,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).drop_all_metrics()
         for keyspace in self.keyspace, self.keyspace_metadata:
+            session = self.__session_data if self.keyspace else self.__session_metadata
             statement_str = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
-            tables = [r[0] for r in self._execute(statement_str, (keyspace, ))]
+            tables = [r[0] for r in self._execute(
+                session, statement_str, (keyspace, ))]
+
             for table in tables:
-                self._execute("TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
+                self._execute(
+                    session, "TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
 
     def fetch_points(self, metric, time_start, time_end, stage):
         """See bg_accessor.Accessor."""
@@ -810,7 +878,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         statements_and_args = self._fetch_points_make_selects(
             metric.id, time_start_ms, time_end_ms, stage)
-        query_results = self._execute_concurrent(
+        query_results = self._execute_concurrent_data(
             statements_and_args,
             results_generator=True,
         )
@@ -853,7 +921,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _select_metric(self, metric_name):
         """Fetch metric metadata."""
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
-        result = list(self._execute(
+        result = list(self._execute_metadata(
             self.__select_metric_metadata_statement, (encoded_metric_name, )))
         if not result:
             return None
@@ -936,7 +1004,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             )
             statements_with_params.append((statement, ()))
 
-        query_results = self._execute_concurrent(
+        query_results = self._execute_concurrent_metadata(
             statements_with_params,
             concurrency=self.max_concurrent_queries_per_pattern,
             results_generator=True,
@@ -1205,7 +1273,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
                 offset=offset, value=value, count=count,
             )
-            future = self._execute_async(query=statement, parameters=args)
+            future = self._execute_async(session=self.__session_data,
+                                         query=statement, parameters=args)
             if count_down:
                 future.add_callbacks(
                     count_down.on_cassandra_result,
@@ -1220,7 +1289,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
 
-        partitioner = self.__cluster.metadata.partitioner
+        partitioner = self.__cluster_data.metadata.partitioner
         if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
             log.warn("Partitioner '%s' not supported for repairs" % partitioner)
             return
@@ -1236,16 +1305,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
             start_token += my_tokens * shard
             stop_token = start_token + my_tokens
 
-        dir_query = self.__session.prepare("SELECT name, token(name) FROM \"%s\".directories"
-                                           " WHERE token(name) > ? LIMIT %d;"
-                                           % (self.keyspace_metadata, batch_size))
+        dir_query = self.__session_data.prepare(
+            "SELECT name, token(name) FROM \"%s\".directories"
+            " WHERE token(name) > ? LIMIT %d;"
+            % (self.keyspace_metadata, batch_size))
         dir_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         dir_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         dir_query.request_timeout = 60
 
-        has_directory_query = self.__session.prepare("SELECT name FROM \"%s\".directories"
-                                                     " WHERE name = ? LIMIT 1;"
-                                                     % self.keyspace_metadata)
+        has_directory_query = self.__session_data.prepare(
+            "SELECT name FROM \"%s\".directories"
+            " WHERE name = ? LIMIT 1;"
+            % self.keyspace_metadata)
         # force read repair to occur in cassandra
         has_directory_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         has_directory_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
@@ -1271,20 +1342,23 @@ class _CassandraAccessor(bg_accessor.Accessor):
         log.info("Starting repair")
         token = start_token
         while token < stop_token:
-            result = self._execute(dir_query, (token,))
+            result = self._execute_metadata(dir_query, (token,))
             if len(result.current_rows) == 0:
                 break
 
             # Update token range for the next iteration
             token = result[-1][1]
-            parent_dirs = self._execute_concurrent(directories_to_check(result),
-                                                   concurrency=max_concurrent_reqs,
-                                                   raise_on_first_error=False,
-                                                   results_generator=True)
+            parent_dirs = self._execute_concurrent_metadata(
+                directories_to_check(result),
+                concurrency=max_concurrent_reqs,
+                raise_on_first_error=False,
+                results_generator=True)
 
-            self._execute_concurrent(directories_to_create(parent_dirs),
-                                     concurrency=max_concurrent_reqs,
-                                     raise_on_first_error=False)
+            self._execute_concurrent_metadata(
+                directories_to_create(parent_dirs),
+                concurrency=max_concurrent_reqs,
+                raise_on_first_error=False)
+
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
 
@@ -1293,33 +1367,33 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).shutdown()
         if self.is_connected:
             try:
-                self.__cluster.shutdown()
+                self.__cluster_data.shutdown()
             except Exception as exc:
                 raise CassandraError(exc)
-            self.__cluster = None
+            self.__cluster_data = None
             self.is_connected = False
 
     def _upgrade_schema(self):
         # Currently no change, so only upgrade operation is to setup
         try:
-            self.__cluster.refresh_schema_metadata()
+            self.__cluster_metadata.refresh_schema_metadata()
         except cassandra.DriverException:
             log.exception("Failed to refresh metadata.")
             return
 
-        keyspaces = self.__cluster.metadata.keyspaces.keys()
-        for keyspace in [self.keyspace, self.keyspace_metadata]:
-            if keyspace not in keyspaces:
-                raise CassandraError("Missing keyspace '%s'." % keyspace)
+        keyspaces = self.__cluster_metadata.metadata.keyspaces.keys()
+        if self.keyspace_metadata not in keyspaces:
+            raise CassandraError("Missing keyspace '%s'." % self.keyspace_metadata)
 
-        tables = self.__cluster.metadata.keyspaces[self.keyspace_metadata].tables
+        tables = self.__cluster_metadata.metadata.keyspaces[
+            self.keyspace_metadata].tables
         mandatory_tables = ['metrics', 'directories', 'metrics_metadata']
 
         if reduce(lambda acc, val: acc and val in tables, mandatory_tables):
             return
 
         for cql in _METADATA_CREATION_CQL:
-            self._execute(cql % {"keyspace": self.keyspace_metadata})
+            self._execute_metadata(cql % {"keyspace": self.keyspace_metadata})
 
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""
@@ -1335,7 +1409,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         ))
 
         for statement, args in queries:
-            self._execute(statement, args)
+            self._execute_metadata(statement, args)
 
     def clean(self, max_age=None):
         """See bg_accessor.Accessor.
@@ -1354,7 +1428,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         log.info("Cleaning with cutoff time %d", cutoff)
 
         # statements
-        select = self.__session.prepare(
+        select = self.__session_metadata.prepare(
             "SELECT name FROM \"%s\".metrics_metadata"
             " WHERE updated_on <= maxTimeuuid(%d);" %
             (self.keyspace_metadata, cutoff))
@@ -1362,20 +1436,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
         select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         select.request_timeout = 120
 
-        delete = self.__session.prepare(
+        delete = self.__session_metadata.prepare(
             "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
             (self.keyspace_metadata))
-        delete_metadata = self.__session.prepare(
+        delete_metadata = self.__session_metadata.prepare(
             "DELETE FROM \"%s\".metrics_metadata WHERE name = ? ;" %
             (self.keyspace_metadata))
         delete_metadata.consistency_level = _META_WRITE_CONSISTENCY
         delete.consistency_level = _META_WRITE_CONSISTENCY
 
-        result = self._execute(select)
+        result = self._execute_metadata(select)
         for row in result:
             log.info("Cleaning metric %s", row)
-            self._execute(delete, row)  # cleanup metrics
-            self._execute(delete_metadata, row)  # cleanup modification time
+            # cleanup metrics
+            self._execute_metadata(delete, row)
+            # cleanup modification time
+            self._execute_metadata(delete_metadata, row)
 
 
 def build(*args, **kwargs):
