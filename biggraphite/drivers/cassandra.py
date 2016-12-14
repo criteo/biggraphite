@@ -619,12 +619,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         cluster = self.__cluster_metadata = c_cluster.Cluster(
             self.contact_points_metadata, self.port_metadata,
             executor_threads=self.__connections,
+            compression=self.__compression,
             metrics_enabled=True,
         )
 
         # Limits in flight requests
         cluster.connection_class = _CappedConnection
         session = self.__session_metadata = cluster.connect()
+        session.row_factory = c_query.tuple_factory  # Saves 2% CPU
         if self.__timeout:
             session.default_timeout = self.__timeout
 
