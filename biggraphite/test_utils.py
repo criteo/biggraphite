@@ -54,7 +54,6 @@ if HAS_CASSANDRA_HOME:
 def setup_logging():
     """To be called to enable logs in unittests."""
     logger = logging.getLogger()
-    logger.level = logging.DEBUG
     stream_handler = logging.StreamHandler(sys.stdout)
     logger.addHandler(stream_handler)
 
