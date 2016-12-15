@@ -94,19 +94,20 @@ class Cache(object):
         """Check if a metric is cached."""
         return self._cache_has(metric_name)
 
-    def cache_set(self, metric):
+    def cache_set(self, metric_name, metric):
         """Insert a metric in the cache."""
-        return self._cache_set(metric.name, metric)
+        return self._cache_set(metric_name, metric)
 
     def make_metric(self, name, metadata):
         """Create a metric object from a name and metadata."""
         return self._accessor.make_metric(name, metadata)
 
-    def create_metric(self, metric):
+    def create_metric(self, metric, metric_name=None):
         """Create a metric definition from a Metric."""
+        metric_name = metric_name or metric.name
         with self._accessor_lock:
             self._accessor.create_metric(metric)
-        self._cache_set(metric.name, metric)
+        self._cache_set(metric_name, metric)
 
     def has_metric(self, metric_name):
         """Check if a metric exists.

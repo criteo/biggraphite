@@ -112,7 +112,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             carbon_xfilesfactor=xfilesfactor,
         )
         metric = self.cache.make_metric(metric_name, metadata)
-        self.cache.cache_set(metric)
+        self.cache.cache_set(metric_name, metric)
         self._createAsync(metric)
 
     def getMetadata(self, metric_name, key):
