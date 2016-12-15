@@ -15,6 +15,7 @@
 """Adapter between BigGraphite and Carbon."""
 from __future__ import absolute_import  # Otherwise carbon is this module.
 
+import time
 import Queue
 
 # Version 0.9.15 (the one from PIP) does not have the "database" module.
@@ -177,10 +178,14 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                 metric = self._metricsToCreate.get(True, 1)
             except Queue.Empty:
                 continue
-            if self.accessor.has_metric(metric.name):
-                continue
-            log.creates("creating database metric %s" % metric.name)
-            self.cache.create_metric(metric)
+            try:
+                if self.accessor.has_metric(metric.name):
+                    continue
+                log.creates("creating database metric %s" % metric.name)
+                self.cache.create_metric(metric)
+            except:
+                log.err()
+                time.sleep(0.1)
 
 
 class MultiDatabase(database.TimeSeriesDatabase):
