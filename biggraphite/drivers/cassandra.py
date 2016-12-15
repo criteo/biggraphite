@@ -180,6 +180,7 @@ class InvalidGlobError(InvalidArgumentError):
 # ======================
 # Currently these are explicitely set to the defaults.
 _META_WRITE_CONSISTENCY = cassandra.ConsistencyLevel.ONE
+_META_SERIAL_CONSISTENCY = cassandra.ConsistencyLevel.LOCAL_SERIAL
 _META_READ_CONSISTENCY = cassandra.ConsistencyLevel.ONE
 
 _DATA_WRITE_CONSISTENCY = cassandra.ConsistencyLevel.ONE
@@ -635,7 +636,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         def __prepare(cql, consistency=_META_WRITE_CONSISTENCY):
             statement = session.prepare(cql)
-            statement.consistency = consistency
+            statement.consistency_level = consistency
             return statement
 
         # Metadata (metrics and directories)
@@ -649,6 +650,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
         )
+        self.__insert_directory_statement.serial_consistency_level = _META_SERIAL_CONSISTENCY
         # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_metadata_statement = __prepare(
             "SELECT id, config, toUnixTimestamp(updated_on)"
