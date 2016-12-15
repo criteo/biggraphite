@@ -283,6 +283,7 @@ class DiskCache(Cache):
         self.__path = os_path.join(path, "biggraphite", "cache", "version0")
         self.__size = settings.get("size", self.MAP_SIZE)
         self.__ttl = settings.get("ttl", 24*60*60)
+        self.__sync = settings.get("sync", True)
         self.__databases = {
             "metric_to_meta": None
         }
@@ -307,6 +308,9 @@ class DiskCache(Cache):
             map_size=self.__size,
             # Only one sync per transaction, system crash can undo a transaction.
             metasync=False,
+            # Actually, don't sync at all.
+            sync=self.__sync,
+            map_async=not self.__sync,
             # Use mmap()
             writemap=True,
             # Max number of concurrent readers, see _MAX_READERS for details

@@ -38,6 +38,7 @@ OPTIONS = {
     "cache": str,
     "cache_size": lambda v: None if v is None else int(v),
     "cache_ttl": lambda v: None if v is None else int(v),
+    "cache_sync": bool,
     "loglevel": str,
     "storage_dir": str,
 }
@@ -94,9 +95,9 @@ def cache_from_settings(accessor, settings):
     cache_settings = {
         'path': settings.get('storage_dir'),
     }
-    for opt in ['size', 'ttl']:
+    for opt in ['size', 'ttl', 'sync']:
         value = settings.get('cache_%s' % opt)
-        if value:
+        if value is not None:
             cache_settings[opt] = value
 
     for name, cache in CACHES:
@@ -123,6 +124,9 @@ def add_argparse_arguments(parser):
     parser.add_argument(
         "--cache-size",
         help="Metadata cache size.")
+    parser.add_argument(
+        "--cache-sync",
+        help="Metadata cache sync.")
     parser.add_argument(
         "--storage_dir", metavar="PATH",
         help="Storage path (cache, etc..)")
