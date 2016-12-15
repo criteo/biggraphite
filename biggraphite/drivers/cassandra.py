@@ -803,13 +803,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             [metric.name, metric.id, metadata_dict],
         ))
 
-        # We have to run queries in sequence as:
-        #  - we want them to have IF NOT EXISTS ease the hotspot on root directories
-        #  - we do not want directories or metrics without parents (not handled by callee)
-        #  - batch queries cannot contain IF NOT EXISTS and involve multiple primary keys
-        # We can still end up with empty directories, which will need a reaper job to clean them.
-        for statement, args in queries:
-            self._execute_metadata(statement, args)
+        self._execute_concurrent_metadata(
+            queries,
+            raise_on_first_error=False)
 
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
