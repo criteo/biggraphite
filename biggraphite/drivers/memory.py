@@ -97,7 +97,9 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).insert_points_async(
             metric, datapoints, on_done)
-        assert metric.name in self._name_to_metric
+        if metric.name not in self._name_to_metric:
+            self.create_metric(metric)
+
         datapoints = self.__downsampler.feed(metric, datapoints)
         if self.__delayed_writer:
             datapoints = self.__delayed_writer.feed(metric, datapoints)
@@ -107,7 +109,8 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).insert_downsampled_points_async(
             metric, datapoints, on_done)
-        assert metric.name in self._name_to_metric
+        if metric.name not in self._name_to_metric:
+            self.create_metric(metric)
 
         for datapoint in datapoints:
             timestamp, value, count, stage = datapoint

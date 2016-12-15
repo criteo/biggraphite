@@ -90,6 +90,14 @@ class Cache(object):
         """
         pass
 
+    def cache_has(self, metric_name):
+        """Check if a metric is cached."""
+        return self._cache_has(metric_name)
+
+    def cache_set(self, metric):
+        """Insert a metric in the cache."""
+        return self._cache_set(metric.name, metric)
+
     def make_metric(self, name, metadata):
         """Create a metric object from a name and metadata."""
         return self._accessor.make_metric(name, metadata)

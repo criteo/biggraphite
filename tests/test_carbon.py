@@ -38,6 +38,9 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         settings["BG_CASSANDRA_KEYSPACE"] = self.KEYSPACE
         settings["STORAGE_DIR"] = self.tempdir
         self._plugin = bg_carbon.BigGraphiteDatabase(settings)
+        def _create(metric):
+            self._plugin.cache.create_metric(metric)
+        self._plugin._createAsync = _create
         self._plugin.create(
             _TEST_METRIC,
             retentions=[(1, 60)],
@@ -86,13 +89,13 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
         self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
         self.assertEqual(
-            self._plugin.accessor().get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "sum")
+            self._plugin.accessor.get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "sum")
 
         # Setting a different value should work
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "avg")
         self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "avg")
         self.assertEqual(
-            self._plugin.accessor().get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "avg")
+            self._plugin.accessor.get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "avg")
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
 
         # Setting a name that is not in MetricMetadata.__slots__ should fail

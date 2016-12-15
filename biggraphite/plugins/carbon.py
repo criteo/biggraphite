@@ -15,6 +15,8 @@
 """Adapter between BigGraphite and Carbon."""
 from __future__ import absolute_import  # Otherwise carbon is this module.
 
+import Queue
+
 # Version 0.9.15 (the one from PIP) does not have the "database" module.
 # To make use of the plugin with carbon, you will need a version that has
 # upstream commit 3d260b0f663b5577bc3a0fc3f0741802109a28c4 or apply this
@@ -22,6 +24,7 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
 from carbon import log
+from twisted.internet import task
 
 from biggraphite import graphite_utils
 from biggraphite import accessor
@@ -52,24 +55,21 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._cache = None
         self._accessor = None
         self._settings = settings
+        self._metricsToCreate = Queue.Queue()
         self._sync_countdown = 0
 
-        # Flush before shutdown.
-        def _flush():
-            log.cache("flushing the accessor")
-            if self._accessor:
-                self.accessor().flush()
-
-        def _background():
-            log.cache("background operations")
-            if self._accessor:
-                self.accessor().background()
-
-        from twisted.internet import reactor, task
-        reactor.addSystemEventTrigger('before', 'shutdown', _flush)
-        self._lc = task.LoopingCall(_background)
+        self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
+        self.reactor.callInThread(self._createMetrics)
+        self._lc = task.LoopingCall(self._background)
         self._lc.start(60)
 
+    @property
+    def reactor(self):
+        # We are included first, but we don't want to create the reactor.
+        from twisted.internet import reactor
+        return reactor
+
+    @property
     def accessor(self):
         if not self._accessor:
             accessor = graphite_utils.accessor_from_settings(self._settings)
@@ -78,9 +78,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         return self._accessor
 
+    @property
     def cache(self):
         if not self._cache:
-            cache = graphite_utils.cache_from_settings(self.accessor(), self._settings)
+            cache = graphite_utils.cache_from_settings(self.accessor, self._settings)
             cache.open()
             self._cache = cache
 
@@ -88,23 +89,21 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
-        metric = self.cache().get_metric(metric_name=metric_name)
+        metric = self.cache.get_metric(metric_name=metric_name)
 
         # Round down timestamp because inner functions expect integers.
         datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
 
         # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
         if self._sync_countdown < 1:
-            self.accessor().insert_points(metric=metric, datapoints=datapoints)
+            self.accessor.insert_points(metric=metric, datapoints=datapoints)
             self._sync_countdown = self._SYNC_EVERY_N_WRITE
         else:
             self._sync_countdown -= 1
-            self.accessor().insert_points_async(metric=metric, datapoints=datapoints)
+            self.accessor.insert_points_async(metric=metric, datapoints=datapoints)
 
     def exists(self, metric_name):
-        # If exists returns "False" then "create" will be called.
-        # New metrics are also throttled by some settings.
-        return bool(self.cache().has_metric(metric_name))
+        return self.cache.cache_has(metric_name)
 
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
         metadata = accessor.MetricMetadata(
@@ -112,11 +111,12 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             retention=accessor.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
-        metric = self.cache().make_metric(metric_name, metadata)
-        self.cache().create_metric(metric)
+        metric = self.cache.make_metric(metric_name, metadata)
+        self.cache.cache_set(metric)
+        self._createAsync(metric)
 
     def getMetadata(self, metric_name, key):
-        metadata = self.cache().get_metric(metric_name=metric_name)
+        metadata = self.cache.get_metric(metric_name=metric_name)
         if not metadata:
             raise ValueError("%s: No such metric" % metric_name)
 
@@ -133,7 +133,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def setMetadata(self, metric_name, key, value):
         old_value = self.getMetadata(metric_name, key)
         if old_value != value:
-            metadata = self.cache().get_metric(metric_name=metric_name)
+            metadata = self.cache.get_metric(metric_name=metric_name)
             if not metadata:
                 raise ValueError("%s: No such metric" % metric_name)
 
@@ -145,15 +145,42 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             except AttributeError:
                 msg = "%s[%s]: Unsupported metadata" % (metric_name, key)
                 raise ValueError(msg)
-            self.accessor().update_metric(metric_name, metadata.metadata)
+            self.accessor.update_metric(metric_name, metadata.metadata)
 
     def getFilesystemPath(self, metric_name):
-        # Only used for logging.
-        return "/".join(("//biggraphite", self.accessor().backend_name, metric_name))
+        return "/".join(("//biggraphite", self.accessor.backend_name, metric_name))
 
     def validateArchiveList(self, archiveList):
-        # TODO(c.chary): maybe run repair() ?
         pass
+
+    def _flush(self):
+        log.cache("flushing the accessor")
+        if self._accessor:
+            self.accessor.flush()
+
+    def _background(self):
+        log.cache("background operations")
+        if self._accessor:
+            self.accessor.background()
+
+    def _createAsync(self, metric):
+        self._metricsToCreate.put(metric)
+
+    def _createMetrics(self):
+        # We create metrics in a separate thread because this is potentially
+        # slow and we don't want to slow down the main ingestion thread.
+        # With a cold cache we will put all the metric in the queue and
+        # asynchronously create the non-existing one but the points will
+        # be written as soon as they are received.
+        while self.reactor.running:
+            try:
+                metric = self._metricsToCreate.get(True, 1)
+            except Queue.Empty:
+                continue
+            if self.accessor.has_metric(metric.name):
+                continue
+            log.creates("creating database metric %s" % metric.name)
+            self.cache.create_metric(metric)
 
 
 class MultiDatabase(database.TimeSeriesDatabase):
