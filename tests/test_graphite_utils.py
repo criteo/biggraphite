@@ -35,6 +35,7 @@ class TestGraphiteUtils(unittest.TestCase):
         settings.BG_CACHE = "memory"
         settings.BG_CACHE_SIZE = 10
         settings.BG_CACHE_TTL = 60
+        settings.BG_CACHE_SYNC = False
         cache = bg_graphite_utils.cache_from_settings('fake', settings)
         self.assertNotEquals(cache, None)
 

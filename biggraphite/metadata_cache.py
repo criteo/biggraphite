@@ -90,15 +90,24 @@ class Cache(object):
         """
         pass
 
+    def cache_has(self, metric_name):
+        """Check if a metric is cached."""
+        return self._cache_has(metric_name)
+
+    def cache_set(self, metric_name, metric):
+        """Insert a metric in the cache."""
+        return self._cache_set(metric_name, metric)
+
     def make_metric(self, name, metadata):
         """Create a metric object from a name and metadata."""
         return self._accessor.make_metric(name, metadata)
 
-    def create_metric(self, metric):
+    def create_metric(self, metric, metric_name=None):
         """Create a metric definition from a Metric."""
+        metric_name = metric_name or metric.name
         with self._accessor_lock:
             self._accessor.create_metric(metric)
-        self._cache_set(metric.name, metric)
+        self._cache_set(metric_name, metric)
 
     def has_metric(self, metric_name):
         """Check if a metric exists.
@@ -275,6 +284,7 @@ class DiskCache(Cache):
         self.__path = os_path.join(path, "biggraphite", "cache", "version0")
         self.__size = settings.get("size", self.MAP_SIZE)
         self.__ttl = settings.get("ttl", 24*60*60)
+        self.__sync = settings.get("sync", True)
         self.__databases = {
             "metric_to_meta": None
         }
@@ -299,6 +309,9 @@ class DiskCache(Cache):
             map_size=self.__size,
             # Only one sync per transaction, system crash can undo a transaction.
             metasync=False,
+            # Actually, don't sync at all.
+            sync=self.__sync,
+            map_async=not self.__sync,
             # Use mmap()
             writemap=True,
             # Max number of concurrent readers, see _MAX_READERS for details
