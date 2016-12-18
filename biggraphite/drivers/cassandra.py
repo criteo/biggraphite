@@ -1281,7 +1281,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_failure,
                 )
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def _repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
@@ -1362,7 +1362,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
 
-    def _remove_empty_dir(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
+                          callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
@@ -1370,7 +1371,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
 
-        partitioner = self.__cluster.metadata.partitioner
+        partitioner = self.__cluster_data.metadata.partitioner
         if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
             log.warn("Partitioner '%s' not supported for repairs" % partitioner)
             return
@@ -1386,24 +1387,26 @@ class _CassandraAccessor(bg_accessor.Accessor):
             start_token += my_tokens * shard
             stop_token = start_token + my_tokens
 
-        dir_query = self.__session.prepare("SELECT name, token(name) FROM \"%s\".directories"
+        dir_query = self.__session_data.prepare("SELECT name, token(name) FROM \"%s\".directories"
                                            " WHERE token(name) > ? LIMIT %d;"
                                            % (self.keyspace_metadata, batch_size))
         dir_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         dir_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         dir_query.request_timeout = 60
 
-        has_metric_query = self.__session.prepare("SELECT name FROM \"%s\".metrics"
-                                                     " WHERE parent LIKE ? LIMIT 1;"
-                                                     % self.keyspace_metadata)
-        # force read repair to occur in cassandra
-        has_metric_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
-        has_metric_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
-        has_metric_query.request_timeout = 60
+        def prepare_selects(nb_elems):
+            components = " AND ".join("component_%d = ? " % n for n in range(nb_elems))
+            has_metric_query = self.__session_data.prepare("SELECT name FROM \"%s\".metrics where %s LIMIT 1 ALLOW FILTERING;"
+                                                    % (self.keyspace_metadata, components))
+            # force read repair to occur in cassandra
+            has_metric_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
+            has_metric_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+            has_metric_query.request_timeout = 60
+            return has_metric_query
+        lazy_has_metric_query = [prepare_selects(x+1) for x in range(_COMPONENTS_MAX_LEN)]
 
-        delete_empty_dir_stm = self.__session.prepare("DELETE FROM \"%s\".directories"
-                                                      " WHERE name = ?;"
-                                           % self.keyspace_metadata)
+        delete_empty_dir_stm = self.__session_data.prepare("DELETE FROM \"%s\".directories"
+                                                      " WHERE name = ?;" % self.keyspace_metadata)
         delete_empty_dir_stm.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         delete_empty_dir_stm.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         delete_empty_dir_stm.request_timeout = 60
@@ -1412,30 +1415,30 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for row in result:
                 name, next_token = row
                 if name:
-                    yield has_metric_query, (name + DIRECTORY_SEPARATOR + "%",)
+                    components = self._components_from_name(name + DIRECTORY_SEPARATOR)[:-1]
+                    yield (lazy_has_metric_query[len(components) - 1], components)
 
         def directories_to_remove(result):
             for response in result:
                 if not response.success or not list(response.result_or_exc):
-                    dir_name = response.result_or_exc.response_future.query.values[0].rpartition('.')[0]
+                    dir_name = ".".join(response.result_or_exc.response_future.query.values[:-1])
                     log.info("Scheduling delete for '%s'" % dir_name)
                     yield delete_empty_dir_stm, (dir_name,)
 
         log.info("Starting cleanup of empty dir")
         token = start_token
         while token < stop_token:
-            result = self._execute(dir_query, (token,))
+            result = self._execute_metadata(dir_query, (token,))
             if len(result.current_rows) == 0:
                 break
 
             # Update token range for the next iteration
             token = result[-1][1]
-            parent_dirs = self._execute_concurrent(directories_to_check(result),
+            parent_dirs = self._execute_concurrent_metadata(directories_to_check(result),
                                                    concurrency=max_concurrent_reqs,
                                                    raise_on_first_error=True,
                                                    results_generator=False)
-
-            self._execute_concurrent(directories_to_remove(parent_dirs),
+            self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
                                      concurrency=max_concurrent_reqs,
                                      raise_on_first_error=False)
             if callback_on_progress:
