@@ -16,16 +16,24 @@
 
 
 import logging
+import os
+import sys
+import progressbar
 
 from biggraphite.cli import command
 from biggraphite import metadata_cache
 
+_DEV_NULL = open(os.devnull, "w")
 
 class CommandClean(command.BaseCommand):
     """Clean BigGraphite metric metadata from old metrics."""
 
     NAME = "clean"
     HELP = "Clean the metric metadata."
+
+    def __init__(self):
+        """Constructor."""
+        self.pbar = None
 
     def add_arguments(self, parser):
         """Add custom arguments."""
@@ -34,6 +42,10 @@ class CommandClean(command.BaseCommand):
             help="clean cache",
             action='store_true'
         )
+        # parser.add_argument(
+        #     "--quiet", action="store_const", default=False, const=True,
+        #     help="Show no output unless there are problems."
+        # )
         parser.add_argument(
             "--clean-backend",
             help="clean backend",
@@ -48,11 +60,25 @@ class CommandClean(command.BaseCommand):
             action='store'
         )
 
-    def run(self, accessor, opts):
+    def run(self, accessor, opts, on_progress=None):
         """Run some cleanups.
 
         See command.BaseCommand
         """
+        out_fd = sys.stderr
+        # if opts.quiet:
+        #     out_fd = _DEV_NULL
+
+        if self.pbar is None:
+            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=False)
+        self.pbar.start()
+
+        if on_progress is None:
+            def _on_progress(done, total):
+                self.pbar.max_value = total
+                self.pbar.update(done)
+            on_progress = _on_progress
+
         with accessor as bg_acc:
             if opts.clean_cache:
                 if opts.storage_dir:
@@ -66,4 +92,6 @@ class CommandClean(command.BaseCommand):
 
             if opts.clean_backend:
                 logging.info("Cleaning backend, removing things before %d", opts.max_age)
-                bg_acc.clean(opts.max_age)
+                bg_acc.clean(opts.max_age, on_progress)
+
+        self.pbar.finish()
