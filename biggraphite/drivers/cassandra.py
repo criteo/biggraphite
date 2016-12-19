@@ -1281,14 +1281,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_failure,
                 )
 
-    def _repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
+               callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
         tokens directly.
         """
         super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
+        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
+        self._fix_missing_dir(start_key, end_key, shard, nshards, callback_on_progress)
 
+    def _fix_missing_dir(self, start_key=None, end_key=None, shard=0, nshards=1,
+                         callback_on_progress=None):
+        """Create directory that does not exist for a metric to be accessible."""
         partitioner = self.__cluster_data.metadata.partitioner
         if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
             log.warn("Partitioner '%s' not supported for repairs" % partitioner)
@@ -1339,7 +1345,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     for query in queries:
                         yield query
 
-        log.info("Starting repair")
+        log.info("Start creating missing directories")
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(dir_query, (token,))
@@ -1362,15 +1368,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
-               callback_on_progress=None):
-        """See bg_accessor.Accessor.
-
-        Slight change for start_key and end_key, they are intrepreted as
-        tokens directly.
-        """
-        super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
-
+    def _clean_empty_dir(self, start_key=None, end_key=None, shard=0, nshards=1,
+                         callback_on_progress=None):
+        """Remove directory that does not contains any metrics."""
         partitioner = self.__cluster_data.metadata.partitioner
         if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
             log.warn("Partitioner '%s' not supported for repairs" % partitioner)
