@@ -1388,25 +1388,21 @@ class _CassandraAccessor(bg_accessor.Accessor):
             stop_token = start_token + my_tokens
 
         dir_query = self.__session_data.prepare("SELECT name, token(name) FROM \"%s\".directories"
-                                           " WHERE token(name) > ? LIMIT %d;"
-                                           % (self.keyspace_metadata, batch_size))
+                                                " WHERE token(name) > ? LIMIT %d;"
+                                                % (self.keyspace_metadata, batch_size))
         dir_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         dir_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         dir_query.request_timeout = 60
 
-        def prepare_selects(nb_elems):
-            components = " AND ".join("component_%d = ? " % n for n in range(nb_elems))
-            has_metric_query = self.__session_data.prepare("SELECT name FROM \"%s\".metrics where %s LIMIT 1 ALLOW FILTERING;"
-                                                    % (self.keyspace_metadata, components))
-            # force read repair to occur in cassandra
-            has_metric_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
-            has_metric_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
-            has_metric_query.request_timeout = 60
-            return has_metric_query
-        lazy_has_metric_query = [prepare_selects(x+1) for x in range(_COMPONENTS_MAX_LEN)]
+        has_metric_query = self.__session_data.prepare("SELECT name FROM \"%s\".metrics where parent LIKE ? LIMIT 1;"
+                                                       % (self.keyspace_metadata, ))
+        # force read repair to occur in cassandra
+        has_metric_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
+        has_metric_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        has_metric_query.request_timeout = 60
 
         delete_empty_dir_stm = self.__session_data.prepare("DELETE FROM \"%s\".directories"
-                                                      " WHERE name = ?;" % self.keyspace_metadata)
+                                                           " WHERE name = ?;" % self.keyspace_metadata)
         delete_empty_dir_stm.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         delete_empty_dir_stm.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         delete_empty_dir_stm.request_timeout = 60
@@ -1415,13 +1411,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for row in result:
                 name, next_token = row
                 if name:
-                    components = self._components_from_name(name + DIRECTORY_SEPARATOR)[:-1]
-                    yield (lazy_has_metric_query[len(components) - 1], components)
+                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + '%',))
 
         def directories_to_remove(result):
             for response in result:
                 if not response.success or not list(response.result_or_exc):
-                    dir_name = ".".join(response.result_or_exc.response_future.query.values[:-1])
+                    dir_name = response.result_or_exc.response_future.query.values[0].rpartition('.')[0]
                     log.info("Scheduling delete for '%s'" % dir_name)
                     yield delete_empty_dir_stm, (dir_name,)
 
