@@ -1363,7 +1363,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 callback_on_progress(token - start_token, stop_token - start_token)
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
-                          callback_on_progress=None):
+               callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
@@ -1394,7 +1394,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         dir_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         dir_query.request_timeout = 60
 
-        has_metric_query = self.__session_data.prepare("SELECT name FROM \"%s\".metrics where parent LIKE ? LIMIT 1;"
+        has_metric_query = self.__session_data.prepare("SELECT name FROM \"%s\".metrics"
+                                                       " WHERE parent LIKE ? LIMIT 1;"
                                                        % (self.keyspace_metadata, ))
         # force read repair to occur in cassandra
         has_metric_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
@@ -1402,7 +1403,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         has_metric_query.request_timeout = 60
 
         delete_empty_dir_stm = self.__session_data.prepare("DELETE FROM \"%s\".directories"
-                                                           " WHERE name = ?;" % self.keyspace_metadata)
+                                                           " WHERE name = ?;"
+                                                           % self.keyspace_metadata)
         delete_empty_dir_stm.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
         delete_empty_dir_stm.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         delete_empty_dir_stm.request_timeout = 60
@@ -1416,7 +1418,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         def directories_to_remove(result):
             for response in result:
                 if not response.success or not list(response.result_or_exc):
-                    dir_name = response.result_or_exc.response_future.query.values[0].rpartition('.')[0]
+                    dir_name = response.result_or_exc.response_future\
+                                                     .query.values[0].rpartition('.')[0]
                     log.info("Scheduling delete for '%s'" % dir_name)
                     yield delete_empty_dir_stm, (dir_name,)
 
@@ -1430,12 +1433,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # Update token range for the next iteration
             token = result[-1][1]
             parent_dirs = self._execute_concurrent_metadata(directories_to_check(result),
-                                                   concurrency=max_concurrent_reqs,
-                                                   raise_on_first_error=True,
-                                                   results_generator=False)
+                                                            concurrency=max_concurrent_reqs,
+                                                            raise_on_first_error=True,
+                                                            results_generator=False)
             self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
-                                     concurrency=max_concurrent_reqs,
-                                     raise_on_first_error=False)
+                                              concurrency=max_concurrent_reqs,
+                                              raise_on_first_error=False)
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
 
