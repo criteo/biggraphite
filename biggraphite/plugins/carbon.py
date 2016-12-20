@@ -36,10 +36,13 @@ from biggraphite import accessor
 # pylama:ignore=D102
 
 WRITE_TIME = prometheus_client.Histogram(
-    'bg_write_latency_ms', 'write latency in milliseconds',
+    "bg_write_latency_ms", "write latency in milliseconds",
     buckets=(0.005, .01, .025, .05, .075,
              .1, .25, .5, .75,
              1.0, 2.5, 5.0, 7.5))
+CREATE_TIME = prometheus_client.Summary(
+    "bg_create_latency_ms", "create latency in milliseconds")
+CREATES = prometheus_client.Counter("bg_creates", "metric creations")
 
 
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
@@ -70,7 +73,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
         self.reactor.callInThread(self._createMetrics)
         self._lc = task.LoopingCall(self._background)
-        self._lc.start(60)
+        self._lc.start(50)
 
     @property
     def reactor(self):
@@ -115,6 +118,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def exists(self, metric_name):
         return self.cache.cache_has(metric_name)
 
+    @CREATE_TIME.time()
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
         metadata = accessor.MetricMetadata(
             aggregator=accessor.Aggregator.from_carbon_name(aggregation_method),
@@ -200,6 +204,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                     continue
                 log.creates("creating database metric %s" % metric.name)
                 self.cache.create_metric(metric)
+                CREATES.inc()
+                time.sleep(0) # thread.yield()
             except:
                 log.err()
                 time.sleep(0.1)
