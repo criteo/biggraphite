@@ -17,6 +17,7 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 
 import time
 import Queue
+import prometheus_client
 
 # Version 0.9.15 (the one from PIP) does not have the "database" module.
 # To make use of the plugin with carbon, you will need a version that has
@@ -25,6 +26,7 @@ import Queue
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
 from carbon import log
+from carbon import instrumentation
 from twisted.internet import task
 
 from biggraphite import graphite_utils
@@ -33,6 +35,11 @@ from biggraphite import accessor
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102
 
+WRITE_TIME = prometheus_client.Histogram(
+    'bg_write_latency_ms', 'write latency in milliseconds',
+    buckets=(0.005, .01, .025, .05, .075,
+             .1, .25, .5, .75,
+             1.0, 2.5, 5.0, 7.5))
 
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """Database plugin for Carbon.
@@ -88,6 +95,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         return self._cache
 
+    @WRITE_TIME.time()
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
         metric = self.cache.get_metric(metric_name=metric_name)
@@ -161,6 +169,14 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def _background(self):
         log.cache("background operations")
+        for metric in prometheus_client.REGISTRY.collect():
+            for name, labels, value in metric.samples:
+                name = name
+                if labels:
+                    name += "." + ".".join(
+                        ["%s.%s" % (k,v.replace('.', '_'))
+                         for k, v in sorted(labels.items())])
+                instrumentation.cache_record(name, value)
         if self._accessor:
             self.accessor.background()
 
