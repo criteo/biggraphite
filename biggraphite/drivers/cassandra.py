@@ -1296,7 +1296,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self._repair_missing_dir(start_key, end_key, shard, nshards, callback_on_progress)
 
     def _repair_missing_dir(self, start_key=None, end_key=None, shard=0, nshards=1,
-                         callback_on_progress=None):
+                            callback_on_progress=None):
         """Create directory that does not exist for a metric to be accessible."""
         start_token, stop_token = self._get_search_range(start_key, end_key, shard, nshards)
 
@@ -1371,9 +1371,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """Remove directory that does not contains any metrics."""
         start_token, stop_token = self._get_search_range(start_key, end_key, shard, nshards)
 
-        dir_query = self._prepare_background_request("SELECT name, token(name) FROM \"%s\".directories"
+        dir_query = self._prepare_background_request("SELECT name, token(name)"
+                                                     " FROM \"%s\".directories"
                                                      " WHERE token(name) > ? LIMIT %d;"
-                                                     % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
+                                                     % (self.keyspace_metadata,
+                                                        DEFAULT_MAX_BATCH_UTIL))
         has_metric_query = self._prepare_background_request("SELECT name FROM \"%s\".metrics"
                                                             " WHERE parent LIKE ? LIMIT 1;"
                                                             % (self.keyspace_metadata, ))
@@ -1470,7 +1472,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
         self._clean_expired_metrics(max_age, callback_on_progress=callback_on_progress)
-        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
+        self._clean_empty_dir(callback_on_progress=callback_on_progress)
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
@@ -1480,11 +1482,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         return select
 
-
     def _clean_expired_metrics(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
                                callback_on_progress=None):
-        """Delete metrics that has an expired ttl. """
-
+        """Delete metrics that has an expired ttl."""
         if not max_age:
             log.warn("You must specify a cutoff time for cleanup")
             return
@@ -1510,7 +1510,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             (self.keyspace_metadata))
 
         def run(rows):
-            for name, _ in  rows:
+            for name, _ in rows:
                 log.info("Scheduling delete for %s", name)
                 yield (delete, (name,))
                 yield (delete_metadata, (name,))

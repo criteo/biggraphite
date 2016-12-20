@@ -25,6 +25,7 @@ from biggraphite import metadata_cache
 
 _DEV_NULL = open(os.devnull, "w")
 
+
 class CommandClean(command.BaseCommand):
     """Clean BigGraphite metric metadata from old metrics."""
 
@@ -70,7 +71,8 @@ class CommandClean(command.BaseCommand):
         #     out_fd = _DEV_NULL
 
         if self.pbar is None:
-            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=False)
+            self.pbar = progressbar.ProgressBar(fd=out_fd,
+                                                redirect_stderr=False)
         self.pbar.start()
 
         if on_progress is None:
@@ -88,10 +90,12 @@ class CommandClean(command.BaseCommand):
                     with metadata_cache.DiskCache(bg_acc, settings) as cache:
                         cache.clean()
                 else:
-                    logging.error('Cannot clean disk cache because storage_dir is empty')
+                    logging.error('Cannot clean disk cache because storage_dir'
+                                  ' is empty')
 
             if opts.clean_backend:
-                logging.info("Cleaning backend, removing things before %d", opts.max_age)
+                logging.info("Cleaning backend, removing things before %d",
+                             opts.max_age)
                 bg_acc.clean(opts.max_age, on_progress)
 
         self.pbar.finish()
