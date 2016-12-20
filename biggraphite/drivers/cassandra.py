@@ -31,7 +31,7 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
-from cassandra.io import asyncorereactor as c_asyncorereactor
+from cassandra.io.asyncorereactor import AsyncoreConnection as c_reactor
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -342,7 +342,7 @@ def _row_size_ms(stage):
     return bg_accessor.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
 
-class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
+class _CappedConnection(c_reactor):
     """A connection with a cap on the number of in-flight requests per host."""
 
     # 300 is the minimum with protocol version 3, default is 65536
