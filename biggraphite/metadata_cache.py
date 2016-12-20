@@ -303,7 +303,8 @@ class DiskCache(Cache):
         except OSError:
             pass  # Directory already exists
 
-        logging.info('Opening cache %s', self.__path)
+        logging.info('Opening cache %s (ttl: %s, sync: %s)',
+                     self.__path, self.__ttl, self.__sync)
         self.__env = lmdb.open(
             self.__path,
             map_size=self.__size,

@@ -41,6 +41,7 @@ WRITE_TIME = prometheus_client.Histogram(
              .1, .25, .5, .75,
              1.0, 2.5, 5.0, 7.5))
 
+
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """Database plugin for Carbon.
 
@@ -174,7 +175,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                 name = name
                 if labels:
                     name += "." + ".".join(
-                        ["%s.%s" % (k,v.replace('.', '_'))
+                        ["%s.%s" % (k, v.replace('.', '_'))
                          for k, v in sorted(labels.items())])
                 instrumentation.cache_record(name, value)
         if self._accessor:
