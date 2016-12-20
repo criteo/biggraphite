@@ -1,4 +1,3 @@
-
 # Commande line
 humanize
 ipython
@@ -15,6 +14,7 @@ scales
 # Core
 enum34
 cachetools
+prometheus_client
 
 # Metadata cache
 lmdb

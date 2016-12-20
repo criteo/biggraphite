@@ -17,6 +17,7 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 
 import time
 import Queue
+import prometheus_client
 
 # Version 0.9.15 (the one from PIP) does not have the "database" module.
 # To make use of the plugin with carbon, you will need a version that has
@@ -25,6 +26,7 @@ import Queue
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
 from carbon import log
+from carbon import instrumentation
 from twisted.internet import task
 
 from biggraphite import graphite_utils
@@ -32,6 +34,15 @@ from biggraphite import accessor
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102
+
+WRITE_TIME = prometheus_client.Histogram(
+    "bg_write_latency_seconds", "write latency in seconds",
+    buckets=(0.005, .01, .025, .05, .075,
+             .1, .25, .5, .75,
+             1.0, 2.5, 5.0, 7.5))
+CREATE_TIME = prometheus_client.Summary(
+    "bg_create_latency_seconds", "create latency in seconds")
+CREATES = prometheus_client.Counter("bg_creates", "metric creations")
 
 
 class BigGraphiteDatabase(database.TimeSeriesDatabase):
@@ -62,7 +73,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
         self.reactor.callInThread(self._createMetrics)
         self._lc = task.LoopingCall(self._background)
-        self._lc.start(60)
+        self._lc.start(50)
 
     @property
     def reactor(self):
@@ -88,6 +99,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         return self._cache
 
+    @WRITE_TIME.time()
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
         metric = self.cache.get_metric(metric_name=metric_name)
@@ -106,6 +118,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def exists(self, metric_name):
         return self.cache.cache_has(metric_name)
 
+    @CREATE_TIME.time()
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
         metadata = accessor.MetricMetadata(
             aggregator=accessor.Aggregator.from_carbon_name(aggregation_method),
@@ -161,6 +174,14 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def _background(self):
         log.cache("background operations")
+        for metric in prometheus_client.REGISTRY.collect():
+            for name, labels, value in metric.samples:
+                name = name
+                if labels:
+                    name += "." + ".".join(
+                        ["%s.%s" % (k, v.replace('.', '_'))
+                         for k, v in sorted(labels.items())])
+                instrumentation.cache_record(name, value)
         if self._accessor:
             self.accessor.background()
 
@@ -183,6 +204,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                     continue
                 log.creates("creating database metric %s" % metric.name)
                 self.cache.create_metric(metric)
+                CREATES.inc()
+                time.sleep(0)  # thread.yield()
             except:
                 log.err()
                 time.sleep(0.1)

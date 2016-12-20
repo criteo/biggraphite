@@ -15,6 +15,7 @@
 """Utility module."""
 
 import logging
+import distutils
 
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import memory as bg_memory
@@ -30,15 +31,32 @@ CACHES = frozenset([
     ("memory", metadata_cache.MemoryCache),
 ])
 
+
+def strtoint(value):
+    """Cast a string to an integer."""
+    if value is None:
+        return None
+    return int(value)
+
+
+def strtobool(value):
+    """Cast a string to a bool."""
+    if value is None:
+        return None
+    if type(value) is bool:
+        return value
+    return distutils.util.strtobool(value)
+
+
 DEFAULT_DRIVER = "cassandra"
 DEFAULT_CACHE = "memory"
 DEFAULT_LOG_LEVEL = "WARNING"
 OPTIONS = {
     "driver": str,
     "cache": str,
-    "cache_size": lambda v: None if v is None else int(v),
-    "cache_ttl": lambda v: None if v is None else int(v),
-    "cache_sync": bool,
+    "cache_size": strtoint,
+    "cache_ttl": strtoint,
+    "cache_sync": strtobool,
     "loglevel": str,
     "storage_dir": str,
 }

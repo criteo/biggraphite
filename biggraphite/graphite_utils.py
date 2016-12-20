@@ -17,18 +17,6 @@
 from biggraphite import utils as bg_utils
 
 
-class Error(Exception):
-    """Base class for all exceptions from this module."""
-
-    pass
-
-
-class ConfigError(Error):
-    """Configuration problems."""
-
-    pass
-
-
 def accessor_from_settings(settings):
     """Get Accessor from Graphite-related configuration object.
 
