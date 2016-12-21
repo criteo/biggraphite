@@ -24,6 +24,7 @@ import uuid
 import os
 from os import path as os_path
 import multiprocessing
+import collections
 
 import cassandra
 from cassandra import murmur3
@@ -1263,6 +1264,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if on_done:
             count_down = _CountDown(count=len(datapoints), on_zero=on_done)
 
+        statements = collections.defaultdict(list)
         for timestamp, value, count, stage in datapoints:
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _row_size_ms(stage)
@@ -1273,8 +1275,26 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
                 offset=offset, value=value, count=count,
             )
-            future = self._execute_async(session=self.__session_data,
-                                         query=statement, parameters=args)
+
+            # We group by table/partition.
+            key = (stage, time_start_ms)
+            statements[key].append((statement, args))
+
+        for statements_and_args in statements.values():
+            if len(statements_and_args) == 1:
+                statement, args = statements_and_args[0]
+            else:
+                batch = c_query.BatchStatement(
+                    consistency_level=_DATA_WRITE_CONSISTENCY,
+                    batch_type=c_query.BatchType.UNLOGGED
+                )
+                for statement, args in statements_and_args:
+                    batch.add(statement, args)
+                statement = batch
+                parameters = None
+
+            future = self._execute_async(
+                session=self.__session_data, query=statement, parameters=args)
             if count_down:
                 future.add_callbacks(
                     count_down.on_cassandra_result,
