@@ -16,6 +16,7 @@
 
 import logging
 import distutils
+import prometheus_client
 
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import memory as bg_memory
@@ -51,6 +52,7 @@ def strtobool(value):
 DEFAULT_DRIVER = "cassandra"
 DEFAULT_CACHE = "memory"
 DEFAULT_LOG_LEVEL = "WARNING"
+DEFAULT_ADMIN_PORT = None
 OPTIONS = {
     "driver": str,
     "cache": str,
@@ -59,6 +61,7 @@ OPTIONS = {
     "cache_sync": strtobool,
     "loglevel": str,
     "storage_dir": str,
+    "admin_port": strtoint,
 }
 
 
@@ -72,6 +75,21 @@ class ConfigError(Error):
     """Configuration problems."""
 
     pass
+
+
+def start_admin(settings):
+    """Start the admin interface.
+
+    Args:
+      settings: dict(str -> value).
+    """
+    port = settings.get('admin_port', DEFAULT_ADMIN_PORT)
+    if port and not start_admin.started:
+        prometheus_client.start_wsgi_server(port)
+        start_admin.started = True
+
+
+start_admin.started = False
 
 
 def accessor_from_settings(settings):
@@ -152,6 +170,10 @@ def add_argparse_arguments(parser):
         "--loglevel", metavar="LEVEL",
         help="Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
         default=DEFAULT_LOG_LEVEL)
+    parser.add_argument(
+        "--admin_port", metavar="PORT",
+        help="Admin port with /metrics",
+        default=DEFAULT_ADMIN_PORT)
     bg_cassandra.add_argparse_arguments(parser)
 
 

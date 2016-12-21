@@ -29,6 +29,7 @@ from carbon import log
 from carbon import instrumentation
 from twisted.internet import task
 
+from biggraphite import utils
 from biggraphite import graphite_utils
 from biggraphite import accessor
 
@@ -70,6 +71,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._metricsToCreate = Queue.Queue()
         self._sync_countdown = 0
 
+        utils.start_admin(utils.settings_from_confattr(settings))
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
         self.reactor.callInThread(self._createMetrics)
         self._lc = task.LoopingCall(self._background)
