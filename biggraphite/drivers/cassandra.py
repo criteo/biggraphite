@@ -1281,7 +1281,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             statements[key].append((statement, args))
 
         for statements_and_args in statements.values():
-            if len(statements_and_args) == 0:
+            if len(statements_and_args) == 1:
                 statement, args = statements_and_args[0]
                 count = 1
             else:
@@ -1292,7 +1292,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 for statement, args in statements_and_args:
                     batch.add(statement, args)
                 statement = batch
-                parameters = None
+                args = None
                 count = len(statements_and_args)
 
             future = self._execute_async(
