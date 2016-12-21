@@ -61,7 +61,7 @@ DEFAULT_TRACE = False
 DEFAULT_BULKIMPORT = False
 DEFAULT_MAX_QUERIES_PER_PATTERN = 42
 DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN = 4
-DEFAULT_MAX_QUERIES_UTIL = 100
+DEFAULT_MAX_CONCURRENT_CONNECTIONS = 100
 DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 
@@ -79,6 +79,7 @@ OPTIONS = {
     "max_metrics_per_pattern": int,
     "max_queries_per_pattern": int,
     "max_concurrent_queries_per_pattern": int,
+    "max_concurrent_connections": int,
     "trace": bool,
     "bulkimport": bool,
 }
@@ -94,6 +95,10 @@ def add_argparse_arguments(parser):
         "--cassandra_contact_points", metavar="HOST", nargs="+",
         help="Hosts used for discovery.",
         default=DEFAULT_CONTACT_POINTS)
+    parser.add_argument(
+        "--cassandra_concurrent_connections", metavar="N", type=int,
+        help="Maximum concurrent connections to the cluster.",
+        default=DEFAULT_MAX_CONCURRENT_CONNECTIONS)
     parser.add_argument(
         "--cassandra_contact_points_metadata", metavar="HOST", nargs="+",
         help="Hosts used for discovery.",
@@ -547,6 +552,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  max_queries_per_pattern=DEFAULT_MAX_QUERIES_PER_PATTERN,
                  max_concurrent_queries_per_pattern=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN,
                  trace=DEFAULT_TRACE,
+                 max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
                  bulkimport=DEFAULT_BULKIMPORT):
         """Record parameters needed to connect.
 
@@ -585,6 +591,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.max_metrics_per_pattern = max_metrics_per_pattern
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
+        self.max_concurrent_connections = max_concurrent_connections
         self.__connections = connections
         self.__compression = compression
         self.__trace = trace
@@ -1338,13 +1345,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             token = result[-1][1]
             parent_dirs = self._execute_concurrent_metadata(
                 directories_to_check(result),
-                concurrency=DEFAULT_MAX_QUERIES_UTIL,
+                concurrency=self.max_concurrent_connections,
                 raise_on_first_error=False,
                 results_generator=True)
 
             rets = self._execute_concurrent_metadata(
                 directories_to_create(parent_dirs),
-                concurrency=DEFAULT_MAX_QUERIES_UTIL,
+                concurrency=self.max_concurrent_connections,
                 raise_on_first_error=False)
 
             for ret in rets:
@@ -1411,10 +1418,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # Update token range for the next iteration
             token = result[-1][1]
             parent_dirs = self._execute_concurrent_metadata(directories_to_check(result),
-                                                            concurrency=DEFAULT_MAX_QUERIES_UTIL,
+                                                            concurrency=self.max_concurrent_connections,
                                                             raise_on_first_error=False)
             rets = self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
-                                                     concurrency=DEFAULT_MAX_QUERIES_UTIL,
+                                                     concurrency=self.max_concurrent_connections,
                                                      raise_on_first_error=False)
             for ret in rets:
                 if not ret.success:
@@ -1533,7 +1540,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             token = rows[-1][1]
             rets = self._execute_concurrent_metadata(run(rows),
-                                                     concurrency=DEFAULT_MAX_QUERIES_UTIL,
+                                                     concurrency=self.max_concurrent_connections,
                                                      raise_on_first_error=False)
             for ret in rets:
                 if not ret.success:
