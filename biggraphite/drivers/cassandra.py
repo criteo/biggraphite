@@ -1281,8 +1281,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             statements[key].append((statement, args))
 
         for statements_and_args in statements.values():
-            if len(statements_and_args) == 1:
+            if len(statements_and_args) == 0:
                 statement, args = statements_and_args[0]
+                count = 1
             else:
                 batch = c_query.BatchStatement(
                     consistency_level=_DATA_WRITE_CONSISTENCY,
@@ -1292,10 +1293,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     batch.add(statement, args)
                 statement = batch
                 parameters = None
+                count = len(statements_and_args)
 
             future = self._execute_async(
                 session=self.__session_data, query=statement, parameters=args)
             if count_down:
+                if count > 1:
+                    # If batched we will get less results.
+                    count_down.count -= count - 1
                 future.add_callbacks(
                     count_down.on_cassandra_result,
                     count_down.on_cassandra_failure,

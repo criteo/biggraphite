@@ -41,8 +41,8 @@ class CountDown(object):
           on_zero: called once count reaches zero, see decrement
         """
         assert count > 0
+        self.count = count
         self._canceled = False
-        self._count = count
         self._lock = threading.Lock()
         self._on_zero = on_zero
 
@@ -57,10 +57,10 @@ class CountDown(object):
     def decrement(self):
         """Call the callback if count reached zero, with None as argument."""
         with self._lock:
-            self._count -= 1
+            self.count -= 1
             if self._canceled:
                 return
-            elif not self._count:
+            elif not self.count:
                 self._on_zero(None)
 
     def on_result(self, unused_result):
