@@ -17,20 +17,20 @@ from __future__ import print_function
 import unittest
 import argparse
 
-from biggraphite.cli import command_repair
+from biggraphite.cli import command_test
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
 
 
-class TestCommandRepair(bg_test_utils.TestCaseWithFakeAccessor):
+class TestCommandTest(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_run(self):
-        cmd = command_repair.CommandRepair()
+        cmd = command_test.CommandTest()
 
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(['--shard=0', '--nshards=5'])
+        opts = parser.parse_args([])
         cmd.run(self.accessor, opts)
 
 

@@ -231,6 +231,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             port=self.port,
             timeout=60,
         )
+        self.accessor.syncdb()
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
         self.addCleanup(self.__drop_all_metrics)

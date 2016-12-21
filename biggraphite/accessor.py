@@ -595,10 +595,18 @@ class Accessor(object):
         return False
 
     @abc.abstractmethod
-    def connect(self, skip_schema_upgrade=False):
+    def connect(self):
         """Establish a connection, idempotent.
 
         This must be called AFTER creating subprocess with the multiprocessing module.
+        """
+        pass
+
+    def syncdb(self, dry_run=False):
+        """Create the database schema.
+
+        Args:
+          dry_run: bool, if True nothing will be applied to the database.
         """
         pass
 

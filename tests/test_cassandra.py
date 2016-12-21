@@ -14,13 +14,9 @@
 # limitations under the License.
 from __future__ import print_function
 
-import os
 import unittest
 import time
 from distutils import version
-
-# To speed-up tests.
-os.environ['BG_COMPONENTS_MAX_LEN'] = str(12)
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
