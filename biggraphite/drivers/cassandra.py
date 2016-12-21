@@ -61,7 +61,7 @@ DEFAULT_TRACE = False
 DEFAULT_BULKIMPORT = False
 DEFAULT_MAX_QUERIES_PER_PATTERN = 42
 DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN = 4
-DEFAULT_MAX_QUERIES_UTIL = 1000
+DEFAULT_MAX_QUERIES_UTIL = 100
 DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 
@@ -285,9 +285,9 @@ _METADATA_CREATION_CQL = ([
     _METADATA_CREATION_CQL_DIRECTORIES,
     _METADATA_CREATION_CQL_METRICS_METADATA,
 ] + _METADATA_CREATION_CQL_PATH_INDEXES
-  + _METADATA_CREATION_CQL_PARENT_INDEXES
-  + _METADATA_CREATION_CQL_ID_INDEXES
-  + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
+                          + _METADATA_CREATION_CQL_PARENT_INDEXES
+                          + _METADATA_CREATION_CQL_ID_INDEXES
+                          + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
 )
 
 
@@ -760,7 +760,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     raise e
                 result = e
                 success = False
-            query_results.append((success, result))
+                query_results.append((success, result))
         return query_results
 
     def _execute_concurrent_data(self, *args, **kwargs):
@@ -1342,10 +1342,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 raise_on_first_error=False,
                 results_generator=True)
 
-            self._execute_concurrent_metadata(
+            rets = self._execute_concurrent_metadata(
                 directories_to_create(parent_dirs),
                 concurrency=DEFAULT_MAX_QUERIES_UTIL,
                 raise_on_first_error=False)
+
+            for ret in rets:
+                if not ret.success:
+                    log.warn(str(ret.result_or_exc))
 
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
@@ -1409,9 +1413,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             parent_dirs = self._execute_concurrent_metadata(directories_to_check(result),
                                                             concurrency=DEFAULT_MAX_QUERIES_UTIL,
                                                             raise_on_first_error=False)
-            self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
-                                              concurrency=DEFAULT_MAX_QUERIES_UTIL,
-                                              raise_on_first_error=False)
+            rets = self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
+                                                     concurrency=DEFAULT_MAX_QUERIES_UTIL,
+                                                     raise_on_first_error=False)
+            for ret in rets:
+                if not ret.success:
+                    log.warn(str(ret.result_or_exc))
+
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
 
@@ -1464,15 +1472,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for statement, args in queries:
             self._execute_metadata(statement, args)
 
-    def clean(self, max_age=None, callback_on_progress=None):
+    def clean(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
+              callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Args:
             cutoff: UNIX time in seconds. Rows older than it should be deleted.
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
-        self._clean_expired_metrics(max_age, callback_on_progress=callback_on_progress)
-        self._clean_empty_dir(callback_on_progress=callback_on_progress)
+        self._clean_expired_metrics(max_age, start_key, end_key, shard, nshards,
+                                    callback_on_progress)
+        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
@@ -1522,9 +1532,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 break
 
             token = rows[-1][1]
-            self._execute_concurrent_metadata(run(rows),
-                                              concurrency=DEFAULT_MAX_QUERIES_UTIL,
-                                              raise_on_first_error=False)
+            rets = self._execute_concurrent_metadata(run(rows),
+                                                     concurrency=DEFAULT_MAX_QUERIES_UTIL,
+                                                     raise_on_first_error=False)
+            for ret in rets:
+                if not ret.success:
+                    log.warn(str(ret.result_or_exc))
+
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
 

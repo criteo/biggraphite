@@ -43,14 +43,14 @@ class CommandClean(command.BaseCommand):
             help="clean cache",
             action='store_true'
         )
-        # parser.add_argument(
-        #     "--quiet", action="store_const", default=False, const=True,
-        #     help="Show no output unless there are problems."
-        # )
         parser.add_argument(
             "--clean-backend",
             help="clean backend",
             action='store_true'
+        )
+        parser.add_argument(
+            "--quiet", action="store_const", default=False, const=True,
+            help="Show no output unless there are problems."
         )
         parser.add_argument(
             "--max-age",
@@ -60,6 +60,26 @@ class CommandClean(command.BaseCommand):
             default=24 * 60 * 60,
             action='store'
         )
+        parser.add_argument(
+            "--start-key",
+            help="Start key.",
+        )
+        parser.add_argument(
+            "--end-key",
+            help="End key.",
+        )
+        parser.add_argument(
+            "--shard",
+            help="Shard number.",
+            type=int,
+            default=0,
+        )
+        parser.add_argument(
+            "--nshards",
+            help="Number of shards.",
+            type=int,
+            default=1,
+        )
 
     def run(self, accessor, opts, on_progress=None):
         """Run some cleanups.
@@ -67,8 +87,8 @@ class CommandClean(command.BaseCommand):
         See command.BaseCommand
         """
         out_fd = sys.stderr
-        # if opts.quiet:
-        #     out_fd = _DEV_NULL
+        if opts.quiet:
+            out_fd = _DEV_NULL
 
         if self.pbar is None:
             self.pbar = progressbar.ProgressBar(fd=out_fd,
@@ -96,6 +116,10 @@ class CommandClean(command.BaseCommand):
             if opts.clean_backend:
                 logging.info("Cleaning backend, removing things before %d",
                              opts.max_age)
-                bg_acc.clean(opts.max_age, on_progress)
+                bg_acc.clean(opts.max_age,
+                             shard=opts.shard, nshards=opts.nshards,
+                             start_key=opts.start_key,
+                             end_key=opts.end_key,
+                             callback_on_progress=on_progress)
 
         self.pbar.finish()

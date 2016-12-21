@@ -133,6 +133,17 @@ class CommandDaemon(command.BaseCommand):
             default=8080,
             type=int
         )
+
+        # To avoid to fail to add the same option twice
+        old_fn = parser.add_argument
+
+        def add_arg(*args, **kwargs):
+            try:
+                old_fn(*args, **kwargs)
+            except:
+                pass
+
+        parser.add_argument = add_arg
         command_repair.CommandRepair.add_arguments(command_repair.CommandRepair(), parser)
         command_clean.CommandClean.add_arguments(command_clean.CommandClean(), parser)
 
