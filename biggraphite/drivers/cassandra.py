@@ -1418,7 +1418,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # Update token range for the next iteration
             token = result[-1][1]
             parent_dirs = self._execute_concurrent_metadata(directories_to_check(result),
-                                                            concurrency=self.max_concurrent_connections,
+                                                            concurrency=self.
+                                                            max_concurrent_connections,
                                                             raise_on_first_error=False)
             rets = self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
                                                      concurrency=self.max_concurrent_connections,
