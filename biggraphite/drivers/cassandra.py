@@ -210,7 +210,7 @@ _FLUSH_MEMORY_EVERY_S = 15 * MINUTE
 # Support for TWCS is still experimental and require Cassandra >=3.8.
 _COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
 
-_COMPONENTS_MAX_LEN = 64
+_COMPONENTS_MAX_LEN = int(os.environ.get('BG_COMPONENTS_MAX_LEN', 64))
 _LAST_COMPONENT = "__END__"
 _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
