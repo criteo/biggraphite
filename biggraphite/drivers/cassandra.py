@@ -39,6 +39,14 @@ from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
 
+import prometheus_client as pm
+pm_deleted_directories = pm.Counter('biggraphite_cassandra_deleted_directories',
+                                    'Number of directory that have been deleted so far')
+pm_repaired_directories = pm.Counter('biggraphite_cassandra_repaired_directories',
+                                     'Number of missing directory created')
+pm_expired_metrics = pm.Counter('biggraphite_cassandra_expired_metrics',
+                                'Number of metrics that has been cleaned due to expiration')
+
 log = logging.getLogger(__name__)
 
 # Round the row size to 1000 seconds
@@ -1332,6 +1340,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     components = self._components_from_name(dir_name + DIRECTORY_SEPARATOR + '_')
                     queries = self._create_parent_dirs_queries(components)
                     for query in queries:
+                        pm_repaired_directories.inc()
                         yield query
 
         log.info("Start creating missing directories")
@@ -1406,6 +1415,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     dir_name = response.result_or_exc.response_future\
                                                      .query.values[0].rpartition('.')[0]
                     log.info("Scheduling delete for '%s'" % dir_name)
+                    pm_deleted_directories.inc()
                     yield delete_empty_dir_stm, (dir_name,)
 
         log.info("Starting cleanup of empty dir")
@@ -1530,6 +1540,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         def run(rows):
             for name, _ in rows:
                 log.info("Scheduling delete for %s", name)
+                pm_expired_metrics.inc()
                 yield (delete, (name,))
                 yield (delete_metadata, (name,))
 

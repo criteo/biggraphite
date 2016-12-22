@@ -26,6 +26,7 @@ import StringIO
 
 from biggraphite.cli import command
 from biggraphite.cli import command_clean, command_repair
+from biggraphite import utils
 
 
 def _init_logger(workers):
@@ -200,6 +201,9 @@ class CommandDaemon(command.BaseCommand):
 
         _init_logger(workers)
         accessor.connect()
+
+        # start prometheus server
+        utils.start_admin(utils.settings_from_args(opts))
 
         # Spawn workers
         for worker in workers.values():
