@@ -24,6 +24,7 @@ import uuid
 import os
 from os import path as os_path
 import multiprocessing
+import collections
 
 import cassandra
 from cassandra import murmur3
@@ -209,7 +210,7 @@ _FLUSH_MEMORY_EVERY_S = 15 * MINUTE
 # Support for TWCS is still experimental and require Cassandra >=3.8.
 _COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
 
-_COMPONENTS_MAX_LEN = 64
+_COMPONENTS_MAX_LEN = int(os.environ.get('BG_COMPONENTS_MAX_LEN', 64))
 _LAST_COMPONENT = "__END__"
 _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
@@ -532,7 +533,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def __init__(self,
                  keyspace='biggraphite',
-                 contact_points=DEFAULT_CONTACT_POINTS,
+                 contact_points=[DEFAULT_CONTACT_POINTS],
                  port=DEFAULT_PORT,
                  contact_points_metadata=None,
                  port_metadata=None,
@@ -600,42 +601,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__session_metadata = None  # setup by connect()
         self.__glob_parser = bg_glob.GraphiteGlobParser()
 
-    def connect(self, skip_schema_upgrade=False):
+    def connect(self):
         """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).connect(
-            skip_schema_upgrade=skip_schema_upgrade)
-        self._connect_metadata(skip_schema_upgrade=skip_schema_upgrade)
-        if self.contact_points_data != self.contact_points_metadata:
-            self._connect_data()
-        else:
-            self.__session_data = self.__session_metadata
-            self.__cluster_data = self.__cluster_metadata
-
-        self.__lazy_statements = _LazyPreparedStatements(
-            self.__session_data, self.keyspace, self.__bulkimport)
-
+        super(_CassandraAccessor, self).connect()
+        self._connect_clusters()
+        self._prepare_statements()
         self.is_connected = True
 
-    def _connect_metadata(self, skip_schema_upgrade=False):
-        cluster = self.__cluster_metadata = c_cluster.Cluster(
-            self.contact_points_metadata, self.port_metadata,
-            executor_threads=self.__connections,
-            compression=self.__compression,
-            metrics_enabled=True,
-        )
-
-        # Limits in flight requests
-        cluster.connection_class = _CappedConnection
-        session = self.__session_metadata = cluster.connect()
-        session.row_factory = c_query.tuple_factory  # Saves 2% CPU
-        if self.__timeout:
-            session.default_timeout = self.__timeout
-
-        if not skip_schema_upgrade:
-            self._upgrade_schema()
-
+    def _prepare_statements(self):
         def __prepare(cql, consistency=_META_WRITE_CONSISTENCY):
-            statement = session.prepare(cql)
+            statement = self.__session_metadata.prepare(cql)
             statement.consistency_level = consistency
             return statement
 
@@ -671,20 +646,33 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
         )
 
-    def _connect_data(self):
-        cluster = self.__cluster_data = c_cluster.Cluster(
-            self.contact_points_data, self.port,
+    def _connect_clusters(self):
+        self.__cluster_metadata, self.__session_metadata = self._connect(
+            self.contact_points_metadata, self.port_metadata)
+        if self.contact_points_data != self.contact_points_metadata:
+            self.__cluster_data, self.__session_data = self._connect(
+                self.contact_points_data, self.port_data)
+        else:
+            self.__session_data = self.__session_metadata
+            self.__cluster_data = self.__cluster_metadata
+        self.__lazy_statements = _LazyPreparedStatements(
+            self.__session_data, self.keyspace, self.__bulkimport)
+
+    def _connect(self, contact_points, port):
+        cluster = c_cluster.Cluster(
+            contact_points, port,
             executor_threads=self.__connections,
             compression=self.__compression,
             metrics_enabled=True,
         )
+
         # Limits in flight requests
         cluster.connection_class = _CappedConnection
-
-        session = self.__session_data = self.__cluster_data.connect()
+        session = cluster.connect()
         session.row_factory = c_query.tuple_factory  # Saves 2% CPU
         if self.__timeout:
             session.default_timeout = self.__timeout
+        return cluster, session
 
     def _execute(self, session, *args, **kwargs):
         """Wrapper for __session.execute_async()."""
@@ -1263,6 +1251,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if on_done:
             count_down = _CountDown(count=len(datapoints), on_zero=on_done)
 
+        statements = collections.defaultdict(list)
         for timestamp, value, count, stage in datapoints:
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _row_size_ms(stage)
@@ -1273,9 +1262,32 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
                 offset=offset, value=value, count=count,
             )
-            future = self._execute_async(session=self.__session_data,
-                                         query=statement, parameters=args)
+
+            # We group by table/partition.
+            key = (stage, time_start_ms)
+            statements[key].append((statement, args))
+
+        for statements_and_args in statements.values():
+            if len(statements_and_args) == 1:
+                statement, args = statements_and_args[0]
+                count = 1
+            else:
+                batch = c_query.BatchStatement(
+                    consistency_level=_DATA_WRITE_CONSISTENCY,
+                    batch_type=c_query.BatchType.UNLOGGED
+                )
+                for statement, args in statements_and_args:
+                    batch.add(statement, args)
+                statement = batch
+                args = None
+                count = len(statements_and_args)
+
+            future = self._execute_async(
+                session=self.__session_data, query=statement, parameters=args)
             if count_down:
+                if count > 1:
+                    # If batched we will get less results.
+                    count_down.count -= count - 1
                 future.add_callbacks(
                     count_down.on_cassandra_result,
                     count_down.on_cassandra_failure,
@@ -1367,33 +1379,55 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).shutdown()
         if self.is_connected:
             try:
-                self.__cluster_data.shutdown()
+                if self.__cluster_data:
+                    self.__cluster_data.shutdown()
             except Exception as exc:
                 raise CassandraError(exc)
             self.__cluster_data = None
+
+            try:
+                if self.__cluster_metadata:
+                    self.__cluster_metadata.shutdown()
+            except Exception as exc:
+                raise CassandraError(exc)
+            self.__cluster_metadata = None
+
             self.is_connected = False
 
-    def _upgrade_schema(self):
-        # Currently no change, so only upgrade operation is to setup
-        try:
-            self.__cluster_metadata.refresh_schema_metadata()
-        except cassandra.DriverException:
-            log.exception("Failed to refresh metadata.")
-            return
+    def syncdb(self, dry_run=False):
+        schema = ""
+
+        self._connect_clusters()
+        self.__cluster_data.refresh_schema_metadata()
+        self.__cluster_metadata.refresh_schema_metadata()
 
         keyspaces = self.__cluster_metadata.metadata.keyspaces.keys()
         if self.keyspace_metadata not in keyspaces:
             raise CassandraError("Missing keyspace '%s'." % self.keyspace_metadata)
 
-        tables = self.__cluster_metadata.metadata.keyspaces[
-            self.keyspace_metadata].tables
-        mandatory_tables = ['metrics', 'directories', 'metrics_metadata']
-
-        if reduce(lambda acc, val: acc and val in tables, mandatory_tables):
-            return
+        keyspaces = self.__cluster_data.metadata.keyspaces.keys()
+        if self.keyspace not in keyspaces:
+            raise CassandraError("Missing keyspace '%s'." % self.keyspace)
 
         for cql in _METADATA_CREATION_CQL:
-            self._execute_metadata(cql % {"keyspace": self.keyspace_metadata})
+            query = cql % {"keyspace": self.keyspace_metadata}
+            schema += query + "\n\n"
+            if not dry_run:
+                self._execute_metadata(query)
+
+        tables = self.__cluster_data.metadata.keyspaces[self.keyspace].tables
+        for table in tables:
+            if table.startswith('datapoints_'):
+                try:
+                    stage_str = table.strip('datapoints_').replace('p_', '*') + 's'
+                except:
+                    continue
+                stage = bg_accessor.Stage.from_string(stage_str)
+                query = self.__lazy_statements._create_datapoints_table_stmt(stage)
+                schema += query + "\n\n"
+
+        self.shutdown()
+        return schema
 
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""

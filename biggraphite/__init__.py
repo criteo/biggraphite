@@ -13,9 +13,12 @@
 # limitations under the License.
 
 import logging
+import threads
 
 log = logging.getLogger("biggraphite")
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter(
     "%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
 log.addHandler(handler)
+
+threads.set_thread_names()

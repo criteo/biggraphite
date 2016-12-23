@@ -77,7 +77,7 @@ $ tox
 You can also simply use `unittest.discover` if you have a working dev environment (see previous paragraph).
 
 ```bash
-python -m unittest discover --failfast --verbose --catch
+$ python -m unittest discover --failfast --verbose --catch
 ```
 
 
@@ -94,8 +94,9 @@ The following will start Cassandra (if you have a manual setup) and import the b
 Beware that the current schema uses SimpleStrategy with 3 replicas: if you only have a single node, you should set the replication factor to 1.
 
 ```bash
-${CASSANDRA_HOME}/bin/cassandra
-${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
+$ ${CASSANDRA_HOME}/bin/cassandra
+$ ${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
+$ bgutil syncdb
 ```
 
 
