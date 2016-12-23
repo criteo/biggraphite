@@ -17,15 +17,15 @@ from __future__ import print_function
 import unittest
 import argparse
 
-from biggraphite.cli import command_test
+from biggraphite.cli import command_syncdb
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
 
 
-class TestCommandTest(bg_test_utils.TestCaseWithFakeAccessor):
+class TestCommandSyncdb(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_run(self):
-        cmd = command_test.CommandTest()
+        cmd = command_syncdb.CommandSyncdb()
 
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
