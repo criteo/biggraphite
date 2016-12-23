@@ -32,13 +32,21 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
-from cassandra.io import asyncorereactor as c_asyncorereactor
+from cassandra.io.asyncorereactor import AsyncoreConnection as c_reactor
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
+
+import prometheus_client as pm
+pm_deleted_directories = pm.Counter('biggraphite_cassandra_deleted_directories',
+                                    'Number of directory that have been deleted so far')
+pm_repaired_directories = pm.Counter('biggraphite_cassandra_repaired_directories',
+                                     'Number of missing directory created')
+pm_expired_metrics = pm.Counter('biggraphite_cassandra_expired_metrics',
+                                'Number of metrics that has been cleaned due to expiration')
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +70,9 @@ DEFAULT_TRACE = False
 DEFAULT_BULKIMPORT = False
 DEFAULT_MAX_QUERIES_PER_PATTERN = 42
 DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN = 4
+DEFAULT_MAX_CONCURRENT_CONNECTIONS = 100
+DEFAULT_MAX_BATCH_UTIL = 1000
+DEFAULT_TIMEOUT_QUERY_UTIL = 120
 
 DIRECTORY_SEPARATOR = '.'
 
@@ -77,6 +88,7 @@ OPTIONS = {
     "max_metrics_per_pattern": int,
     "max_queries_per_pattern": int,
     "max_concurrent_queries_per_pattern": int,
+    "max_concurrent_connections": int,
     "trace": bool,
     "bulkimport": bool,
 }
@@ -92,6 +104,10 @@ def add_argparse_arguments(parser):
         "--cassandra_contact_points", metavar="HOST", nargs="+",
         help="Hosts used for discovery.",
         default=DEFAULT_CONTACT_POINTS)
+    parser.add_argument(
+        "--cassandra_concurrent_connections", metavar="N", type=int,
+        help="Maximum concurrent connections to the cluster.",
+        default=DEFAULT_MAX_CONCURRENT_CONNECTIONS)
     parser.add_argument(
         "--cassandra_contact_points_metadata", metavar="HOST", nargs="+",
         help="Hosts used for discovery.",
@@ -186,6 +202,7 @@ _META_READ_CONSISTENCY = cassandra.ConsistencyLevel.ONE
 
 _DATA_WRITE_CONSISTENCY = cassandra.ConsistencyLevel.ONE
 _DATA_READ_CONSISTENCY = cassandra.ConsistencyLevel.ONE
+_META_BACKGROUND_CONSISTENCY = cassandra.ConsistencyLevel.LOCAL_QUORUM
 
 
 # HEURISTIC PARAMETERS
@@ -282,9 +299,9 @@ _METADATA_CREATION_CQL = ([
     _METADATA_CREATION_CQL_DIRECTORIES,
     _METADATA_CREATION_CQL_METRICS_METADATA,
 ] + _METADATA_CREATION_CQL_PATH_INDEXES
-  + _METADATA_CREATION_CQL_PARENT_INDEXES
-  + _METADATA_CREATION_CQL_ID_INDEXES
-  + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
+                          + _METADATA_CREATION_CQL_PARENT_INDEXES
+                          + _METADATA_CREATION_CQL_ID_INDEXES
+                          + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
 )
 
 
@@ -339,7 +356,7 @@ def _row_size_ms(stage):
     return bg_accessor.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
 
-class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
+class _CappedConnection(c_reactor):
     """A connection with a cap on the number of in-flight requests per host."""
 
     # 300 is the minimum with protocol version 3, default is 65536
@@ -544,6 +561,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  max_queries_per_pattern=DEFAULT_MAX_QUERIES_PER_PATTERN,
                  max_concurrent_queries_per_pattern=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN,
                  trace=DEFAULT_TRACE,
+                 max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
                  bulkimport=DEFAULT_BULKIMPORT):
         """Record parameters needed to connect.
 
@@ -582,6 +600,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.max_metrics_per_pattern = max_metrics_per_pattern
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
+        self.max_concurrent_connections = max_concurrent_connections
         self.__connections = connections
         self.__compression = compression
         self.__trace = trace
@@ -744,7 +763,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     raise e
                 result = e
                 success = False
-            query_results.append((success, result))
+                query_results.append((success, result))
         return query_results
 
     def _execute_concurrent_data(self, *args, **kwargs):
@@ -1293,46 +1312,30 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     count_down.on_cassandra_failure,
                 )
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
+               callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
         tokens directly.
         """
         super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
+        self._repair_missing_dir(start_key, end_key, shard, nshards, callback_on_progress)
 
-        partitioner = self.__cluster_data.metadata.partitioner
-        if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
-            log.warn("Partitioner '%s' not supported for repairs" % partitioner)
-            return
+    def _repair_missing_dir(self, start_key=None, end_key=None, shard=0, nshards=1,
+                            callback_on_progress=None):
+        """Create directory that does not exist for a metric to be accessible."""
+        start_token, stop_token = self._get_search_range(start_key, end_key, shard, nshards)
 
-        start_token = murmur3.INT64_MIN if not start_key else int(start_key)
-        stop_token = murmur3.INT64_MAX if not end_key else int(end_key)
-        batch_size = 1000
-        max_concurrent_reqs = 1000
-
-        if nshards > 1:
-            tokens = stop_token - start_token
-            my_tokens = tokens / nshards
-            start_token += my_tokens * shard
-            stop_token = start_token + my_tokens
-
-        dir_query = self.__session_data.prepare(
+        dir_query = self._prepare_background_request(
             "SELECT name, token(name) FROM \"%s\".directories"
             " WHERE token(name) > ? LIMIT %d;"
-            % (self.keyspace_metadata, batch_size))
-        dir_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
-        dir_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
-        dir_query.request_timeout = 60
+            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
 
-        has_directory_query = self.__session_data.prepare(
+        has_directory_query = self._prepare_background_request(
             "SELECT name FROM \"%s\".directories"
             " WHERE name = ? LIMIT 1;"
             % self.keyspace_metadata)
-        # force read repair to occur in cassandra
-        has_directory_query.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
-        has_directory_query.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
-        has_directory_query.request_timeout = 60
 
         def directories_to_check(result):
             for row in result:
@@ -1349,12 +1352,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     components = self._components_from_name(dir_name + DIRECTORY_SEPARATOR + '_')
                     queries = self._create_parent_dirs_queries(components)
                     for query in queries:
+                        pm_repaired_directories.inc()
                         yield query
 
-        log.info("Starting repair")
+        log.info("Start creating missing directories")
         token = start_token
         while token < stop_token:
-            result = self._execute_metadata(dir_query, (token,))
+            result = self._execute_metadata(dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
             if len(result.current_rows) == 0:
                 break
 
@@ -1362,14 +1366,89 @@ class _CassandraAccessor(bg_accessor.Accessor):
             token = result[-1][1]
             parent_dirs = self._execute_concurrent_metadata(
                 directories_to_check(result),
-                concurrency=max_concurrent_reqs,
+                concurrency=self.max_concurrent_connections,
                 raise_on_first_error=False,
                 results_generator=True)
 
-            self._execute_concurrent_metadata(
+            rets = self._execute_concurrent_metadata(
                 directories_to_create(parent_dirs),
-                concurrency=max_concurrent_reqs,
+                concurrency=self.max_concurrent_connections,
                 raise_on_first_error=False)
+
+            for ret in rets:
+                if not ret.success:
+                    log.warn(str(ret.result_or_exc))
+
+            if callback_on_progress:
+                callback_on_progress(token - start_token, stop_token - start_token)
+
+    def _get_search_range(self, start_key, end_key, shard, nshards):
+        partitioner = self.__cluster_data.metadata.partitioner
+        if partitioner != "org.apache.cassandra.dht.Murmur3Partitioner":
+            raise "Partitioner '%s' not supported" % partitioner
+
+        start_token = murmur3.INT64_MIN if not start_key else int(start_key)
+        stop_token = murmur3.INT64_MAX if not end_key else int(end_key)
+
+        if nshards > 1:
+            tokens = stop_token - start_token
+            my_tokens = tokens / nshards
+            start_token += my_tokens * shard
+            stop_token = start_token + my_tokens
+
+        return (start_token, stop_token)
+
+    def _clean_empty_dir(self, start_key=None, end_key=None, shard=0, nshards=1,
+                         callback_on_progress=None):
+        """Remove directory that does not contains any metrics."""
+        start_token, stop_token = self._get_search_range(start_key, end_key, shard, nshards)
+
+        dir_query = self._prepare_background_request("SELECT name, token(name)"
+                                                     " FROM \"%s\".directories"
+                                                     " WHERE token(name) > ? LIMIT %d;"
+                                                     % (self.keyspace_metadata,
+                                                        DEFAULT_MAX_BATCH_UTIL))
+        has_metric_query = self._prepare_background_request("SELECT name FROM \"%s\".metrics"
+                                                            " WHERE parent LIKE ? LIMIT 1;"
+                                                            % (self.keyspace_metadata, ))
+        delete_empty_dir_stm = self._prepare_background_request("DELETE FROM \"%s\".directories"
+                                                                " WHERE name = ?;"
+                                                                % self.keyspace_metadata)
+
+        def directories_to_check(result):
+            for row in result:
+                name, next_token = row
+                if name:
+                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + '%',))
+
+        def directories_to_remove(result):
+            for response in result:
+                if not response.success or not list(response.result_or_exc):
+                    dir_name = response.result_or_exc.response_future\
+                                                     .query.values[0].rpartition('.')[0]
+                    log.info("Scheduling delete for '%s'" % dir_name)
+                    pm_deleted_directories.inc()
+                    yield delete_empty_dir_stm, (dir_name,)
+
+        log.info("Starting cleanup of empty dir")
+        token = start_token
+        while token < stop_token:
+            result = self._execute_metadata(dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+            if len(result.current_rows) == 0:
+                break
+
+            # Update token range for the next iteration
+            token = result[-1][1]
+            parent_dirs = self._execute_concurrent_metadata(directories_to_check(result),
+                                                            concurrency=self.
+                                                            max_concurrent_connections,
+                                                            raise_on_first_error=False)
+            rets = self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
+                                                     concurrency=self.max_concurrent_connections,
+                                                     raise_on_first_error=False)
+            for ret in rets:
+                if not ret.success:
+                    log.warn(str(ret.result_or_exc))
 
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
@@ -1445,47 +1524,76 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for statement, args in queries:
             self._execute_metadata(statement, args)
 
-    def clean(self, max_age=None):
+    def clean(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
+              callback_on_progress=None):
         """See bg_accessor.Accessor.
 
         Args:
             cutoff: UNIX time in seconds. Rows older than it should be deleted.
         """
-        super(_CassandraAccessor, self).clean(max_age)
+        super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
+        self._clean_expired_metrics(max_age, start_key, end_key, shard, nshards,
+                                    callback_on_progress)
+        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
 
+    def _prepare_background_request(self, query_str):
+        select = self.__session_metadata.prepare(query_str)
+        select.consistency_level = _META_BACKGROUND_CONSISTENCY
+        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        select.request_timeout = DEFAULT_TIMEOUT_QUERY_UTIL
+
+        return select
+
+    def _clean_expired_metrics(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
+                               callback_on_progress=None):
+        """Delete metrics that has an expired ttl."""
         if not max_age:
             log.warn("You must specify a cutoff time for cleanup")
             return
+
+        start_token, stop_token = self._get_search_range(start_key, end_key, shard, nshards)
 
         # timestamp format in Cassandra is in milliseconds
         cutoff = (int(time.time()) - max_age) * 1000
         log.info("Cleaning with cutoff time %d", cutoff)
 
         # statements
-        select = self.__session_metadata.prepare(
-            "SELECT name FROM \"%s\".metrics_metadata"
-            " WHERE updated_on <= maxTimeuuid(%d);" %
-            (self.keyspace_metadata, cutoff))
-        select.consistency_level = cassandra.ConsistencyLevel.LOCAL_QUORUM
-        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
-        select.request_timeout = 120
+        select = self._prepare_background_request(
+            "SELECT name, token(name) FROM \"%s\".metrics_metadata"
+            " WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d ;"
+            % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL))
+        select.request_timeout = None
 
-        delete = self.__session_metadata.prepare(
+        delete = self._prepare_background_request(
             "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
             (self.keyspace_metadata))
-        delete_metadata = self.__session_metadata.prepare(
+        delete_metadata = self._prepare_background_request(
             "DELETE FROM \"%s\".metrics_metadata WHERE name = ? ;" %
             (self.keyspace_metadata))
-        delete_metadata.consistency_level = _META_WRITE_CONSISTENCY
-        delete.consistency_level = _META_WRITE_CONSISTENCY
 
-        result = self._execute_metadata(select)
-        for row in result:
-            log.info("Cleaning metric %s", row)
-            # cleanup metrics
-            self._execute_metadata(delete, row)
-            # cleanup modification time
-            self._execute_metadata(delete_metadata, row)
+        def run(rows):
+            for name, _ in rows:
+                log.info("Scheduling delete for %s", name)
+                pm_expired_metrics.inc()
+                yield (delete, (name,))
+                yield (delete_metadata, (name,))
+
+        token = start_token
+        while token < stop_token:
+            rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+            if len(rows.current_rows) == 0:
+                break
+
+            token = rows[-1][1]
+            rets = self._execute_concurrent_metadata(run(rows),
+                                                     concurrency=self.max_concurrent_connections,
+                                                     raise_on_first_error=False)
+            for ret in rets:
+                if not ret.success:
+                    log.warn(str(ret.result_or_exc))
+
+            if callback_on_progress:
+                callback_on_progress(token - start_token, stop_token - start_token)
 
 
 def build(*args, **kwargs):
