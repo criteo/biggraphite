@@ -31,7 +31,7 @@ class CountDown(object):
     This is used to wait for queries to complete without storing & sorting their results.
     """
 
-    __slots__ = ("_canceled", "_count", "_lock", "_on_zero", )
+    __slots__ = ("_canceled", "count", "_lock", "_on_zero", )
 
     def __init__(self, count, on_zero):
         """Record parameters.
