@@ -61,7 +61,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         member.value for member in list(accessor.Aggregator)]
 
     # See class pydoc for the rational.
-    _SYNC_EVERY_N_WRITE = 300
+    _SYNC_EVERY_N_WRITE = 10
 
     def __init__(self, settings):
         self._cache = None
