@@ -648,7 +648,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.contact_points_metadata, self.port_metadata)
         if self.contact_points_data != self.contact_points_metadata:
             self.__cluster_data, self.__session_data = self._connect(
-                self.contact_points_data, self.port_data)
+                self.contact_points_data, self.port)
         else:
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
