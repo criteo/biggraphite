@@ -55,7 +55,6 @@ DEFAULT_KEYSPACE = "biggraphite"
 DEFAULT_CONTACT_POINTS = "127.0.0.1"
 DEFAULT_PORT = 9042
 DEFAULT_TIMEOUT = 10.0
-DEFAULT_CONNECTIONS = 4
 # Disable compression per default as this is clearly useless for writes and
 # reads do not generate that much traffic.
 DEFAULT_COMPRESSION = False
@@ -77,7 +76,6 @@ OPTIONS = {
     "contact_points_metadata": _utils.list_from_str,
     "port": int,
     "port_metadata": lambda k: 0 if k is None else int(k),
-    "connections": int,
     "timeout": float,
     "compression": _utils.bool_from_str,
     "max_metrics_per_pattern": int,
@@ -110,10 +108,6 @@ def add_argparse_arguments(parser):
         "--cassandra_port_metadata", metavar="PORT", type=int,
         help="The native port to connect to.",
         default=None)
-    parser.add_argument(
-        "--cassandra_connections", metavar="N", type=int,
-        help="Number of connections per Cassandra host per process.",
-        default=DEFAULT_CONNECTIONS)
     parser.add_argument(
         "--cassandra_timeout", metavar="TIMEOUT", type=int,
         help="Cassandra query timeout in seconds.",
@@ -543,7 +537,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  port=DEFAULT_PORT,
                  contact_points_metadata=None,
                  port_metadata=None,
-                 connections=DEFAULT_CONNECTIONS,
                  timeout=DEFAULT_TIMEOUT,
                  compression=DEFAULT_COMPRESSION,
                  max_metrics_per_pattern=DEFAULT_MAX_METRICS_PER_PATTERN,
@@ -560,7 +553,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
           contact_points_metadata: list of strings, the hostnames or IP to use
             to discover Cassandra.
           port_metadata: The port to connect to, as an int.
-          connections: How many worker threads to use.
           timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
           max_metrics_per_pattern: int, Maximum number of metrics per pattern.
@@ -588,7 +580,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.max_metrics_per_pattern = max_metrics_per_pattern
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
-        self.__connections = connections
         self.__compression = compression
         self.__trace = trace
         self.__bulkimport = bulkimport
@@ -1505,6 +1496,5 @@ def build(*args, **kwargs):
       keyspace: Base name of Cassandra keyspaces dedicated to BigGraphite.
       contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
       port: The port to connect to, as an int.
-      connections: How many worker threads to use.
     """
     return _CassandraAccessor(*args, **kwargs)
