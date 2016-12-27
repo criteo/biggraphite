@@ -25,6 +25,7 @@ import os
 from os import path as os_path
 import multiprocessing
 import collections
+from distutils import version
 
 import cassandra
 from cassandra import murmur3
@@ -32,7 +33,12 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
-from cassandra.io import asyncorereactor as c_asyncorereactor
+try:
+    from cassandra.io import libevreactor as c_libevreactor
+    CONNECTION_CLASS = c_libevreactor.LibevConnection
+except ImportError, e:
+    from cassandra.io import asyncorereactor as c_asyncorereactor
+    CONNECTION_CLASS = c_asyncorereactor.AsyncoreConnection
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -339,11 +345,11 @@ def _row_size_ms(stage):
     return bg_accessor.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
 
-class _CappedConnection(c_asyncorereactor.AsyncoreConnection):
+class _CappedConnection(CONNECTION_CLASS):
     """A connection with a cap on the number of in-flight requests per host."""
 
     # 300 is the minimum with protocol version 3, default is 65536
-    max_in_flight = 500
+    max_in_flight = 600
 
 
 class _CountDown(_utils.CountDown):
@@ -375,7 +381,7 @@ class _LazyPreparedStatements(object):
         self.__data_files = {}
 
         release_version = session.get_pools()[0].host.release_version
-        if release_version >= '3.9':
+        if version.LooseVersion(release_version) >= version.LooseVersion('3.9'):
             self._COMPACTION_STRATEGY = 'TimeWindowCompactionStrategy'
         else:
             self._COMPACTION_STRATEGY = _COMPACTION_STRATEGY
@@ -661,9 +667,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _connect(self, contact_points, port):
         cluster = c_cluster.Cluster(
             contact_points, port,
-            executor_threads=self.__connections,
             compression=self.__compression,
-            metrics_enabled=True,
+            metrics_enabled=False,
         )
 
         # Limits in flight requests
@@ -682,7 +687,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__trace:
             kwargs["trace"] = True
 
-        log.debug(' '.join([str(arg) for arg in args]))
+        if args:
+            log.debug(' '.join([str(arg) for arg in args]))
+        if kwargs:
+            log.debug(' '.join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
         result = session.execute(*args, **kwargs)
 
         if self.__trace:
@@ -708,7 +716,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__trace:
             kwargs["trace"] = True
 
-        log.debug(' '.join([str(arg) for arg in args]))
+        if args:
+            log.debug(' '.join([str(arg) for arg in args]))
+        if kwargs:
+            log.debug(' '.join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
         future = session.execute_async(*args, **kwargs)
 
         if self.__trace:
@@ -1235,7 +1246,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             metric, datapoints, on_done)
 
         log.debug("insert: [%s, %s]", metric.name, datapoints)
-
         datapoints = self.__downsampler.feed(metric, datapoints)
         if self.__delayed_writer:
             datapoints = self.__delayed_writer.feed(metric, datapoints)
