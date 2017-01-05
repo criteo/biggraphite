@@ -26,6 +26,7 @@ import StringIO
 
 from biggraphite.cli import command
 from biggraphite.cli import command_clean, command_repair
+from biggraphite import utils
 
 
 def _init_logger(workers):
@@ -133,6 +134,17 @@ class CommandDaemon(command.BaseCommand):
             default=8080,
             type=int
         )
+
+        # To avoid to fail to add the same option twice
+        old_fn = parser.add_argument
+
+        def add_arg(*args, **kwargs):
+            try:
+                old_fn(*args, **kwargs)
+            except:
+                pass
+
+        parser.add_argument = add_arg
         command_repair.CommandRepair.add_arguments(command_repair.CommandRepair(), parser)
         command_clean.CommandClean.add_arguments(command_clean.CommandClean(), parser)
 
@@ -189,6 +201,9 @@ class CommandDaemon(command.BaseCommand):
 
         _init_logger(workers)
         accessor.connect()
+
+        # start prometheus server
+        utils.start_admin(utils.settings_from_args(opts))
 
         # Spawn workers
         for worker in workers.values():

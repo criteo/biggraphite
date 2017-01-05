@@ -88,7 +88,7 @@ class CommandRepair(command.BaseCommand):
             out_fd = _DEV_NULL
 
         if self.pbar is None:
-            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=True)
+            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=False)
         self.pbar.start()
 
         if on_progress is None:
