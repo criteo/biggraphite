@@ -91,7 +91,7 @@ Assuming you have a working development environment, here is how to run a test i
 If you do not have a test Cassandra cluster around, you can use [CCM](https://github.com/pcmanus/ccm) to setup a local one.
 
 The following will start Cassandra (if you have a manual setup) and import the base schema.
-Beware that the current schema uses SimpleStrategy with 3 replicas: if you only have a single node, you should set the replication factor to 1.
+Beware that the current schema uses SimpleStrategy with 1 replica: in production you should increase the replication factor.
 
 ```bash
 $ ${CASSANDRA_HOME}/bin/cassandra
