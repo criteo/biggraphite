@@ -26,7 +26,6 @@ import prometheus_client
 # test-requirements.txt as a URL pinned at the correct version.
 from carbon import database
 from carbon import log
-from carbon import instrumentation
 from twisted.internet import task
 
 from biggraphite import utils
@@ -175,6 +174,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             self.accessor.flush()
 
     def _background(self):
+        # import here because else it will import cache.py too early
+        from carbon import instrumentation
+
         log.cache("background operations")
         for metric in prometheus_client.REGISTRY.collect():
             for name, labels, value in metric.samples:

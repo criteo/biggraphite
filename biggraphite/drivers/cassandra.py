@@ -25,6 +25,7 @@ import os
 from os import path as os_path
 import multiprocessing
 import collections
+from distutils import version
 
 import cassandra
 from cassandra import murmur3
@@ -32,7 +33,12 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
-from cassandra.io.asyncorereactor import AsyncoreConnection as c_reactor
+try:
+    from cassandra.io import libevreactor as c_libevreactor
+    CONNECTION_CLASS = c_libevreactor.LibevConnection
+except ImportError, e:
+    from cassandra.io import asyncorereactor as c_asyncorereactor
+    CONNECTION_CLASS = c_asyncorereactor.AsyncoreConnection
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -57,7 +63,6 @@ DEFAULT_KEYSPACE = "biggraphite"
 DEFAULT_CONTACT_POINTS = "127.0.0.1"
 DEFAULT_PORT = 9042
 DEFAULT_TIMEOUT = 10.0
-DEFAULT_CONNECTIONS = 4
 # Disable compression per default as this is clearly useless for writes and
 # reads do not generate that much traffic.
 DEFAULT_COMPRESSION = False
@@ -82,7 +87,6 @@ OPTIONS = {
     "contact_points_metadata": _utils.list_from_str,
     "port": int,
     "port_metadata": lambda k: 0 if k is None else int(k),
-    "connections": int,
     "timeout": float,
     "compression": _utils.bool_from_str,
     "max_metrics_per_pattern": int,
@@ -120,10 +124,6 @@ def add_argparse_arguments(parser):
         "--cassandra_port_metadata", metavar="PORT", type=int,
         help="The native port to connect to.",
         default=None)
-    parser.add_argument(
-        "--cassandra_connections", metavar="N", type=int,
-        help="Number of connections per Cassandra host per process.",
-        default=DEFAULT_CONNECTIONS)
     parser.add_argument(
         "--cassandra_timeout", metavar="TIMEOUT", type=int,
         help="Cassandra query timeout in seconds.",
@@ -356,11 +356,11 @@ def _row_size_ms(stage):
     return bg_accessor.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
 
-class _CappedConnection(c_reactor):
+class _CappedConnection(CONNECTION_CLASS):
     """A connection with a cap on the number of in-flight requests per host."""
 
     # 300 is the minimum with protocol version 3, default is 65536
-    max_in_flight = 500
+    max_in_flight = 600
 
 
 class _CountDown(_utils.CountDown):
@@ -392,7 +392,7 @@ class _LazyPreparedStatements(object):
         self.__data_files = {}
 
         release_version = session.get_pools()[0].host.release_version
-        if release_version >= '3.9':
+        if version.LooseVersion(release_version) >= version.LooseVersion('3.9'):
             self._COMPACTION_STRATEGY = 'TimeWindowCompactionStrategy'
         else:
             self._COMPACTION_STRATEGY = _COMPACTION_STRATEGY
@@ -554,7 +554,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  port=DEFAULT_PORT,
                  contact_points_metadata=None,
                  port_metadata=None,
-                 connections=DEFAULT_CONNECTIONS,
                  timeout=DEFAULT_TIMEOUT,
                  compression=DEFAULT_COMPRESSION,
                  max_metrics_per_pattern=DEFAULT_MAX_METRICS_PER_PATTERN,
@@ -572,7 +571,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
           contact_points_metadata: list of strings, the hostnames or IP to use
             to discover Cassandra.
           port_metadata: The port to connect to, as an int.
-          connections: How many worker threads to use.
           timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
           max_metrics_per_pattern: int, Maximum number of metrics per pattern.
@@ -601,7 +599,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
         self.max_concurrent_connections = max_concurrent_connections
-        self.__connections = connections
         self.__compression = compression
         self.__trace = trace
         self.__bulkimport = bulkimport
@@ -670,7 +667,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.contact_points_metadata, self.port_metadata)
         if self.contact_points_data != self.contact_points_metadata:
             self.__cluster_data, self.__session_data = self._connect(
-                self.contact_points_data, self.port_data)
+                self.contact_points_data, self.port)
         else:
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
@@ -680,9 +677,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _connect(self, contact_points, port):
         cluster = c_cluster.Cluster(
             contact_points, port,
-            executor_threads=self.__connections,
             compression=self.__compression,
-            metrics_enabled=True,
+            metrics_enabled=False,
         )
 
         # Limits in flight requests
@@ -701,7 +697,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__trace:
             kwargs["trace"] = True
 
-        log.debug(' '.join([str(arg) for arg in args]))
+        if args:
+            log.debug(' '.join([str(arg) for arg in args]))
+        if kwargs:
+            log.debug(' '.join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
         result = session.execute(*args, **kwargs)
 
         if self.__trace:
@@ -727,7 +726,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__trace:
             kwargs["trace"] = True
 
-        log.debug(' '.join([str(arg) for arg in args]))
+        if args:
+            log.debug(' '.join([str(arg) for arg in args]))
+        if kwargs:
+            log.debug(' '.join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
         future = session.execute_async(*args, **kwargs)
 
         if self.__trace:
@@ -1254,7 +1256,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             metric, datapoints, on_done)
 
         log.debug("insert: [%s, %s]", metric.name, datapoints)
-
         datapoints = self.__downsampler.feed(metric, datapoints)
         if self.__delayed_writer:
             datapoints = self.__delayed_writer.feed(metric, datapoints)
@@ -1603,6 +1604,5 @@ def build(*args, **kwargs):
       keyspace: Base name of Cassandra keyspaces dedicated to BigGraphite.
       contact_points: list of strings, the hostnames or IP to use to discover Cassandra.
       port: The port to connect to, as an int.
-      connections: How many worker threads to use.
     """
     return _CassandraAccessor(*args, **kwargs)
