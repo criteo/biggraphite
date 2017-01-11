@@ -118,7 +118,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             if name == self.accessor.keyspace:
                 break
 
-        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s']
+        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s_0']
         options = datapoints_86400p_1s.options
         self.assertEquals(
             options['compaction']['class'],
@@ -127,7 +127,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(options['compaction']['max_window_size_seconds'], '2000')
         self.assertEquals(options['default_time_to_live'], 87300)
 
-        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s']
+        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s_aggr']
         options = datapoints_10080_60s.options
         self.assertEquals(
             options['compaction']['class'],
@@ -162,7 +162,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
             if name == self.accessor.keyspace:
                 break
 
-        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s']
+        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s_0']
         options = datapoints_86400p_1s.options
         self.assertEquals(
             options['compaction']['class'],
@@ -171,7 +171,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(options['compaction']['compaction_window_size'], '1')
         self.assertEquals(options['default_time_to_live'], 87300)
 
-        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s']
+        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s_aggr']
         options = datapoints_10080_60s.options
         self.assertEquals(
             options['compaction']['class'],

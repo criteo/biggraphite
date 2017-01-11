@@ -4,7 +4,7 @@ Settings are either set in Graphite/Carbon configuration (when embedded), via co
 
 ## Generic
 
-- ```STORAGE_DIR```: Storage directory to use, currently mostly use to store the cache
+- ```BG_STORAGE_DIR```: Storage directory to use, currently mostly use to store the cache
 - ```BG_DRIVER```: One of ```cassandra``` (for production) or ```memory``` (for debug)
 
 ## Cassandra Backend
@@ -20,3 +20,13 @@ This is the main backend for BigGraphite and the one that should be used in prod
 ## Memory Backend
 
 The in-memory backend can be used during development to make debuging easier.
+
+## Cache
+
+In order to improve performances a metric metadata cache is used. This cache
+reduces the number of round-trips between graphite/carbon and cassandra.
+
+- ```BG_CACHE```: cache driver to use (memory or disk).
+- ```BG_CACHE_SIZE```: size of the cache.
+- ```BG_CACHE_TTL```: TTL of items in the cache
+- ```BG_CACHE_SYNC```: when using disk cache, should writes be synchronous or not.

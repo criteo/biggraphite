@@ -260,18 +260,22 @@ class Stage(object):
 
     A stage means "keep that many points with that precision".
     Precision is the amount of time a point covers, measured in seconds.
+
+    stage0 means that it's the first stage of a retention policy which
+    is special because it doesn't contain aggregated values.
     """
 
-    __slots__ = ("duration", "points", "precision", )
+    __slots__ = ("duration", "points", "precision", "stage0", )
 
     # Parses the values of as_string into points and precision group
-    _STR_RE = re.compile(r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s$")
+    _STR_RE = re.compile(r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s(?P<stage0>_0)?$")
 
-    def __init__(self, points, precision):
+    def __init__(self, points, precision, stage0=False):
         """Set attributes."""
         self.points = int(points)
         self.precision = int(precision)
         self.duration = self.points * self.precision
+        self.stage0 = stage0
 
     def __str__(self):
         return self.as_string
@@ -284,18 +288,28 @@ class Stage(object):
     def __eq__(self, other):
         if not isinstance(other, Stage):
             return False
-        return self.points == other.points and self.precision == other.precision
+        return (self.points == other.points
+                and self.precision == other.precision
+                and self.stage0 == other.stage0)
 
     def __ne__(self, other):
         return not (self == other)
 
     def __hash__(self):
-        return hash((self.points, self.precision))
+        return hash((self.points, self.precision, self.stage0))
 
     @property
     def as_string(self):
         """A string like "${POINTS}*${PRECISION}s"."""
         return "{}*{}s".format(self.points, self.precision)
+
+    @property
+    def as_full_string(self):
+        """A string like "${POINTS}*${PRECISION}s"."""
+        ret = self.as_string
+        if self.stage0:
+            ret += '_0'
+        return ret
 
     @property
     def duration_ms(self):
@@ -323,6 +337,7 @@ class Stage(object):
         return cls(
             points=int(groups['points']),
             precision=int(groups['precision']),
+            stage0=bool(groups['stage0'])
         )
 
     @property
@@ -360,6 +375,17 @@ class Stage(object):
         """
         return int(timestamp_ms // self.precision_ms)
 
+    def aggregated(self):
+        """Return true if this contains aggregated values.
+
+        Aggregated values are in the form (sum, count) instead of just (value).
+        Only the first stage of a retention policy isn't aggregated (called stage0).
+
+        Returns:
+          bool, True is not first stage.
+        """
+        return not self.stage0
+
 
 class Retention(object):
     """A retention policy, made of 0 or more Stages."""
@@ -378,6 +404,7 @@ class Retention(object):
                 raise InvalidArgumentError("duration of %s must be lesser than %s" % (s, prev))
             prev = s
         self.stages = tuple(stages)
+        self.stages[0].stage0 = True
 
     def __getitem__(self, n):
         """Return the n-th stage."""
@@ -418,6 +445,11 @@ class Retention(object):
         if not self.stages:
             return 0
         return self.stages[-1].duration
+
+    @property
+    def stage0(self):
+        """An alias for stage[0]."""
+        return self.stages[0]
 
     @property
     def downsampled_stages(self):
@@ -868,6 +900,8 @@ class PointGrouper(object):
     def generate_values(self):
         """Generator function, consume query_results and produce values."""
         first_exc = None
+        same_stage = self.stage == self.source_stage
+        aggregated_stage = self.source_stage.aggregated()
 
         # TODO: This function is still quite Cassandra Specific.
         for successful, rows_or_exception in self.query_results:
@@ -877,16 +911,26 @@ class PointGrouper(object):
             if not successful:
                 first_exc = rows_or_exception
             for row in rows_or_exception:
-                (time_start_ms, offset, value, count) = row
+                if aggregated_stage:
+                    (time_start_ms, offset, _, value, count) = row
+                else:
+                    (time_start_ms, offset, value) = row
+                    count = 1
+
                 timestamp_ms = (
                     time_start_ms + offset * self.source_stage.precision_ms)
 
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms
-                if self.stage != self.source_stage:
+                if not same_stage:
                     timestamp_ms = round_down(timestamp_ms, self.stage.precision_ms)
 
-                if self.current_timestamp_ms != timestamp_ms:
+                if same_stage and not aggregated_stage:
+                    # Non aggregated stages are pretty simple, nothing to do.
+                    yield (timestamp_ms / 1000.0, value)
+                    continue
+
+                elif self.current_timestamp_ms != timestamp_ms:
                     # This needs to be optimized because in the common case
                     # there is absolutely nothing to aggregate.
                     ts, point = self.run_aggregator()
@@ -898,9 +942,10 @@ class PointGrouper(object):
                 self.current_values.append(value)
                 self.current_counts.append(count)
 
-        ts, point = self.run_aggregator()
-        if ts is not None:
-            yield (ts, point)
+        if not same_stage or aggregated_stage:
+            ts, point = self.run_aggregator()
+            if ts is not None:
+                yield (ts, point)
 
         if first_exc:
             raise RetryableError(first_exc)

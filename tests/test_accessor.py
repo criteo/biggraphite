@@ -110,6 +110,15 @@ class TestStage(unittest.TestCase):
         self.assertFalse(s1 == s3)
         self.assertTrue(s1 != s3)
 
+    def test_stage0(self):
+        s1 = bg_accessor.Stage(points=24, precision=3600, stage0=True)
+        s2 = bg_accessor.Stage.from_string("24*3600s_0")
+
+        self.assertTrue(s1.stage0)
+        self.assertTrue(s2.stage0)
+        self.assertTrue(s1 == s2)
+        self.assertFalse(s1 != s2)
+
 
 class TestRetention(unittest.TestCase):
 
@@ -148,21 +157,26 @@ class TestRetention(unittest.TestCase):
     def test_align_time_window(self):
         retention = self._TEST
 
-        self.assertEqual(
+        self.assertNotEqual(
             retention.align_time_window(0, 0, 0),
             (0, 0, bg_accessor.Stage(precision=60, points=60))
         )
+        stage0 = bg_accessor.Stage(precision=60, points=60, stage0=True)
+        self.assertEqual(
+            retention.align_time_window(0, 0, 0),
+            (0, 0, stage0)
+        )
         self.assertEqual(
             retention.align_time_window(60, 120, 1200),
-            (60, 120, bg_accessor.Stage(precision=60, points=60))
+            (60, 120, stage0)
         )
         self.assertEqual(
             retention.align_time_window(61, 119, 1200),
-            (60, 120, bg_accessor.Stage(precision=60, points=60))
+            (60, 120, stage0)
         )
         self.assertEqual(
             retention.align_time_window(59, 121, 1200),
-            (0, 180, bg_accessor.Stage(precision=60, points=60))
+            (0, 180, stage0)
         )
         self.assertEqual(
             retention.align_time_window(59, 3601, 8000),

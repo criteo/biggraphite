@@ -77,7 +77,7 @@ $ tox
 You can also simply use `unittest.discover` if you have a working dev environment (see previous paragraph).
 
 ```bash
-$ python -m unittest discover --failfast --verbose --catch
+$ BG_COMPONENTS_MAX_LEN=12 python -m unittest discover --failfast --verbose --catch
 ```
 
 

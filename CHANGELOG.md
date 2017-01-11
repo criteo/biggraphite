@@ -6,13 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Added
--
+- Prometheus support and additional metrics.
 
 ### Fixed
 -
 
 ### Changed
--
+- [Breaking] Cassandra schema as been changed to separate stage0 and aggregated
+  metrics. There is no upgrade procedure as this is a pre-release.
 
 ### Removed
 -
