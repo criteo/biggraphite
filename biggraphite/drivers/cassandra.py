@@ -97,6 +97,7 @@ OPTIONS = {
     "max_concurrent_connections": int,
     "trace": bool,
     "bulkimport": bool,
+    "enable_metrics": bool,
 }
 
 
@@ -154,6 +155,11 @@ def add_argparse_arguments(parser):
     parser.add_argument(
         "--cassandra_bulkimport", action="store_true",
         help="Generate files needed for bulkimport.")
+    parser.add_argument(
+        "--cassandra_enable_metrics",
+        help="should expose metrics",
+        action='store_true',
+        default=False)
 
 
 MINUTE = 60
@@ -595,6 +601,27 @@ class _LazyPreparedStatements(object):
         return statement, args
 
 
+def expose_metrics(metrics, cluster_name=''):
+    """Adaptor to notify prometheus of Cassandra's metrics change."""
+    metrics_adp = {}
+
+    def counter_adaptor(cpt, fn):
+        def inner(*args, **kwargs):
+            cpt.inc()
+            fn(*args, **kwargs)
+
+        return inner
+
+    for attr in dir(metrics):
+        if attr.startswith('on_'):
+            metric_name = 'biggraphite_cassandra_' + cluster_name + '_' + attr[3:]
+            cpt = pm.Counter(metric_name, '')
+            metrics_adp[metric_name] = cpt
+            setattr(metrics, attr, counter_adaptor(cpt, attr))
+
+    return metrics_adp
+
+
 class _CassandraAccessor(bg_accessor.Accessor):
     """Provides Read/Write accessors to Cassandra.
 
@@ -616,6 +643,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  max_concurrent_queries_per_pattern=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN,
                  trace=DEFAULT_TRACE,
                  max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+                 enable_metrics=False,
                  bulkimport=DEFAULT_BULKIMPORT):
         """Record parameters needed to connect.
 
@@ -671,6 +699,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__session_data = None  # setup by connect()
         self.__session_metadata = None  # setup by connect()
         self.__glob_parser = bg_glob.GraphiteGlobParser()
+        self.__metrics = {}
+        self.__enable_metrics = enable_metrics
 
     def connect(self):
         """See bg_accessor.Accessor."""
@@ -732,6 +762,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         shard = int(random.getrandbits(15))
         self.__lazy_statements = _LazyPreparedStatements(
             self.__session_data, self.keyspace, shard, self.__bulkimport)
+
+        if self.__enable_metrics:
+            self.__metrics["metadata"] = expose_metrics(self.__cluster_metadata.metrics, 'metadata')
+            self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, 'data')
 
     def _connect(self, contact_points, port):
         cluster = c_cluster.Cluster(
@@ -1603,6 +1637,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             cutoff: UNIX time in seconds. Rows older than it should be deleted.
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
+
         self._clean_expired_metrics(max_age, start_key, end_key, shard, nshards,
                                     callback_on_progress)
         self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
