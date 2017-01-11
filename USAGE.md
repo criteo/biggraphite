@@ -9,6 +9,8 @@ Configure Cassandra (you will probably want to tweak the keyspace).
 
 ```bash
 $ ${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
+# Can be slow on HDD. Restart-it if it timeouts.
+$ bgutil --cassandra_contact_points=localhost syncdb
 ```
 
 ## Carbon plugin
@@ -22,6 +24,10 @@ DATABASE = biggraphite
 
 You can optionally use `whisper+biggraphite` or `biggraphite+whisper` to enable
 double writes.
+
+You'll need to start `bg-carbon-cache` instead of `carbon-cache` to run carbon with
+biggraphite. If carbon is installed in `/opt/graphite/lib` and not in site-packages
+you'll need to set do set `PYTHONPATH=/opt/graphite/lib`.
 
 ## Graphite Web plugin
 
