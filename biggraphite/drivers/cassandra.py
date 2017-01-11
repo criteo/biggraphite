@@ -1390,7 +1390,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     batch_type=c_query.BatchType.UNLOGGED
                 )
                 for statement, args in statements_and_args:
-                    batch.add(statement, args)
+                    if statement is not None:
+                        batch.add(statement, args)
                 statement = batch
                 args = None
                 count = len(statements_and_args)

@@ -214,9 +214,13 @@ def main(args=None):
 
     total_points = 0
     with progressbar.ProgressBar(max_value=len(paths), fd=out_fd, redirect_stderr=True) as pbar:
-        for n_path, n_points in enumerate(pool.imap_unordered(_import_whisper, paths)):
-            total_points += n_points
-            pbar.update(n_path)
+        try:
+            res = pool.imap_unordered(_import_whisper, paths)
+            for n_path, n_points in enumerate(res):
+                total_points += n_points
+                pbar.update(n_path)
+        except KeyboardInterrupt:
+            pool.terminate()
 
     pool.close()
     pool.join()
