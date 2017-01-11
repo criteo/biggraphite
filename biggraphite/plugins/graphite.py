@@ -21,7 +21,7 @@ from graphite import intervals
 from graphite import node
 from graphite import readers
 from graphite.logger import log
-
+from graphite.render import hashing
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils
@@ -147,6 +147,8 @@ class Finder(object):
         """
         self._accessor = accessor
         self._cache = metadata_cache
+        self._django_cache = None
+        self._cache_timeout = None
 
     def accessor(self):
         """Return an accessor."""
@@ -170,12 +172,34 @@ class Finder(object):
             self._cache = cache
         return self._cache
 
+    def django_cache(self):
+        """Return the django cache."""
+        if not self._django_cache:
+            from django.conf import settings as django_settings
+            from django.core.cache import cache
+            self._django_cache = cache
+            self._cache_timeout = django_settings.FIND_CACHE_DURATION
+        return self._django_cache
+
     def find_nodes(self, query):
         """Find nodes matching a query."""
-        # TODO: handle directories constructor argument/property
-        find_start = time.time()
-        metric_names, directories = glob_utils.graphite_glob(self.accessor(), query.pattern)
-        log.rendering('find(%s) - %f secs' % (query.pattern, time.time() - find_start))
+
+        # TODO: we should probably consider query.startTime and query.endTime
+        #  to filter out metrics that had no points in this interval.
+
+        cache_key = "find:%s" % (hashing.compactHash(query.pattern))
+        results = self.django_cache().get(cache_key)
+        print (results, self._cache_timeout)
+        if results:
+            cache_hit = True
+        else:
+            find_start = time.time()
+            results = glob_utils.graphite_glob(self.accessor(), query.pattern)
+            log.rendering(
+                'find(%s) - %f secs' % (query.pattern, time.time() - find_start))
+            cache_hit = False
+
+        metric_names, directories = results
 
         for metric_name in metric_names:
             reader = Reader(self.accessor(), self.cache(), metric_name)
@@ -183,3 +207,6 @@ class Finder(object):
 
         for directory in directories:
             yield node.BranchNode(directory)
+
+        if not cache_hit:
+            self.django_cache().set(cache_key, results, self._cache_timeout)
