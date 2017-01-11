@@ -105,7 +105,9 @@ class _Worker(object):
             archive_starts_at = float("inf")
             expected_next_timestamp = 0
             stage = bg_accessor.Stage(
-                precision=archive["secondsPerPoint"], points=archive["points"])
+                precision=archive["secondsPerPoint"],
+                points=archive["points"],
+                stage0=prev_archive_starts_at == float("inf"))
             if stage in self._opts.ignored_stages:
                 continue
             for _ in range(archive["points"]):

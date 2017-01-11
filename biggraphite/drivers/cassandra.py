@@ -17,14 +17,16 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-import time
-import itertools
-import logging
-import uuid
-import os
-from os import path as os_path
-import multiprocessing
 import collections
+import itertools
+import json
+import logging
+import multiprocessing
+import os
+import random
+import time
+import uuid
+from os import path as os_path
 from distutils import version
 
 import cassandra
@@ -304,14 +306,34 @@ _METADATA_CREATION_CQL = ([
                           + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
 )
 
-
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
     "  metric uuid,"           # Metric UUID.
     "  time_start_ms bigint,"  # Lower bound for this row.
     "  offset smallint,"       # time_start_ms + offset * precision = timestamp
+    "  shard  smallint,"       # Writer shard to allow restarts.
     "  value double,"          # Value for the point.
-    "  count int,"             # If value is sum, divide by count to get the avg.
+    "  count smallint,"        # If value is sum, divide by count to get the avg.
+    "  PRIMARY KEY ((metric, time_start_ms), offset, shard)"
+    ")"
+    "  WITH CLUSTERING ORDER BY (offset DESC)"
+    "  AND default_time_to_live = %(default_time_to_live)d"
+    "  AND memtable_flush_period_in_ms = %(memtable_flush_period_in_ms)d"
+    "  AND comment = '%(comment)s'"
+    "  AND compaction = {"
+    "    'class': '%(compaction_strategy)s',"
+    "    'timestamp_resolution': 'MICROSECONDS',"
+    "    %(compaction_options)s"
+    "  };"
+)
+
+# Special schema for first stages.
+_DATAPOINTS0_CREATION_CQL_TEMPLATE = str(
+    "CREATE TABLE IF NOT EXISTS %(table)s ("
+    "  metric uuid,"           # Metric UUID.
+    "  time_start_ms bigint,"  # Lower bound for this row.
+    "  offset smallint,"       # time_start_ms + offset * precision = timestamp
+    "  value double,"          # Value for the point.
     "  PRIMARY KEY ((metric, time_start_ms), offset)"
     ")"
     "  WITH CLUSTERING ORDER BY (offset DESC)"
@@ -383,13 +405,14 @@ class _LazyPreparedStatements(object):
     bulkimport data.
     """
 
-    def __init__(self, session, keyspace, bulkimport=False):
+    def __init__(self, session, keyspace, shard, bulkimport=False):
         self._keyspace = keyspace
         self._session = session
         self._bulkimport = bulkimport
         self.__stage_to_insert = {}
         self.__stage_to_select = {}
         self.__data_files = {}
+        self.__shard = shard
 
         release_version = session.get_pools()[0].host.release_version
         if version.LooseVersion(release_version) >= version.LooseVersion('3.9'):
@@ -407,18 +430,18 @@ class _LazyPreparedStatements(object):
         return filename
 
     def _bulkimport_write_schema(self, stage, statement_str):
-        filename = self.__bulkimport_filename(stage.as_string + ".cql")
-        log.info("Writing schema for '%s' in '%s'" % (stage.as_string, filename))
+        filename = self.__bulkimport_filename(stage.as_full_string + ".cql")
+        log.info("Writing schema for '%s' in '%s'" % (stage.as_full_string, filename))
         open(filename, "w").write(statement_str)
 
     def _bulkimport_write_datapoint(self, stage, args):
-        stage_str = stage.as_string
+        stage_str = stage.as_full_string
         if stage_str not in self.__data_files:
             statement_str = self._create_datapoints_table_stmt(stage)
             self._bulkimport_write_schema(stage, statement_str)
 
-            filename = self.__bulkimport_filename(stage.as_string + ".csv")
-            log.info("Writing data for '%s' in '%s'" % (stage.as_string, filename))
+            filename = self.__bulkimport_filename(stage_str + ".csv")
+            log.info("Writing data for '%s' in '%s'" % (stage_str, filename))
             fp = open(filename, "w")
             self.__data_files[stage_str] = fp
         else:
@@ -477,16 +500,26 @@ class _LazyPreparedStatements(object):
             cs_kwargs["compaction_window_size"] = max(1, window_size)
 
         compaction_options = cs_template % cs_kwargs
+        comment = {
+            "created_by": "biggraphite",
+            "schema_version": 0,
+            "stage": stage.as_full_string,
+        }
         kwargs = {
             "table": self._get_table_name(stage),
             "default_time_to_live": time_to_live,
             "memtable_flush_period_in_ms": _FLUSH_MEMORY_EVERY_S * 1000,
-            "comment": "{\"created_by\": \"biggraphite\", \"schema_version\": 0}",
+            "comment": json.dumps(comment),
             "compaction_strategy": self._COMPACTION_STRATEGY,
             "compaction_options": compaction_options,
         }
 
-        return _DATAPOINTS_CREATION_CQL_TEMPLATE % kwargs
+        if stage.stage0:
+            template = _DATAPOINTS0_CREATION_CQL_TEMPLATE
+        else:
+            template = _DATAPOINTS_CREATION_CQL_TEMPLATE
+
+        return template % kwargs
 
     def _create_datapoints_table(self, stage):
         # The statement is idempotent
@@ -494,12 +527,19 @@ class _LazyPreparedStatements(object):
         self._session.execute(statement_str)
 
     def _get_table_name(self, stage):
-        return "\"{}\".\"datapoints_{}p_{}s\"".format(
-            self._keyspace, stage.points, stage.precision)
+        if stage.stage0:
+            suffix = "_0"
+        else:
+            suffix = "_aggr"
+        return "\"{}\".\"datapoints_{}p_{}s{}\"".format(
+            self._keyspace, stage.points, stage.precision, suffix)
 
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
-        args = (metric_id, time_start_ms, offset, value, count)
+        if stage.aggregated():
+            args = (metric_id, time_start_ms, offset, self.__shard, value, count)
+        else:
+            args = (metric_id, time_start_ms, offset, value)
 
         if self._bulkimport:
             self._bulkimport_write_datapoint(stage, args)
@@ -509,11 +549,20 @@ class _LazyPreparedStatements(object):
             return statement, args
 
         self._create_datapoints_table(stage)
-        statement_str = (
-            "INSERT INTO %(table)s"
-            " (metric, time_start_ms, offset, value, count)"
-            " VALUES (?, ?, ?, ?, ?);"
-        ) % {"table": self._get_table_name(stage)}
+        if stage.aggregated():
+            statement_str = (
+                "INSERT INTO %(table)s"
+                " (metric, time_start_ms, offset, shard, value, count)"
+                " VALUES (?, ?, ?, ?, ?, ?);"
+            )
+        else:
+            statement_str = (
+                "INSERT INTO %(table)s"
+                " (metric, time_start_ms, offset, value)"
+                " VALUES (?, ?, ?, ?);"
+            )
+
+        statement_str = statement_str % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = _DATA_WRITE_CONSISTENCY
         self.__stage_to_insert[stage] = statement
@@ -527,13 +576,19 @@ class _LazyPreparedStatements(object):
             return statement, args
 
         self._create_datapoints_table(stage)
+        if stage.aggregated():
+            columns = ["time_start_ms", "offset", "shard", "value", "count"]
+        else:
+            columns = ["time_start_ms", "offset", "value"]
+
         statement_str = (
-            "SELECT time_start_ms, offset, value, count FROM %(table)s"
+            "SELECT %(columns)s FROM %(table)s"
             " WHERE metric=? AND time_start_ms=?"
             " AND offset >= ? AND offset < ? "
             " ORDER BY offset"
             " LIMIT ?;"
-        ) % {"table": self._get_table_name(stage)}
+        ) % {"columns": ", ".join(columns),
+             "table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = _DATA_READ_CONSISTENCY
         self.__stage_to_select[stage] = statement
@@ -671,8 +726,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         else:
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
+
+        # TODO: Currently a random shard is good enough. We should use a counter
+        # stored in cassandra instead.
+        shard = int(random.getrandbits(15))
         self.__lazy_statements = _LazyPreparedStatements(
-            self.__session_data, self.keyspace, self.__bulkimport)
+            self.__session_data, self.keyspace, shard, self.__bulkimport)
 
     def _connect(self, contact_points, port):
         cluster = c_cluster.Cluster(
@@ -1404,17 +1463,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """Remove directory that does not contains any metrics."""
         start_token, stop_token = self._get_search_range(start_key, end_key, shard, nshards)
 
-        dir_query = self._prepare_background_request("SELECT name, token(name)"
-                                                     " FROM \"%s\".directories"
-                                                     " WHERE token(name) > ? LIMIT %d;"
-                                                     % (self.keyspace_metadata,
-                                                        DEFAULT_MAX_BATCH_UTIL))
-        has_metric_query = self._prepare_background_request("SELECT name FROM \"%s\".metrics"
-                                                            " WHERE parent LIKE ? LIMIT 1;"
-                                                            % (self.keyspace_metadata, ))
-        delete_empty_dir_stm = self._prepare_background_request("DELETE FROM \"%s\".directories"
-                                                                " WHERE name = ?;"
-                                                                % self.keyspace_metadata)
+        dir_query = self._prepare_background_request(
+            "SELECT name, token(name)"
+            " FROM \"%s\".directories"
+            " WHERE token(name) > ? LIMIT %d;"
+            % (self.keyspace_metadata,
+               DEFAULT_MAX_BATCH_UTIL))
+        has_metric_query = self._prepare_background_request(
+            "SELECT name FROM \"%s\".metrics"
+            " WHERE parent LIKE ? LIMIT 1;"
+            % (self.keyspace_metadata, ))
+        delete_empty_dir_stm = self._prepare_background_request(
+            "DELETE FROM \"%s\".directories"
+            " WHERE name = ?;"
+            % self.keyspace_metadata)
 
         def directories_to_check(result):
             for row in result:
@@ -1440,13 +1502,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             # Update token range for the next iteration
             token = result[-1][1]
-            parent_dirs = self._execute_concurrent_metadata(directories_to_check(result),
-                                                            concurrency=self.
-                                                            max_concurrent_connections,
-                                                            raise_on_first_error=False)
-            rets = self._execute_concurrent_metadata(directories_to_remove(parent_dirs),
-                                                     concurrency=self.max_concurrent_connections,
-                                                     raise_on_first_error=False)
+            parent_dirs = self._execute_concurrent_metadata(
+                directories_to_check(result),
+                concurrency=self.
+                max_concurrent_connections,
+                raise_on_first_error=False)
+            rets = self._execute_concurrent_metadata(
+                directories_to_remove(parent_dirs),
+                concurrency=self.max_concurrent_connections,
+                raise_on_first_error=False)
             for ret in rets:
                 if not ret.success:
                     log.warn(str(ret.result_or_exc))
@@ -1497,12 +1561,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         tables = self.__cluster_data.metadata.keyspaces[self.keyspace].tables
         for table in tables:
+            comment = tables[table].options.get('comment')
             if table.startswith('datapoints_'):
-                try:
-                    stage_str = table.strip('datapoints_').replace('p_', '*') + 's'
-                except:
+                if not comment:
                     continue
-                stage = bg_accessor.Stage.from_string(stage_str)
+                stage_str = json.loads(comment).get('stage')
+                if not stage_str:
+                    continue
+                try:
+                    stage = bg_accessor.Stage.from_string(stage_str)
+                except Exception as e:
+                    log.debug(e)
+                    continue
                 query = self.__lazy_statements._create_datapoints_table_stmt(stage)
                 schema += query + "\n\n"
 

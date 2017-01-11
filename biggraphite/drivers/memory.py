@@ -44,7 +44,10 @@ class _MemoryAccessor(bg_accessor.Accessor):
     """A memory acessor that doubles as a memory MetadataCache."""
 
     Row = collections.namedtuple(
-        'Row', ['time_start_ms', 'offset', 'value', 'count'])
+        'Row', ['time_start_ms', 'offset', 'shard', 'value', 'count'])
+
+    Row0 = collections.namedtuple(
+        'Row', ['time_start_ms', 'offset', 'value'])
 
     _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
@@ -190,7 +193,12 @@ class _MemoryAccessor(bg_accessor.Accessor):
         rows = []
         for ts in points.irange(time_start, time_end):
             # A row is time_base_ms, time_offset_ms, value, count
-            row = self.Row(ts * 1000.0, 0, float(points[ts][0]), points[ts][1])
+            if stage.aggregated():
+                row = self.Row(
+                    ts * 1000.0, 0, 0,
+                    float(points[ts][0]), points[ts][1])
+            else:
+                row = self.Row0(ts * 1000.0, 0, float(points[ts][0]))
             rows.append(row)
 
         query_results = [(True, rows)]
