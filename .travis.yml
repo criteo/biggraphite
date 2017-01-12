@@ -39,6 +39,7 @@ env:
     - TOXENV=pylama
     - TOXENV=pypy-coverage
     - TOXENV=py27-coverage
+    - TOXENV=bench
 
 ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
 before_install:
