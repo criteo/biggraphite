@@ -33,12 +33,6 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
-try:
-    from cassandra.io import libevreactor as c_libevreactor
-    CONNECTION_CLASS = c_libevreactor.LibevConnection
-except ImportError, e:
-    from cassandra.io import asyncorereactor as c_asyncorereactor
-    CONNECTION_CLASS = c_asyncorereactor.AsyncoreConnection
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -362,11 +356,39 @@ def _row_size_ms(stage):
     return bg_accessor.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
 
-class _CappedConnection(CONNECTION_CLASS):
-    """A connection with a cap on the number of in-flight requests per host."""
+REACTOR_TO_USE = None
 
-    # 300 is the minimum with protocol version 3, default is 65536
-    max_in_flight = 600
+
+def getConnectionClass():
+    """Get connection class for cassandra."""
+    global REACTOR_TO_USE
+
+    if REACTOR_TO_USE == "TWISTED":
+        from cassandra.io import twistedreactor as c_reactor
+        CONNECTION_CLASS = c_reactor.TwistedConnection
+
+    elif REACTOR_TO_USE == "LIBEV":
+        from cassandra.io import libevreactor as c_libevreactor
+        CONNECTION_CLASS = c_libevreactor.LibevConnection
+
+    elif REACTOR_TO_USE == "ASYNC":
+            from cassandra.io import asyncorereactor as c_asyncorereactor
+            CONNECTION_CLASS = c_asyncorereactor.AsyncoreConnection
+    else:
+        try:
+            from cassandra.io import libevreactor as c_libevreactor
+            CONNECTION_CLASS = c_libevreactor.LibevConnection
+        except ImportError:
+            from cassandra.io import asyncorereactor as c_asyncorereactor
+            CONNECTION_CLASS = c_asyncorereactor.AsyncoreConnection
+
+    class _CappedConnection(CONNECTION_CLASS):
+        """A connection with a cap on the number of in-flight requests per host."""
+
+        # 300 is the minimum with protocol version 3, default is 65536
+        max_in_flight = 600
+
+    return _CappedConnection
 
 
 class _CountDown(_utils.CountDown):
@@ -716,7 +738,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
 
         # Limits in flight requests
-        cluster.connection_class = _CappedConnection
+        cluster.connection_class = getConnectionClass()
         session = cluster.connect()
         session.row_factory = c_query.tuple_factory  # Saves 2% CPU
         if self.__timeout:
