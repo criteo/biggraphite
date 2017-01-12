@@ -138,6 +138,10 @@ def make_metric(name, metadata=None, accessor=None, **kwargs):
 class TestCaseWithTempDir(unittest.TestCase):
     """A TestCase with a temporary directory."""
 
+    def get_accessor(self):
+        """Return the accessor."""
+        return self.accessor
+
     def setUp(self):
         """Create a new temporary directory in self.tempdir."""
         super(TestCaseWithTempDir, self).setUp()
