@@ -26,4 +26,14 @@ public class BgGenerateCassandraSSTablesTest {
             "src/test/resources/points.csv"};
         BgGenerateCassandraSSTables.main(args);
     }
+
+    @Test
+    public void mainShouldRunStage0() throws Exception {
+        // Just test that we can import simple files.
+        String[] args = new String[]{
+                "biggraphite", "datapoints_0",
+                "src/test/resources/schema_0.cql",
+                "src/test/resources/points_0.csv"};
+        BgGenerateCassandraSSTables.main(args);
+    }
 }

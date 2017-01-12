@@ -101,6 +101,7 @@ class _Worker(object):
         # As archives are from most precise to least precise, we track the oldest
         # point we've found in more precise archives and ignore the newer ones.
         prev_archive_starts_at = float("inf")
+        stage0 = True
         for archive in archives:
             offset = archive["offset"]
             step = archive["secondsPerPoint"]
@@ -109,7 +110,8 @@ class _Worker(object):
             stage = bg_accessor.Stage(
                 precision=archive["secondsPerPoint"],
                 points=archive["points"],
-                stage0=prev_archive_starts_at == float("inf"))
+                stage0=stage0)
+            stage0 = False
             if stage in self._opts.ignored_stages:
                 continue
             for _ in range(archive["points"]):
@@ -201,12 +203,12 @@ class _Walker():
     def paths(self, root=None):
         root = root or self.root_directory
         for entry in scandir.scandir(root):
-            if entry.is_dir(follow_symlinks=False):
+            if entry.is_dir():
                 for filename in self.paths(entry.path):
                     yield filename
-            elif entry.path.endswith(".wsp"):
+            elif entry.name.endswith(".wsp"):
                 self.count += 1
-                yield os.path.join(self.root_directory, entry.path)
+                yield os.path.join(root, entry.name)
 
 
 def main(args=None):
@@ -229,14 +231,14 @@ def main(args=None):
         out_fd.flush()
 
     walker = _Walker(opts.root_directory)
-    paths = list(walker.paths())
+    paths = walker.paths()
     total_points = 0
-    with progressbar.ProgressBar(max_value=walker.count or 1, fd=out_fd, redirect_stderr=True) as pbar:
+    max_value = progressbar.UnknownLength
+    with progressbar.ProgressBar(max_value=max_value, fd=out_fd, redirect_stderr=True) as pbar:
         try:
             res = pool.imap_unordered(_import_whisper, paths)
             for n_path, n_points in enumerate(res):
                 total_points += n_points
-                pbar.max_value = walker.count
                 pbar.update(n_path)
         except KeyboardInterrupt:
             pool.terminate()

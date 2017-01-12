@@ -37,12 +37,15 @@ public class BgGenerateCassandraSSTables
     private static final String DEFAULT_OUTPUT_DIR = "./data";
 
     /**
-     * INSERT statement to bulk load.
+     * INSERT statements to bulk load.
      * It is like prepared statement. You fill in place holder for each data.
      */
-    private static final String INSERT_STMT = "INSERT INTO %s.%s " +
-           "(metric, time_start_ms, offset, value, count)" +
-            " VALUES (?, ?, ?, ?, ?);";
+    private static final String INSERT_STMT_AGGR = "INSERT INTO %s.%s " +
+           "(metric, time_start_ms, offset, shard, value, count)" +
+            " VALUES (?, ?, ?, ?, ?, ?);";
+    private static final String INSERT_STMT_0 = "INSERT INTO %s.%s " +
+           "(metric, time_start_ms, offset, value)" +
+            " VALUES (?, ?, ?, ?);";
 
     /**
      * Returns a new double initialized to the value represented by the specified String, as performed by the valueOf method of class Double.
@@ -83,7 +86,11 @@ public class BgGenerateCassandraSSTables
         final String table = args[1];
         final String schema = new String(Files.readAllBytes(Paths.get(args[2])), StandardCharsets.UTF_8);
         final String data = args[3];
-        final String insert_stmt = String.format(INSERT_STMT, keyspace, table);
+        // TODO: find something better than this hack.
+        final boolean stage0 = !schema.contains("shard");
+        final String insert_stmt = String.format(
+                stage0 ? INSERT_STMT_0 : INSERT_STMT_AGGR,
+                keyspace, table);
 
         // magic!
         Config.setClientMode(true);
@@ -97,9 +104,9 @@ public class BgGenerateCassandraSSTables
 
         // Prepare SSTable writer
         final CQLSSTableWriter.Builder builder = CQLSSTableWriter.builder()
-                .inDirectory(outputDir) // the directory where to write the sstables
-                .forTable(schema) // the schema (CREATE TABLE statement) for the table for which sstable are to be created
-                .using(insert_stmt) // the INSERT statement defining the order of the values to add for a given CQL row
+                .inDirectory(outputDir)
+                .forTable(schema)
+                .using(insert_stmt)
                 .withPartitioner(new Murmur3Partitioner());
 
         try (
@@ -117,12 +124,20 @@ public class BgGenerateCassandraSSTables
             {
                 // We use Java types here based on
                 // http://www.datastax.com/drivers/java/2.0/com/datastax/driver/core/DataType.Name.html#asJavaClass%28%29
-                writer.addRow(
-                        UUID.fromString(line.get(0)),   // metric uuid
-                        Long.parseLong(line.get(1)),    // time_start_ms
-                        Short.parseShort(line.get(2)),  // offset
-                        parseDouble(line.get(3)),       // value
-                        Integer.parseInt(line.get(4))); // count
+                if (stage0)
+                    writer.addRow(
+                            UUID.fromString(line.get(0)),   // metric uuid
+                            Long.parseLong(line.get(1)),    // time_start_ms
+                            Short.parseShort(line.get(2)),  // offset
+                            parseDouble(line.get(3)));      // value
+                else
+                    writer.addRow(
+                            UUID.fromString(line.get(0)),   // metric uuid
+                            Long.parseLong(line.get(1)),    // time_start_ms
+                            Short.parseShort(line.get(2)),  // offset
+                            (short) 0,                      // shard
+                            parseDouble(line.get(4)),       // value
+                            Short.parseShort(line.get(5))); // count
             }
         }
         catch (IOException e)

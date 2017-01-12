@@ -438,7 +438,10 @@ class _LazyPreparedStatements(object):
     def _bulkimport_write_schema(self, stage, statement_str):
         filename = self.__bulkimport_filename(stage.as_full_string + ".cql")
         log.info("Writing schema for '%s' in '%s'" % (stage.as_full_string, filename))
-        open(filename, "w").write(statement_str)
+        fh = open(filename, "w")
+        fh.write(statement_str)
+        fh.flush()
+        fh.close()
 
     def _bulkimport_write_datapoint(self, stage, args):
         stage_str = stage.as_full_string
@@ -448,11 +451,15 @@ class _LazyPreparedStatements(object):
 
             filename = self.__bulkimport_filename(stage_str + ".csv")
             log.info("Writing data for '%s' in '%s'" % (stage_str, filename))
-            fp = open(filename, "w")
+            fp = open(filename, "w", 1)
             self.__data_files[stage_str] = fp
         else:
             fp = self.__data_files[stage_str]
             fp.write(",".join([str(a) for a in args]) + "\n")
+
+    def flush(self):
+        for fp in self.__data_files.values():
+            fp.flush()
 
     def _create_datapoints_table_stmt(self, stage):
         # Time after which data expire.
@@ -1342,6 +1349,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """Flush any internal buffers."""
         if self.__delayed_writer:
             self.__delayed_writer.flush()
+        self.__lazy_statements.flush()
 
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See bg_accessor.Accessor."""
