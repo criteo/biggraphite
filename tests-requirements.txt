@@ -7,3 +7,6 @@ testing.cassandra
 twisted
 unittest2
 zope.interface
+pytest-benchmark
+pygal<2.2
+pygaljs
