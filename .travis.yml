@@ -33,7 +33,7 @@ env:
     - JAVA=false # Default
     ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
     - CASSANDRA_VERSION=3.9
-    - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/apache-cassandra-${CASSANDRA_VERSION}/"
+    - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
   matrix:
     - JAVA=true
     - TOXENV=pylama
@@ -43,5 +43,8 @@ env:
 
 ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
 before_install:
+   - mkdir .deps
+   - cd .deps
    - wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
    - tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+   - cd -
