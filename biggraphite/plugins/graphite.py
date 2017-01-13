@@ -189,7 +189,6 @@ class Finder(object):
 
         cache_key = "find:%s" % (hashing.compactHash(query.pattern))
         results = self.django_cache().get(cache_key)
-        print (results, self._cache_timeout)
         if results:
             cache_hit = True
         else:
