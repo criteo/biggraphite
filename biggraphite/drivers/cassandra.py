@@ -98,7 +98,7 @@ OPTIONS = {
     "trace": bool,
     "bulkimport": bool,
     "enable_metrics": bool,
-    "shard": int,
+    "shard": lambda k: None if k is None else int(k),
 }
 
 
