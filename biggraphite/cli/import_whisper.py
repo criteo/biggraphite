@@ -24,7 +24,6 @@ import os
 import scandir
 import struct
 import sys
-import threading
 
 import progressbar
 import whisper

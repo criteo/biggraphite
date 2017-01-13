@@ -183,7 +183,6 @@ class Finder(object):
 
     def find_nodes(self, query):
         """Find nodes matching a query."""
-
         # TODO: we should probably consider query.startTime and query.endTime
         #  to filter out metrics that had no points in this interval.
 
