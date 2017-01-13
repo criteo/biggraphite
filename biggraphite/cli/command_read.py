@@ -106,7 +106,7 @@ class CommandRead(command.BaseCommand):
             time_start, time_end, stage = metric.retention.align_time_window(
                 time_start, time_end, time.time()
             )
-            points = accessor.fetch_points(metric, time_start, time_end, stage)
+        points = accessor.fetch_points(metric, time_start, time_end, stage)
 
         return (points, time_start, time_end, stage)
 

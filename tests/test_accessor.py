@@ -113,9 +113,11 @@ class TestStage(unittest.TestCase):
     def test_stage0(self):
         s1 = bg_accessor.Stage(points=24, precision=3600, stage0=True)
         s2 = bg_accessor.Stage.from_string("24*3600s_0")
+        s3 = bg_accessor.Stage.from_string("24*3600s_aggr")
 
         self.assertTrue(s1.stage0)
         self.assertTrue(s2.stage0)
+        self.assertFalse(s3.stage0)
         self.assertTrue(s1 == s2)
         self.assertFalse(s1 != s2)
 

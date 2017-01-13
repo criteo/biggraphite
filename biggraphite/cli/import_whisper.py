@@ -16,13 +16,15 @@
 
 from __future__ import print_function
 
-import argparse
-import multiprocessing
 from multiprocessing import dummy as multiprocessing_dummy
+import argparse
+import logging
+import multiprocessing
 import os
+import scandir
 import struct
 import sys
-import logging
+import threading
 
 import progressbar
 import whisper
@@ -99,6 +101,7 @@ class _Worker(object):
         # As archives are from most precise to least precise, we track the oldest
         # point we've found in more precise archives and ignore the newer ones.
         prev_archive_starts_at = float("inf")
+        stage0 = True
         for archive in archives:
             offset = archive["offset"]
             step = archive["secondsPerPoint"]
@@ -107,7 +110,8 @@ class _Worker(object):
             stage = bg_accessor.Stage(
                 precision=archive["secondsPerPoint"],
                 points=archive["points"],
-                stage0=prev_archive_starts_at == float("inf"))
+                stage0=stage0)
+            stage0 = False
             if stage in self._opts.ignored_stages:
                 continue
             for _ in range(archive["points"]):
@@ -190,15 +194,29 @@ def _parse_opts(args):
     return opts
 
 
+# TODO: put that in a thread.
+class _Walker():
+    def __init__(self, root_directory):
+        self.count = 0
+        self.root_directory = root_directory
+
+    def paths(self, root=None):
+        root = root or self.root_directory
+        for entry in scandir.scandir(root):
+            if entry.is_dir():
+                for filename in self.paths(entry.path):
+                    yield filename
+            elif entry.name.endswith(".wsp"):
+                self.count += 1
+                yield os.path.join(root, entry.name)
+
+
 def main(args=None):
     """Entry point for the module."""
     if not args:
         args = sys.argv[1:]
 
     opts = _parse_opts(args)
-    paths = [os.path.join(root, f)
-             for root, _, files in os.walk(opts.root_directory)
-             for f in files if f.endswith("wsp")]
 
     pool_factory = multiprocessing.Pool
     if opts.process == 1:
@@ -212,16 +230,23 @@ def main(args=None):
         print("Running without PyPy, this is about 20 times slower", file=out_fd)
         out_fd.flush()
 
+    walker = _Walker(opts.root_directory)
+    paths = walker.paths()
     total_points = 0
-    with progressbar.ProgressBar(max_value=len(paths), fd=out_fd, redirect_stderr=True) as pbar:
-        for n_path, n_points in enumerate(pool.imap_unordered(_import_whisper, paths)):
-            total_points += n_points
-            pbar.update(n_path)
+    max_value = progressbar.UnknownLength
+    with progressbar.ProgressBar(max_value=max_value, fd=out_fd, redirect_stderr=True) as pbar:
+        try:
+            res = pool.imap_unordered(_import_whisper, paths)
+            for n_path, n_points in enumerate(res):
+                total_points += n_points
+                pbar.update(n_path)
+        except KeyboardInterrupt:
+            pool.terminate()
 
     pool.close()
     pool.join()
 
-    print("Uploaded", len(paths), "metrics containing", total_points, "points", file=out_fd)
+    print("Uploaded", walker.count, "metrics containing", total_points, "points", file=out_fd)
 
 
 if __name__ == "__main__":

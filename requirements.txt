@@ -3,6 +3,7 @@ humanize
 ipython
 parsedatetime
 progressbar2
+scandir
 
 # Memory driver
 sortedcontainers

@@ -18,9 +18,10 @@ CREATE TABLE IF NOT EXISTS datapoints_<stage.duration>_<stage.resolution>s (
   metric uuid,           # Metric UUID.
   time_start_ms bigint,  # Lower bound for this row.
   offset smallint,       # time_start_ms + offset * precision = timestamp
+  shard  smallint,       # writer identifier
   value double,          # Value for the point.
-  count int,             # If value is sum, divide by count to get the avg.
-  PRIMARY KEY ((metric, time_start_ms), offset)"
+  count smallint,        # If value is sum, divide by count to get the avg.
+  PRIMARY KEY ((metric, time_start_ms), offset, shard)"
 )  WITH CLUSTERING ORDER BY (offset DESC)
    AND default_time_to_live = <stage.duration>
    AND memtable_flush_period_in_ms = 300000"
@@ -37,6 +38,11 @@ This saves space in two ways:
 - No need to repeatedly store metric IDs for each entry
 - The relative offset is only 4 bytes, while timestamps are 8 bytes
 
+## aggr and 0 tables
+
+A retention policy contains one or more stages. The first stage is commonly called stage0 and never contains aggregated data. Other tables contain aggregated points from previous tables, which is why we need an additional `count` column. To avoid data loss on restarts (because the in-memory downsampler will be reset) we store an additional `shard` value which contain a writer id (reset at restart).
+
+## Shard
 
 ## Expiry of data
 

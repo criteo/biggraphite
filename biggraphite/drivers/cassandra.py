@@ -98,6 +98,7 @@ OPTIONS = {
     "trace": bool,
     "bulkimport": bool,
     "enable_metrics": bool,
+    "shard": lambda k: None if k is None else int(k),
 }
 
 
@@ -160,6 +161,10 @@ def add_argparse_arguments(parser):
         help="should expose metrics",
         action='store_true',
         default=False)
+    parser.add_argument(
+        "--cassandra_shard", type=int,
+        help="Cassandra shard",
+        default=None)
 
 
 MINUTE = 60
@@ -438,7 +443,10 @@ class _LazyPreparedStatements(object):
     def _bulkimport_write_schema(self, stage, statement_str):
         filename = self.__bulkimport_filename(stage.as_full_string + ".cql")
         log.info("Writing schema for '%s' in '%s'" % (stage.as_full_string, filename))
-        open(filename, "w").write(statement_str)
+        fh = open(filename, "w")
+        fh.write(statement_str)
+        fh.flush()
+        fh.close()
 
     def _bulkimport_write_datapoint(self, stage, args):
         stage_str = stage.as_full_string
@@ -448,11 +456,15 @@ class _LazyPreparedStatements(object):
 
             filename = self.__bulkimport_filename(stage_str + ".csv")
             log.info("Writing data for '%s' in '%s'" % (stage_str, filename))
-            fp = open(filename, "w")
+            fp = open(filename, "w", 1)
             self.__data_files[stage_str] = fp
         else:
             fp = self.__data_files[stage_str]
             fp.write(",".join([str(a) for a in args]) + "\n")
+
+    def flush(self):
+        for fp in self.__data_files.values():
+            fp.flush()
 
     def _create_datapoints_table_stmt(self, stage):
         # Time after which data expire.
@@ -644,7 +656,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  trace=DEFAULT_TRACE,
                  max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
                  enable_metrics=False,
-                 bulkimport=DEFAULT_BULKIMPORT):
+                 bulkimport=DEFAULT_BULKIMPORT,
+                 shard=None):
         """Record parameters needed to connect.
 
         Args:
@@ -663,6 +676,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
           trace: bool, Enabling query tracing.
           bulkimport: bool, Configure the accessor to generate files necessary for
             bulk import.
+          shard: short, Id of the shard, this is used to handle different writers
+            for the same metric and restarts.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -701,6 +716,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__metrics = {}
         self.__enable_metrics = enable_metrics
+        # TODO: Currently a random shard is good enough. We should use a counter
+        # stored in cassandra instead.
+        if shard is None:
+            self.__shard = int(random.getrandbits(15))
+        else:
+            self.__shard = shard
 
     def connect(self):
         """See bg_accessor.Accessor."""
@@ -757,11 +778,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
 
-        # TODO: Currently a random shard is good enough. We should use a counter
-        # stored in cassandra instead.
-        shard = int(random.getrandbits(15))
         self.__lazy_statements = _LazyPreparedStatements(
-            self.__session_data, self.keyspace, shard, self.__bulkimport)
+            self.__session_data, self.keyspace, self.__shard, self.__bulkimport)
 
         if self.__enable_metrics:
             self.__metrics["metadata"] = expose_metrics(self.__cluster_metadata.metrics, 'metadata')
@@ -1342,6 +1360,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """Flush any internal buffers."""
         if self.__delayed_writer:
             self.__delayed_writer.flush()
+        self.__lazy_statements.flush()
 
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See bg_accessor.Accessor."""
@@ -1390,7 +1409,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     batch_type=c_query.BatchType.UNLOGGED
                 )
                 for statement, args in statements_and_args:
-                    batch.add(statement, args)
+                    if statement is not None:
+                        batch.add(statement, args)
                 statement = batch
                 args = None
                 count = len(statements_and_args)

@@ -268,7 +268,7 @@ class Stage(object):
     __slots__ = ("duration", "points", "precision", "stage0", )
 
     # Parses the values of as_string into points and precision group
-    _STR_RE = re.compile(r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s(?P<stage0>_0)?$")
+    _STR_RE = re.compile(r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s(?P<type>(_0|_aggr))?$")
 
     def __init__(self, points, precision, stage0=False):
         """Set attributes."""
@@ -309,6 +309,8 @@ class Stage(object):
         ret = self.as_string
         if self.stage0:
             ret += '_0'
+        else:
+            ret += '_aggr'
         return ret
 
     @property
@@ -337,7 +339,7 @@ class Stage(object):
         return cls(
             points=int(groups['points']),
             precision=int(groups['precision']),
-            stage0=bool(groups['stage0'])
+            stage0=bool(groups['type'] == '_0')
         )
 
     @property
