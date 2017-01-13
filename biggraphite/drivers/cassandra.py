@@ -98,6 +98,7 @@ OPTIONS = {
     "trace": bool,
     "bulkimport": bool,
     "enable_metrics": bool,
+    "shard": int,
 }
 
 
@@ -160,6 +161,10 @@ def add_argparse_arguments(parser):
         help="should expose metrics",
         action='store_true',
         default=False)
+    parser.add_argument(
+        "--cassandra_shard", type=int,
+        help="Cassandra shard",
+        default=None)
 
 
 MINUTE = 60
@@ -651,7 +656,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  trace=DEFAULT_TRACE,
                  max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
                  enable_metrics=False,
-                 bulkimport=DEFAULT_BULKIMPORT):
+                 bulkimport=DEFAULT_BULKIMPORT,
+                 shard=None):
         """Record parameters needed to connect.
 
         Args:
@@ -670,6 +676,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
           trace: bool, Enabling query tracing.
           bulkimport: bool, Configure the accessor to generate files necessary for
             bulk import.
+          shard: short, Id of the shard, this is used to handle different writers
+            for the same metric and restarts.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -708,6 +716,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__metrics = {}
         self.__enable_metrics = enable_metrics
+        # TODO: Currently a random shard is good enough. We should use a counter
+        # stored in cassandra instead.
+        if shard is None:
+            self.__shard = int(random.getrandbits(15))
+        else:
+            self.__shard = shard
 
     def connect(self):
         """See bg_accessor.Accessor."""
@@ -764,11 +778,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
 
-        # TODO: Currently a random shard is good enough. We should use a counter
-        # stored in cassandra instead.
-        shard = int(random.getrandbits(15))
         self.__lazy_statements = _LazyPreparedStatements(
-            self.__session_data, self.keyspace, shard, self.__bulkimport)
+            self.__session_data, self.keyspace, self.__shard, self.__bulkimport)
 
         if self.__enable_metrics:
             self.__metrics["metadata"] = expose_metrics(self.__cluster_metadata.metrics, 'metadata')
