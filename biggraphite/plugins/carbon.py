@@ -74,7 +74,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
         self.reactor.callInThread(self._createMetrics)
         self._lc = task.LoopingCall(self._background)
-        self._lc.start(50)
+        self._lc.start(50, now=False)
 
     @property
     def reactor(self):
@@ -204,15 +204,20 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             except Queue.Empty:
                 continue
             try:
-                if self.accessor.has_metric(metric.name):
-                    continue
-                log.creates("creating database metric %s" % metric.name)
-                self.cache.create_metric(metric)
-                CREATES.inc()
-                time.sleep(0)  # thread.yield()
+                if not self.accessor.has_metric(metric.name):
+                    log.creates("creating database metric %s" % metric.name)
+                    self.cache.create_metric(metric)
+                    CREATES.inc()
+                # Hard limit to 300 creations per seconds. This is mostly
+                # to give priority to other threads. A typical carbon instance
+                # can handle up to 200k metrics per second so it will take
+                # ~10 minutes to check all metrics.
+                time.sleep(0.003)
             except:
                 log.err()
-                time.sleep(0.1)
+                # Give the system time to recover, errors might be related
+                # to the current load.
+                time.sleep(1)
 
 
 class MultiDatabase(database.TimeSeriesDatabase):
