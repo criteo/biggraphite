@@ -1,3 +1,4 @@
+cffi <= 1.9.0
 # Commande line
 humanize
 ipython
