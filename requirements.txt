@@ -1,3 +1,6 @@
+#To avoid a bug with pycassa https://github.com/pycassa/pycassa/issues/245
+thrift==0.9.3
+
 # Commande line
 humanize
 ipython
