@@ -24,12 +24,16 @@ import os
 import scandir
 import struct
 import sys
+import time
+import datetime
 
 import progressbar
 import whisper
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import utils as bg_utils
+from biggraphite.cli import command
+
 
 _DEV_NULL = open(os.devnull, "w")
 
@@ -66,6 +70,8 @@ class _Worker(object):
         bg_utils.set_log_level(settings)
         self._accessor = bg_utils.accessor_from_settings(settings)
         self._opts = opts
+        self.time_start = time.mktime(self._opts.time_start.timetuple())
+        self.time_end = time.mktime(self._opts.time_end.timetuple())
 
     @staticmethod
     def _read_metadata(metric_name, path):
@@ -128,7 +134,8 @@ class _Worker(object):
                 archive_starts_at = min(timestamp, archive_starts_at)
 
                 if timestamp < prev_archive_starts_at:
-                    res.append((timestamp, value, 1, stage))
+                    if timestamp >= self.time_start and timestamp <= self.time_end:
+                        res.append((timestamp, value, 1, stage))
                 offset += whisper.pointSize
 
             prev_archive_starts_at = archive_starts_at
@@ -184,6 +191,20 @@ def _parse_opts(args):
     parser.add_argument("--ignored_stages", nargs="*",
                         help="Do not import data for these stages.",
                         default=[])
+    parser.add_argument(
+        "--time-start",
+        action=command.ParseDateTimeArg,
+        help="Read points written later than this time.",
+        default='1970-01-01',
+        required=False,
+    )
+    parser.add_argument(
+        "--time-end",
+        action=command.ParseDateTimeArg,
+        help="Read points written earlier than this time.",
+        default=datetime.datetime.now(),
+        required=False,
+    )
     bg_utils.add_argparse_arguments(parser)
     opts = parser.parse_args(args)
     opts.ignored_stages = [
