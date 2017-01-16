@@ -33,6 +33,20 @@ class TestCommandTest(bg_test_utils.TestCaseWithFakeAccessor):
         opts = parser.parse_args([])
         cmd.run(self.accessor, opts)
 
+    def test_run_with_args(self):
+        cmd = command_test.CommandTest()
+
+        parser = argparse.ArgumentParser()
+        bg_utils.add_argparse_arguments(parser)
+        cmd.add_arguments(parser)
+        opts = parser.parse_args(["--cassandra_contact_points=127.0.0.1,192.168.0.1",
+                                  "--cassandra_contact_points_metadata=127.0.0.1,192.168.1.1"])
+        settings = bg_utils.settings_from_args(opts)
+        assert isinstance(settings['cassandra_contact_points'], list)
+        assert isinstance(settings['cassandra_contact_points_metadata'], list)
+
+        cmd.run(self.accessor, opts)
+
 
 if __name__ == "__main__":
     unittest.main()
