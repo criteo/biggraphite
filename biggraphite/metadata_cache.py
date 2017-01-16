@@ -195,7 +195,7 @@ class MemoryCache(Cache):
         """Initialize the memory cache."""
         super(MemoryCache, self).__init__(accessor, settings)
         self.__size = settings.get('size', 1*1000*1000)
-        self.__ttl = settings.get('ttl', 24*60*60)
+        self.__ttl = int(settings.get('ttl', 24*60*60))
 
     def open(self):
         """Allocate ressources used by the cache."""
@@ -283,7 +283,7 @@ class DiskCache(Cache):
         self.__env = None
         self.__path = os_path.join(path, "biggraphite", "cache", "version0")
         self.__size = settings.get("size", self.MAP_SIZE)
-        self.__ttl = settings.get("ttl", 24*60*60)
+        self.__ttl = int(settings.get("ttl", 24*60*60))
         self.__sync = settings.get("sync", True)
         self.__databases = {
             "metric_to_meta": None
@@ -360,7 +360,7 @@ class DiskCache(Cache):
 
         A timestamp expires when it is older than half the TTL from now
         """
-        return int(time.time()) > timestamp + int(self.__ttl / 2)
+        return int(time.time()) > timestamp + self.__ttl
 
     def _cache_get(self, metric_name):
         """Return a Metric from a the cache, None if no such metric."""
@@ -394,12 +394,11 @@ class DiskCache(Cache):
                 txn.delete(key=encoded_metric_name)
             return None, False
 
-        # update timestamp if expired
+        # if the timestamp expired evict it in order to force
+        # its recreation for the next time
         if self.__expired_timestamp(timestamp):
-            key = encoded_metric_name
-            value = self.__value_from_strings(id_str, metadata_str)
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-                txn.put(key, value, dupdata=False, overwrite=True)
+                txn.delete(key=encoded_metric_name)
 
         metadata = self.metadata_from_str(metadata_str)
         return bg_accessor.Metric(metric_name, id, metadata), True
