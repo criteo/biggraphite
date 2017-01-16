@@ -100,39 +100,86 @@ def test_glob_metric_name(benchmark):
 
 
 
-def insert_points(benchmark, reactor):
+def insert_points_async(benchmark, reactor):
     with Bencher(reactor) as tc:
         ac = tc.get_accessor()
-        digits = "".join([random.choice(string.digits+string.letters) for i in xrange(10)] )
-        metadata = bg_accessor.MetricMetadata()
-        metric = ac.make_metric(digits, metadata)
-        ac.create_metric(metric)
+        now = int(time.time())
 
-        points = [(12121212, 5050)] * 5000
-        benchmark.pedantic(ac.insert_points_async, args=(metric, points), iterations=1000, rounds=100)
+        def gen_metric():
+            digits = "".join([random.choice(string.digits+string.letters) for i in xrange(10)])
+            metadata = bg_accessor.MetricMetadata()
+            return ac.make_metric(digits, metadata)
+
+        metrics = [gen_metric() for x in xrange(0,100)]
+        for m in metrics:
+            ac.create_metric(m)
+
+        def run(metrics):
+            for m in metrics:
+                ac.insert_points_async(m, [(now, 5050)])
+
+        benchmark.pedantic(run, args=(metrics,), iterations=1000, rounds=100)
 
 @pytest.mark.benchmark(group="insert_points")
-def test_insert_metrics_libev(benchmark):
-    insert_points(benchmark, "LIBEV")
+def test_insert_metrics_async_libev(benchmark):
+    insert_points_async(benchmark, "LIBEV")
 
 @pytest.mark.benchmark(group="insert_points")
-def test_insert_metrics_twisted(benchmark):
-    insert_points(benchmark, "TWISTED")
+def test_insert_metrics_async_twisted(benchmark):
+    insert_points_async(benchmark, "TWISTED")
 
+
+def insert_points_sync(benchmark, reactor):
+    with Bencher(reactor) as tc:
+        ac = tc.get_accessor()
+        ac._execute_async = ac._execute
+        now = int(time.time())
+
+        def gen_metric():
+            digits = "".join([random.choice(string.digits+string.letters) for i in xrange(10)])
+            metadata = bg_accessor.MetricMetadata()
+            return ac.make_metric(digits, metadata)
+
+        metrics = [gen_metric() for x in xrange(0,100)]
+        for m in metrics:
+            ac.create_metric(m)
+
+        def run(metrics):
+            for m in metrics:
+                ac.insert_points_async(m, [(now, 5050)])
+
+        benchmark.pedantic(run, args=(metrics,), iterations=1000, rounds=100)
+
+@pytest.mark.benchmark(group="insert_points")
+def test_insert_metrics_sync_libev(benchmark):
+    insert_points_sync(benchmark, "LIBEV")
+
+@pytest.mark.benchmark(group="insert_points")
+def test_insert_metrics_sync_twisted(benchmark):
+    insert_points_sync(benchmark, "TWISTED")
 
 
 
 def get_points(benchmark, reactor):
     with Bencher(reactor) as tc:
         ac = tc.get_accessor()
-        digits = "".join([random.choice(string.digits+string.letters) for i in xrange(10)] )
-        metadata = bg_accessor.MetricMetadata()
-        metric = ac.make_metric(digits, metadata)
-        ac.create_metric(metric)
+        now = int(time.time())
 
-        points = [(12121212, 5050)] * 5000
-        ac.insert_points_async(metric, points)
-        benchmark.pedantic(ac.fetch_points, args=(metric, 0, 36000, bg_accessor.Stage(60,60)), iterations=1000, rounds=1000)
+        def gen_metric():
+            digits = "".join([random.choice(string.digits+string.letters) for i in xrange(10)])
+            metadata = bg_accessor.MetricMetadata()
+            return ac.make_metric(digits, metadata)
+
+        metrics = [gen_metric() for x in xrange(0,100)]
+        for m in metrics:
+            ac.create_metric(m)
+            ac.insert_points_async(m, [(now, 5050)])
+
+        def run(metrics):
+            for m in metrics:
+                ac.fetch_points(m, 0, 36000, bg_accessor.Stage(60,60))
+
+        benchmark.pedantic(run, args=(metrics,), iterations=100, rounds=10)
 
 @pytest.mark.benchmark(group="get_points")
 def test_get_points_twisted(benchmark):
