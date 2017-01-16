@@ -394,12 +394,10 @@ class DiskCache(Cache):
                 txn.delete(key=encoded_metric_name)
             return None, False
 
-        # update timestamp if expired
+        # Force a cache miss if the timestamp expired
+        # It will force to refetch from the database and update its ttl by doing so
         if self.__expired_timestamp(timestamp):
-            key = encoded_metric_name
-            value = self.__value_from_strings(id_str, metadata_str)
-            with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-                txn.put(key, value, dupdata=False, overwrite=True)
+            return None, False
 
         metadata = self.metadata_from_str(metadata_str)
         return bg_accessor.Metric(metric_name, id, metadata), True
