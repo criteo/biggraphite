@@ -143,7 +143,7 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
 
         This test will create a metric at 00:00:00 and then get the same metric
         at two different points in time to check if it the timestamp is updated
-        only when older than now + half the default TTL.
+        only when older than now + the default TTL.
         """
         with freeze_time("2014-01-01 00:00:00"):
             self.metadata_cache.create_metric(_TEST_METRIC)
@@ -151,14 +151,13 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
 
         with freeze_time("2014-01-01 11:00:00"):
             self.metadata_cache.get_metric(_TEST_METRIC.name)
+
         timestamp_get_within_half_ttl = self._get_metric_timestamp()
-
-        with freeze_time("2014-01-01 14:00:00"):
-            self.metadata_cache.get_metric(_TEST_METRIC.name)
-        timestamp_get_outside_half_ttl = self._get_metric_timestamp()
-
         self.assertEquals(timestamp_creation, timestamp_get_within_half_ttl)
-        self.assertNotEqual(timestamp_creation, timestamp_get_outside_half_ttl)
+
+        with freeze_time("2014-01-02 04:00:00"):
+            self.assertIsNot(self.metadata_cache.get_metric(_TEST_METRIC.name), None)
+            self.assertIs(self.metadata_cache.cache_has(_TEST_METRIC.name), False)
 
     def test_cache_clean(self):
         """Check that the cache is cleared out of metrics older than the TTL."""
