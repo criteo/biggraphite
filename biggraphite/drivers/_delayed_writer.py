@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 class DelayedWriter(object):
     """Delay writes."""
 
-    DEFAULT_PERIOD_MS = 900000
+    DEFAULT_PERIOD_MS = 600000
 
     def __init__(self, accessor, period_ms=DEFAULT_PERIOD_MS):
         """Create a DelayedWriter.
@@ -70,8 +70,9 @@ class DelayedWriter(object):
         for datapoint in datapoints:
             _, _, _, stage = datapoint
             # In case of unclean shutdown we could loose up to
-            # 10% of the data.
-            if stage.precision_ms < (self.period_ms * 10):
+            # 25% of the data. We also allow a lag of up to 1/4th of
+            # a period. stage0 are never delayed.
+            if stage.stage0 or stage.precision_ms < (self.period_ms * 4):
                 high_res.append(datapoint)
             else:
                 low_res.append(datapoint)
