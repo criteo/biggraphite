@@ -204,7 +204,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             except Queue.Empty:
                 continue
             try:
-                if not self.accessor.has_metric(metric.name):
+                # Call accessor.get_metric() instead of has_metric() to be sure
+                # that the TTL will be updated if it needs to be.
+                has_metric = bool(self.accessor.get_metric(metric.name))
+                if not has_metric:
                     log.creates("creating database metric %s" % metric.name)
                     self.cache.create_metric(metric)
                     CREATES.inc()
