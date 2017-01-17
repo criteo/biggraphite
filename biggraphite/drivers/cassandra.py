@@ -62,7 +62,7 @@ log = logging.getLogger(__name__)
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
 
 DEFAULT_KEYSPACE = "biggraphite"
-DEFAULT_CONTACT_POINTS = "127.0.0.1"
+DEFAULT_CONTACT_POINTS = ["127.0.0.1"]
 DEFAULT_PORT = 9042
 DEFAULT_TIMEOUT = 10.0
 # Disable compression per default as this is clearly useless for writes and
@@ -109,7 +109,7 @@ def add_argparse_arguments(parser):
         help="Cassandra keyspace.",
         default=DEFAULT_KEYSPACE)
     parser.add_argument(
-        "--cassandra_contact_points", metavar="HOST", nargs="+",
+        "--cassandra_contact_points", metavar="HOST[,HOST,...]",
         help="Hosts used for discovery.",
         default=DEFAULT_CONTACT_POINTS)
     parser.add_argument(
@@ -117,7 +117,7 @@ def add_argparse_arguments(parser):
         help="Maximum concurrent connections to the cluster.",
         default=DEFAULT_MAX_CONCURRENT_CONNECTIONS)
     parser.add_argument(
-        "--cassandra_contact_points_metadata", metavar="HOST", nargs="+",
+        "--cassandra_contact_points_metadata", metavar="HOST[,HOST,...]",
         help="Hosts used for discovery.",
         default=None)
     parser.add_argument(
@@ -644,7 +644,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def __init__(self,
                  keyspace='biggraphite',
-                 contact_points=[DEFAULT_CONTACT_POINTS],
+                 contact_points=DEFAULT_CONTACT_POINTS,
                  port=DEFAULT_PORT,
                  contact_points_metadata=None,
                  port_metadata=None,
