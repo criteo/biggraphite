@@ -92,7 +92,8 @@ OPTIONS = {
     "trace": bool,
     "bulkimport": bool,
     "enable_metrics": bool,
-    "shard": lambda k: None if k is None else int(k),
+    "writer": lambda k: None if k is None else int(k),
+    "replica": lambda k: 0 if k is None else int(k),
 }
 
 
@@ -156,8 +157,12 @@ def add_argparse_arguments(parser):
         action='store_true',
         default=False)
     parser.add_argument(
-        "--cassandra_shard", type=int,
-        help="Cassandra shard",
+        "--cassandra_writer", type=int,
+        help="Cassandra writer",
+        default=None)
+    parser.add_argument(
+        "--cassandra_replica", type=int,
+        help="Cassandra replica",
         default=None)
 
 
@@ -445,7 +450,7 @@ class _LazyPreparedStatements(object):
         self.__stage_to_insert = {}
         self.__stage_to_select = {}
         self.__data_files = {}
-        self.__shard = shard
+        self._shard = shard
 
         release_version = session.get_pools()[0].host.release_version
         if version.LooseVersion(release_version) >= version.LooseVersion('3.9'):
@@ -577,7 +582,7 @@ class _LazyPreparedStatements(object):
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
         if stage.aggregated():
-            args = (metric_id, time_start_ms, offset, self.__shard, value, count)
+            args = (metric_id, time_start_ms, offset, self._shard, value, count)
         else:
             args = (metric_id, time_start_ms, offset, value)
 
@@ -610,7 +615,7 @@ class _LazyPreparedStatements(object):
 
     def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
         statement = self.__stage_to_select.get(stage)
-        limit = (row_max_offset - row_min_offset)
+        limit = (row_max_offset - row_min_offset) * bg_accessor.SHARD_MAX_REPLICAS
         args = (metric_id, row_start_ms, row_min_offset, row_max_offset, limit)
         if statement:
             return statement, args
@@ -679,7 +684,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
                  enable_metrics=False,
                  bulkimport=DEFAULT_BULKIMPORT,
-                 shard=None):
+                 writer=None,
+                 replica=0):
         """Record parameters needed to connect.
 
         Args:
@@ -698,8 +704,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
           trace: bool, Enabling query tracing.
           bulkimport: bool, Configure the accessor to generate files necessary for
             bulk import.
-          shard: short, Id of the shard, this is used to handle different writers
+          writer: short, Id of the writer, this is used to handle different writers
             for the same metric and restarts.
+          replica: shord, Id of the replica. Values will be grouped by replicas
+            during read to allow multiple simultanous writers.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -738,12 +746,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__metrics = {}
         self.__enable_metrics = enable_metrics
-        # TODO: Currently a random shard is good enough. We should use a counter
-        # stored in cassandra instead.
-        if shard is None:
-            self.__shard = int(random.getrandbits(15))
-        else:
-            self.__shard = shard
+        if writer is None:
+            # TODO: Currently a random shard is good enough.
+            # We should use a counter stored in cassandra instead.
+            writer = bg_accessor.pack_shard(
+                replica, random.getrandbits(bg_accessor.SHARD_WRITER_BITS))
+        self.__shard = bg_accessor.pack_shard(replica, writer)
 
     def connect(self):
         """See bg_accessor.Accessor."""
@@ -751,6 +759,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self._connect_clusters()
         self._prepare_statements()
         self.is_connected = True
+
+    @property
+    def shard(self):
+        return self.__shard
+
+    @shard.setter
+    def shard(self, value):
+        self.__shard = value
+        if self.__lazy_statements:
+            self.__lazy_statements._shard = value
 
     def _prepare_statements(self):
         def __prepare(cql, consistency=_META_WRITE_CONSISTENCY):

@@ -44,6 +44,31 @@ _UTF8_CODEC = codecs.getencoder('utf8')
 
 _NAN = float("nan")
 
+# Number of bits allocated to dinstinguish replicas in the shard
+# id. The default is 2 which means that you can have up to 3 replicas
+# writting a the same time to your database.
+SHARD_REPLICA_MASK = 0xC000
+SHARD_WRITER_MASK = (SHARD_REPLICA_MASK ^ 0xFFFF)
+SHARD_REPLICA_BITS = bin(SHARD_REPLICA_MASK).count('1')
+SHARD_WRITER_BITS = 16 - SHARD_REPLICA_BITS
+SHARD_REPLICA_SHIFT = SHARD_WRITER_BITS
+SHARD_MAX_REPLICAS = 2**SHARD_REPLICA_BITS
+
+
+def pack_shard(replica, writer):
+    """Pack a replica id and writer id in a short."""
+    return (
+        (replica << SHARD_REPLICA_SHIFT) |
+        (writer & SHARD_WRITER_MASK)
+    )
+
+
+def unpack_shard(shard):
+    """Unpack what pack_shard() did."""
+    replica = (shard & SHARD_REPLICA_MASK) >> SHARD_REPLICA_SHIFT
+    writer = (shard & SHARD_WRITER_MASK)
+    return (replica, writer)
+
 
 def _wait_async_call(async_function, *args, **kwargs):
     """Call async_function and synchronously wait for it to be done.
@@ -869,13 +894,20 @@ class PointGrouper(object):
         self.stage = stage
         self.source_stage = source_stage or stage
         self.query_results = query_results
-
-        self.current_values = array.array("d")
-        self.current_counts = array.array("l")
-        self.current_timestamp_ms = None
+        self.simple = self.source_stage.stage0 and self.stage == self.source_stage
+        if not self.simple:
+            self.current_values = []
+            self.current_counts = []
+            for r in range(SHARD_MAX_REPLICAS):
+                self.current_values.append(array.array("d"))
+                self.current_counts.append(array.array("l"))
+            self.current_timestamp_ms = None
 
     def __iter__(self):
-        return self.generate_values()
+        if not self.simple:
+            return self.generate_values_aggregated()
+        else:
+            return self.generate_values_stage0()
 
     def run_aggregator(self):
         """Aggregate values in current_values.
@@ -886,20 +918,29 @@ class PointGrouper(object):
         # This is the first point we encounter, do not emit it on its own,
         # rather wait until we have found values fitting in the next period.
         ret = (None, None)
+        max_count = 0
         if self.current_timestamp_ms is None:
             return ret
-        aggregate = self.metric.metadata.aggregator.downsample(
-            values=self.current_values,
-            counts=self.current_counts,
-            newest_first=True,
-        )
-        if aggregate is not None:
-            ret = (self.current_timestamp_ms / 1000.0, aggregate)
-            del self.current_values[:]
-            del self.current_counts[:]
+        # Try to find the most complete replica and return its results. It would
+        # be nice to implement all that in the database directly if we can.
+        for r in range(SHARD_MAX_REPLICAS):
+            r_count = sum(self.current_counts[r])
+            if not r_count:
+                continue
+            aggregate = self.metric.metadata.aggregator.downsample(
+                values=self.current_values[r],
+                counts=self.current_counts[r],
+                newest_first=True,
+            )
+            if aggregate is not None:
+                if r_count > max_count:
+                    ret = (self.current_timestamp_ms / 1000.0, aggregate)
+                    max_count = r_count
+                del self.current_values[r][:]
+                del self.current_counts[r][:]
         return ret
 
-    def generate_values(self):
+    def generate_values_aggregated(self):
         """Generator function, consume query_results and produce values."""
         first_exc = None
         same_stage = self.stage == self.source_stage
@@ -914,11 +955,14 @@ class PointGrouper(object):
                 first_exc = rows_or_exception
             for row in rows_or_exception:
                 if aggregated_stage:
-                    (time_start_ms, offset, _, value, count) = row
+                    (time_start_ms, offset, shard, value, count) = row
                 else:
                     (time_start_ms, offset, value) = row
+                    shard = 0
                     count = 1
 
+                # Find the replica id from the shard id.
+                replica = (shard & SHARD_REPLICA_MASK) >> SHARD_REPLICA_SHIFT
                 timestamp_ms = (
                     time_start_ms + offset * self.source_stage.precision_ms)
 
@@ -927,12 +971,7 @@ class PointGrouper(object):
                 if not same_stage:
                     timestamp_ms = round_down(timestamp_ms, self.stage.precision_ms)
 
-                if same_stage and not aggregated_stage:
-                    # Non aggregated stages are pretty simple, nothing to do.
-                    yield (timestamp_ms / 1000.0, value)
-                    continue
-
-                elif self.current_timestamp_ms != timestamp_ms:
+                if self.current_timestamp_ms != timestamp_ms:
                     # This needs to be optimized because in the common case
                     # there is absolutely nothing to aggregate.
                     ts, point = self.run_aggregator()
@@ -941,13 +980,38 @@ class PointGrouper(object):
 
                     self.current_timestamp_ms = timestamp_ms
 
-                self.current_values.append(value)
-                self.current_counts.append(count)
+                self.current_values[replica].append(value)
+                self.current_counts[replica].append(count)
 
         if not same_stage or aggregated_stage:
             ts, point = self.run_aggregator()
             if ts is not None:
                 yield (ts, point)
+
+        if first_exc:
+            raise RetryableError(first_exc)
+
+    def generate_values_stage0(self):
+        """Generator function, consume query_results and produce values."""
+        first_exc = None
+
+        for successful, rows_or_exception in self.query_results:
+            if first_exc:
+                # A query failed, we still consume the results
+                continue
+            if not successful:
+                first_exc = rows_or_exception
+            for row in rows_or_exception:
+                (time_start_ms, offset, value) = row
+
+                timestamp_ms = (
+                    time_start_ms + offset * self.source_stage.precision_ms)
+
+                assert timestamp_ms >= self.time_start_ms
+                assert timestamp_ms < self.time_end_ms
+
+                # Non aggregated stages are pretty simple, nothing to do.
+                yield (timestamp_ms / 1000.0, value)
 
         if first_exc:
             raise RetryableError(first_exc)
