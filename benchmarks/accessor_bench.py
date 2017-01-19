@@ -47,7 +47,8 @@ class Bencher(BASE_CLASS):
 def _gen_metric(accessor):
     digits = "".join(
         [random.choice(string.digits+string.letters) for i in xrange(10)])
-    metadata = bg_accessor.MetricMetadata()
+    retention = bg_accessor.Retention.from_string("86400*1s:10080*60s")
+    metadata = bg_accessor.MetricMetadata(retention=retention)
     return accessor.make_metric(digits, metadata)
 
 
@@ -120,6 +121,7 @@ def insert_points_async(benchmark):
         def run(metrics):
             for m in metrics:
                 ac.insert_points_async(m, [(now, 5050)])
+            ac.flush()
 
         benchmark.pedantic(
             run, args=(metrics,),
@@ -143,6 +145,7 @@ def insert_points_sync(benchmark):
         def run(metrics):
             for m in metrics:
                 ac.insert_points(m, [(now, 5050)])
+            ac.flush()
 
         benchmark.pedantic(
             run, args=(metrics,),
@@ -163,10 +166,14 @@ def get_points(benchmark):
         for m in metrics:
             ac.create_metric(m)
             ac.insert_points_async(m, [(now, 5050)])
+        ac.flush()
 
         def run(metrics):
+            end = int(now / 60) * 60
+            start = end - 3600
             for m in metrics:
-                ac.fetch_points(m, 0, 36000, bg_accessor.Stage(60,60))
+                ac.fetch_points(m, start, end, bg_accessor.Stage(86400, 1))
+                ac.fetch_points(m, start, end, bg_accessor.Stage(10080, 60))
 
         benchmark.pedantic(
             run, args=(metrics,),
