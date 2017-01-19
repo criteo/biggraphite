@@ -80,6 +80,29 @@ You can also simply use `unittest.discover` if you have a working dev environmen
 $ BG_COMPONENTS_MAX_LEN=12 python -m unittest discover --failfast --verbose --catch
 ```
 
+### Running Benchmarks
+
+The simpliest way is to use tox. The command below will run all the tests inside benches/ directory.
+```bash
+tox -e bench
+```
+
+To be able to compare your new changes, First run the command below before you make any changes.
+It will run all the benches and save the result for later analyze.
+```bash
+tox -e bench -- --benchmark-autosave
+```
+
+Now after any changes, you can run the commmand to see if your results improves things or not
+```bash
+tox -e bench -- --benchmark-compare
+```
+
+If you want to run the benchmarks manually, it uses [pytest-benchmark](https://pypi.python.org/pypi/pytest-benchmark)
+```bash
+pytest path_to_your_benchmark
+```
+
 
 ### Test instance
 
