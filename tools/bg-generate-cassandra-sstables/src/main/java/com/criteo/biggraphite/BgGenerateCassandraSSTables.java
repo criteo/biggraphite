@@ -135,7 +135,7 @@ public class BgGenerateCassandraSSTables
                             UUID.fromString(line.get(0)),   // metric uuid
                             Long.parseLong(line.get(1)),    // time_start_ms
                             Short.parseShort(line.get(2)),  // offset
-                            (short) 0,                      // shard
+                            Short.parseShort(line.get(3)),  // shard
                             parseDouble(line.get(4)),       // value
                             Short.parseShort(line.get(5))); // count
             }
