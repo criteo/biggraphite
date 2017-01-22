@@ -16,6 +16,7 @@
 from __future__ import absolute_import  # Otherwise graphite is this module.
 
 import time
+import threading
 
 from graphite import intervals
 from graphite import node
@@ -149,36 +150,45 @@ class Finder(object):
         self._cache = metadata_cache
         self._django_cache = None
         self._cache_timeout = None
+        self._lock = threading.RLock()
 
     def accessor(self):
         """Return an accessor."""
-        if not self._accessor:
-            from django.conf import settings as django_settings
-            accessor = graphite_utils.accessor_from_settings(django_settings)
-            # If connect() fail it will raise an exception that will be caught
-            # by the caller. If the plugin is called again, self._accessor will
-            # still be None and a new accessor will be created.
-            accessor.connect()
-            self._accessor = accessor
+        with self._lock:
+            if not self._accessor:
+                from django.conf import settings as django_settings
+                accessor = graphite_utils.accessor_from_settings(django_settings)
+                # If connect() fail it will raise an exception that will be caught
+                # by the caller. If the plugin is called again, self._accessor will
+                # still be None and a new accessor will be created.
+                try:
+                    accessor.connect()
+                except Exception as e:
+                    log.exception("failed to connect()")
+                    accessor.shutdown()
+                    raise e
+                self._accessor = accessor
         return self._accessor
 
     def cache(self):
         """Return a metadata cache."""
-        if not self._cache:
-            # TODO: Allow to use Django's cache.
-            from django.conf import settings as django_settings
-            cache = graphite_utils.cache_from_settings(self.accessor(), django_settings)
-            cache.open()
-            self._cache = cache
+        with self._lock:
+            if not self._cache:
+                # TODO: Allow to use Django's cache.
+                from django.conf import settings as django_settings
+                cache = graphite_utils.cache_from_settings(self.accessor(), django_settings)
+                cache.open()
+                self._cache = cache
         return self._cache
 
     def django_cache(self):
         """Return the django cache."""
-        if not self._django_cache:
-            from django.conf import settings as django_settings
-            from django.core.cache import cache
-            self._django_cache = cache
-            self._cache_timeout = django_settings.FIND_CACHE_DURATION
+        with self._lock:
+            if not self._django_cache:
+                from django.conf import settings as django_settings
+                from django.core.cache import cache
+                self._django_cache = cache
+                self._cache_timeout = django_settings.FIND_CACHE_DURATION
         return self._django_cache
 
     def find_nodes(self, query):

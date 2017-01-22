@@ -1596,22 +1596,21 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def shutdown(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).shutdown()
-        if self.is_connected:
-            try:
-                if self.__cluster_data:
-                    self.__cluster_data.shutdown()
-            except Exception as exc:
-                raise CassandraError(exc)
-            self.__cluster_data = None
+        try:
+            if self.__cluster_data:
+                self.__cluster_data.shutdown()
+        except Exception as exc:
+            raise CassandraError(exc)
+        self.__cluster_data = None
 
-            try:
-                if self.__cluster_metadata:
-                    self.__cluster_metadata.shutdown()
-            except Exception as exc:
-                raise CassandraError(exc)
-            self.__cluster_metadata = None
+        try:
+            if self.__cluster_metadata:
+                self.__cluster_metadata.shutdown()
+        except Exception as exc:
+            raise CassandraError(exc)
+        self.__cluster_metadata = None
 
-            self.is_connected = False
+        self.is_connected = False
 
     def syncdb(self, dry_run=False):
         schema = ""
