@@ -47,6 +47,9 @@ _NAN = float("nan")
 # Number of bits allocated to dinstinguish replicas in the shard
 # id. The default is 2 which means that you can have up to 3 replicas
 # writting a the same time to your database.
+# See CASSANDRA_DESIGN.md for details. This should eventually move off
+# to drivers/ and be used only by drivers who needs that, they should in
+# turn just forward the replica id instead of the shard id.
 SHARD_REPLICA_MASK = 0xC000
 SHARD_WRITER_MASK = (SHARD_REPLICA_MASK ^ 0xFFFF)
 SHARD_REPLICA_BITS = bin(SHARD_REPLICA_MASK).count('1')

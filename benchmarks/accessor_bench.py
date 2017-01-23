@@ -1,12 +1,15 @@
+import logging
+import os
+import pytest
+import random
+import string
 import time
+
+from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 from biggraphite import utils as bg_utils
 from biggraphite.drivers import cassandra as bg_cassandra
-from biggraphite import accessor as bg_accessor
-import random
-import string
-import os
-import pytest
+
 
 if bool(os.getenv("CASSANDRA_HOME")):
     BASE_CLASS = bg_test_utils.TestCaseWithAccessor
@@ -14,6 +17,7 @@ if bool(os.getenv("CASSANDRA_HOME")):
     ROUNDS_LARGE = 10
     ITERATIONS = 10
 else:
+    logging.warn("Using memory driver.")
     BASE_CLASS = bg_test_utils.TestCaseWithFakeAccessor
     ROUNDS = 1000
     ROUNDS_LARGE = 10
