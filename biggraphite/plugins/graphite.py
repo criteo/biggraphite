@@ -150,7 +150,7 @@ class Finder(object):
         self._cache = metadata_cache
         self._django_cache = None
         self._cache_timeout = None
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
 
     def accessor(self):
         """Return an accessor."""
