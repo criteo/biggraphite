@@ -1503,8 +1503,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             parent_dirs = self._execute_concurrent_metadata(
                 directories_to_check(result),
                 concurrency=self.max_concurrent_connections,
-                raise_on_first_error=False,
-                results_generator=True)
+                raise_on_first_error=False)
 
             rets = self._execute_concurrent_metadata(
                 directories_to_create(parent_dirs),
