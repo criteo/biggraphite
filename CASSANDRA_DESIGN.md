@@ -42,6 +42,8 @@ This saves space in two ways:
 
 A retention policy contains one or more stages. The first stage is commonly called stage0 and never contains aggregated data. Other tables contain aggregated points from previous tables, which is why we need an additional `count` column. To avoid data loss on restarts (because the in-memory downsampler will be reset) we store an additional `shard` value which contain a writer id (reset at restart).
 
+On top of that, the higher bits of the identifier contain the replica id, this allows multiple replicas to write the exact same data without stepping on each other toes. During a read we select the replica with the most values.
+
 ## Shard
 
 ## Expiry of data
