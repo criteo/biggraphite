@@ -82,13 +82,13 @@ $ BG_COMPONENTS_MAX_LEN=12 python -m unittest discover --failfast --verbose --ca
 
 ### Running Benchmarks
 
-The simpliest way is to use tox. The command below will run all the tests inside benches/ directory.
+The simpliest way is to use tox. The command below will run all the tests inside benchmarks/ directory.
 ```bash
 tox -e bench
 ```
 
 To be able to compare your new changes, First run the command below before you make any changes.
-It will run all the benches and save the result for later analyze.
+It will run all the benchmarks and save the result for later analyze.
 ```bash
 tox -e bench -- --benchmark-autosave
 ```
