@@ -14,12 +14,13 @@
 # limitations under the License.
 """Implements the DiskCache for metrics metadata.
 
+The Memory cache is implemented with a simple LRU cache. It is good for low
+latency when data is unlikely to be shared accross multiple processes.
+
 The DiskCache is implemented with lmdb, an on-disk file DB that can be accessed
 by multiple processes. Keys are metric names, values are json-serialised metadata.
 In deployment the graphite storage dir is used as a rendez-vous point where all processes
 (carbon, graphite, ...) can find the metadata.
-
-TODO(b.arnould): Currently that cache never expires, as we don't allow for deletion.
 """
 
 from __future__ import absolute_import
@@ -224,7 +225,7 @@ class MemoryCache(Cache):
 
     def clean(self):
         """Automatically cleaned by cachetools."""
-        pass
+        self.__cache.expire()
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache."""
@@ -473,21 +474,40 @@ class DiskCache(Cache):
         cutoff = int(time.time()) - int(self.__ttl)
         logging.info("Cleaning cache with cutoff time %d" % cutoff)
 
-        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            cursor = txn.cursor()
-            for key, value in cursor:
-                split = self.__split_payload(value)
-                if split is None:
-                    logging.warning(
-                        "Removing undecodable key '%s' with value %s" % (key, value))
-                    txn.delete(key=key)
-                else:
-                    _, _, timestamp = split
-                    if timestamp < cutoff:
-                        logging.warning(
-                            "Removing expired key '%s' with timestamp %d" % (
-                                key, timestamp))
-                        txn.delete(key=key)
+        start_key = None
+        while True:
+            # Split in small transactions to avoid blocking other processes.
+            with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
+                with txn.cursor() as cursor:
+                    if start_key is not None:
+                        if not cursor.set_range(start_key):
+                            break
+                    start_key = self._clean_some(cursor, cutoff)
+                    if start_key is None:
+                        break
+
+    def _clean_some(self, cursor, cutoff):
+        """Clean a few rows of cursor and stop."""
+        count = 0
+        for key, value in cursor:
+            count += 1
+            if count > 1:
+                return key
+
+            split = self.__split_payload(value)
+            if split is None:
+                logging.warning(
+                    "Removing undecodable key '%s' with value %s" % (key, value))
+                txn.delete(key=key)
+                continue
+
+            _, _, timestamp = split
+            if timestamp < cutoff:
+                logging.warning(
+                    "Removing expired key '%s' with timestamp %d" % (
+                        key, timestamp))
+                txn.delete(key=key)
+        return None
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache.
