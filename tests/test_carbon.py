@@ -42,7 +42,9 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         def _create(metric):
             self._plugin.cache.create_metric(metric)
 
+        # Make sure we don't create metrics asynchronously
         self._plugin._createAsync = _create
+
         self._plugin.create(
             _TEST_METRIC,
             retentions=[(1, 60)],
@@ -67,7 +69,33 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
             aggregation_method="average",
         )
         self.assertTrue(self._plugin.exists(other_metric))
-        self.assertEqual("average", self._plugin.getMetadata(other_metric, "aggregationMethod"))
+
+        aggr = self._plugin.getMetadata(other_metric, "aggregationMethod")
+        self.assertEqual("average", aggr)
+
+    def test_update_metric(self):
+        other_metric = _TEST_METRIC + "-other"
+        self._plugin.create(
+            other_metric,
+            retentions=[(1, 60)],
+            xfilesfactor=0.5,
+            aggregation_method="average",
+        )
+
+        self.assertTrue(self._plugin.exists(other_metric))
+        aggr = self._plugin.getMetadata(other_metric, "aggregationMethod")
+        self.assertEqual("average", aggr)
+
+        self._plugin.create(
+            other_metric,
+            retentions=[(1, 60)],
+            xfilesfactor=0.5,
+            aggregation_method="sum",
+        )
+
+        self.assertTrue(self._plugin.exists(other_metric))
+        aggr = self._plugin.getMetadata(other_metric, "aggregationMethod")
+        self.assertEqual("sum", aggr)
 
     def test_nosuchmetric(self):
         other_metric = _TEST_METRIC + "-nosuchmetric"

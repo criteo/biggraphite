@@ -200,17 +200,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # be written as soon as they are received.
         while self.reactor.running:
             try:
-                metric = self._metricsToCreate.get(True, 1)
-            except Queue.Empty:
-                continue
-            try:
-                # Call accessor.get_metric() instead of has_metric() to be sure
-                # that the TTL will be updated if it needs to be.
-                has_metric = bool(self.accessor.get_metric(metric.name))
-                if not has_metric:
-                    log.creates("creating database metric %s" % metric.name)
-                    self.cache.create_metric(metric)
-                    CREATES.inc()
+                self._createOneMetric()
                 # Hard limit to 300 creations per seconds. This is mostly
                 # to give priority to other threads. A typical carbon instance
                 # can handle up to 200k metrics per second so it will take
@@ -221,6 +211,26 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                 # Give the system time to recover, errors might be related
                 # to the current load.
                 time.sleep(1)
+
+    def _createOneMetric(self):
+        try:
+            metric = self._metricsToCreate.get(True, 1)
+        except Queue.Empty:
+            return
+
+        existing_metric = self.accessor.get_metric(metric.name)
+        if metric == existing_metric:
+            return
+
+        if existing_metric:
+            # The retention policy is different, update it.
+            log.creates("updating database metric %s (%s)" % (
+                metric.name, metric.metadata.as_string_dict()))
+        else:
+            # The metric doesn't exists, create it.
+            log.creates("creating database metric %s" % metric.name)
+            self.cache.create_metric(metric)
+            CREATES.inc()
 
 
 class MultiDatabase(database.TimeSeriesDatabase):
