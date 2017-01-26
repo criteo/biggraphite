@@ -482,11 +482,11 @@ class DiskCache(Cache):
                     if start_key is not None:
                         if not cursor.set_range(start_key):
                             break
-                    start_key = self._clean_some(cursor, cutoff)
+                    start_key = self._clean_some(txn, cursor, cutoff)
                     if start_key is None:
                         break
 
-    def _clean_some(self, cursor, cutoff):
+    def _clean_some(self, txn, cursor, cutoff):
         """Clean a few rows of cursor and stop."""
         count = 0
         for key, value in cursor:
