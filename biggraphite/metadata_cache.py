@@ -491,7 +491,8 @@ class DiskCache(Cache):
         count = 0
         for key, value in cursor:
             count += 1
-            if count > 1:
+            # Limit to 100 keys per iteration.
+            if count > 100:
                 return key
 
             split = self.__split_payload(value)
