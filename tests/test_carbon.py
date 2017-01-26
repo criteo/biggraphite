@@ -22,6 +22,7 @@ import unittest
 from carbon import database
 from carbon import conf as carbon_conf
 
+from biggraphite import accessor as bg_accessor
 from biggraphite.plugins import carbon as bg_carbon
 
 
@@ -43,6 +44,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
             self._plugin.cache.create_metric(metric)
 
         # Make sure we don't create metrics asynchronously
+        self._plugin._createAsyncOrig = self._plugin._createAsync
         self._plugin._createAsync = _create
 
         self._plugin.create(
@@ -96,6 +98,23 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertTrue(self._plugin.exists(other_metric))
         aggr = self._plugin.getMetadata(other_metric, "aggregationMethod")
         self.assertEqual("sum", aggr)
+
+    def test_create_async(self):
+        metric_name = "a.b.c"
+        metric = self.make_metric(metric_name)
+
+        self._plugin._createAsyncOrig(metric)
+        self.assertFalse(self._plugin.exists(metric_name))
+        self._plugin._createOneMetric()
+        self.assertTrue(self._plugin.exists(metric_name))
+
+        # See if we can update.
+        metric = self.make_metric(metric_name)
+        metric.metadata.retention = bg_accessor.Retention([bg_accessor.Stage(1, 1)])
+        self._plugin._createAsyncOrig(metric)
+        self._plugin._createOneMetric()
+        retention = self._plugin.getMetadata(metric_name, "retention")
+        self.assertEquals(retention, metric.metadata.retention)
 
     def test_nosuchmetric(self):
         other_metric = _TEST_METRIC + "-nosuchmetric"

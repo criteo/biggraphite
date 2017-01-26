@@ -219,6 +219,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             return
 
         existing_metric = self.accessor.get_metric(metric.name)
+
         if metric == existing_metric:
             return
 
@@ -229,8 +230,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         else:
             # The metric doesn't exists, create it.
             log.creates("creating database metric %s" % metric.name)
-            self.cache.create_metric(metric)
-            CREATES.inc()
+
+        self.cache.create_metric(metric)
+        CREATES.inc()
 
 
 class MultiDatabase(database.TimeSeriesDatabase):
