@@ -564,6 +564,14 @@ class MetricMetadata(object):
             raise AttributeError("can't set attribute")
         super(MetricMetadata, self).__setattr__(name, value)
 
+    def __eq__(self, other):
+        if not isinstance(other, MetricMetadata):
+            return False
+        return self.as_string_dict() == other.as_string_dict()
+
+    def __ne__(self, other):
+        return not (self == other)
+
     def as_json(self):
         """Serialize MetricMetadata into a JSon string from_json() can parse."""
         return json.dumps(self.as_string_dict())
@@ -625,6 +633,15 @@ class Metric(object):
         res.extend(self.__slots__)
         res.sort()
         return res
+
+    def __eq__(self, other):
+        if not isinstance(other, Metric):
+            return False
+        return (self.name == other.name and
+                self.metadata == other.metadata)
+
+    def __ne__(self, other):
+        return not (self == other)
 
 
 class Accessor(object):

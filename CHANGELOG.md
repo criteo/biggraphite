@@ -6,17 +6,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Added
-- Prometheus support and additional metrics.
+- Prometheus support and additional metrics
+- Add support for multiple replicas/writers
+- Microbenchmarks
+- Asynchronous creation of metrics in carbon
+- Better bg-import-whisper / bg-generate-sstables + helper scripts
 
 ### Fixed
--
+- Multiple bugs with the disk cache
+- Multiple clean/repair bugs
 
 ### Changed
 - [Breaking] Cassandra schema as been changed to separate stage0 and aggregated
   metrics. There is no upgrade procedure as this is a pre-release.
-
-### Removed
--
+- [Breaking] `bgutil syncdb` needs to be run during initial install
 
 ## [0.6.0] - 2016-11-25
 ### Added

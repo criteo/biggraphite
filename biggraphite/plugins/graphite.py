@@ -130,6 +130,7 @@ class Reader(object):
         """
         if now is None:
             now = time.time()
+
         # Call __get_time_info with the widest conceivable range will make it be
         # shortened to the widest range available according to retention policy.
         start, end, unused_stage = self.__get_time_info(0, now, now)
@@ -150,7 +151,7 @@ class Finder(object):
         self._cache = metadata_cache
         self._django_cache = None
         self._cache_timeout = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def accessor(self):
         """Return an accessor."""
