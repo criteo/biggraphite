@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [0.7.0]
 ### Added
 - Prometheus support and additional metrics
 - Add support for multiple replicas/writers
@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.7.0...HEAD
+[0.7]: https://github.com/criteo/biggraphite/compare/v0.7.0
 [0.6]: https://github.com/criteo/biggraphite/compare/v0.6.0
 
