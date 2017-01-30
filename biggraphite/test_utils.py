@@ -198,7 +198,8 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         try:
             cls.cassandra.setup()
             cls.cassandra.start()
-        except:
+        except Exception as e:
+            logging.exception(e)
             print("fail to starting cassandra, logging potentially useful debug info",
                   file=sys.stderr)
             for attr in "cassandra_home", "cassandra_yaml", "cassandra_bin", "base_dir", "settings":
