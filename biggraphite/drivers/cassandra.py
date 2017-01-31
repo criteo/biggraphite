@@ -395,6 +395,9 @@ def getConnectionClass():
     """Get connection class for cassandra."""
     global REACTOR_TO_USE
 
+    if REACTOR_TO_USE in getConnectionClass.classes:
+        return getConnectionClass.classes[REACTOR_TO_USE]
+
     if REACTOR_TO_USE == "TWISTED":
         from cassandra.io import twistedreactor as c_reactor
         CONNECTION_CLASS = c_reactor.TwistedConnection
@@ -420,7 +423,14 @@ def getConnectionClass():
         # 300 is the minimum with protocol version 3, default is 65536
         max_in_flight = 600
 
+    getConnectionClass.classes[REACTOR_TO_USE] = _CappedConnection
     return _CappedConnection
+
+
+# We create a static variable to make sure that we don't create multiple
+# classes if this function is called multiple time. The cassandra driver
+# expect that only one class per event loop will be used.
+getConnectionClass.classes = {}
 
 
 class _CountDown(_utils.CountDown):
