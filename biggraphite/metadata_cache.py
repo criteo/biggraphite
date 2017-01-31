@@ -34,6 +34,7 @@ import threading
 import logging
 import uuid
 import time
+import random
 
 import cachetools
 import lmdb
@@ -200,7 +201,11 @@ class MemoryCache(Cache):
 
     def open(self):
         """Allocate ressources used by the cache."""
-        self.__cache = cachetools.TTLCache(maxsize=self.__size, ttl=self.__ttl)
+        def _timer():
+            # Use a custom timer to try to spread expirations. Within one instance it
+            # won't change anything but it will be better if you run multiple instances.
+            return time.time() + self.__ttl * random.uniform(-0.25, 0.25)
+        self.__cache = cachetools.TTLCache(maxsize=self.__size, ttl=self.__ttl, timer=_timer)
 
     def close(self):
         """Free resources allocated by open()."""
