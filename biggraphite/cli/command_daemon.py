@@ -141,7 +141,7 @@ class CommandDaemon(command.BaseCommand):
         def add_arg(*args, **kwargs):
             try:
                 old_fn(*args, **kwargs)
-            except:
+            except Exception:
                 pass
 
         parser.add_argument = add_arg

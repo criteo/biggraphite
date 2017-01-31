@@ -390,7 +390,8 @@ class DiskCache(Cache):
         id_str, metadata_str, timestamp = split
         try:
             id = uuid.UUID(id_str)
-        except:
+        except Exception as e:
+            logging.debug(str(e))
             with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
                 txn.delete(key=encoded_metric_name)
             return None, False

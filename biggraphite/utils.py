@@ -194,7 +194,7 @@ def get_setting(settings, name):
         try:
             res = getattr(settings, name)
             found = True
-        except:
+        except Exception:
             pass
     return res, found
 

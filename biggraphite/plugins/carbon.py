@@ -206,7 +206,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                 # can handle up to 200k metrics per second so it will take
                 # ~10 minutes to check all metrics.
                 time.sleep(0.003)
-            except:
+            except Exception:
                 log.err()
                 # Give the system time to recover, errors might be related
                 # to the current load.
