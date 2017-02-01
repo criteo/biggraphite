@@ -35,6 +35,7 @@ from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
+from cassandra import marshal as c_marshal
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -761,7 +762,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # We should use a counter stored in cassandra instead.
             writer = bg_accessor.pack_shard(
                 replica, random.getrandbits(bg_accessor.SHARD_WRITER_BITS))
-        self.__shard = bg_accessor.pack_shard(replica, writer)
+        # Cassandra expects a signed short, make sure we give it something
+        # it understands.
+        self.__shard = self.__shard = bg_accessor.pack_shard(replica, writer)
+        self.__shard = c_marshal.int16_unpack(c_marshal.uint16_pack(self.__shard))
 
     def connect(self):
         """See bg_accessor.Accessor."""

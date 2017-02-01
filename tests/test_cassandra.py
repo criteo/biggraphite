@@ -86,7 +86,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
     def test_insert_fetch_replicas(self):
         self.accessor.shard = bg_accessor.pack_shard(replica=0, writer=0)
         self.accessor.insert_points(_METRIC, _POINTS)
-        self.accessor.shard = bg_accessor.pack_shard(replica=1, writer=0)
+        self.accessor.shard = bg_accessor.pack_shard(replica=3, writer=0xFFFF)
         self.accessor.insert_points(_METRIC, _POINTS)
 
         self.accessor.flush()
