@@ -259,9 +259,9 @@ class Printer(object):
 class TxtPrinter(Printer):
     """TxtPrinter."""
 
-    def __init__(self, file=None):
+    def __init__(self, fp=None):
         """Create a txt Printer."""
-        self._file = file or sys.stdout
+        self._file = fp or sys.stdout
 
     def _print(self, *args, **kwargs):
         """Print in a given file."""
@@ -599,7 +599,7 @@ def main(args=None):
         )
 
     # print outputs
-    printer = TxtPrinter()
+    printer = TxtPrinter(fp=open(opts.output_filename, 'w'))
     printer.print_parameters(opts)
 
     printer.print_times(
