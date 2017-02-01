@@ -1137,6 +1137,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         config = result[1]
         updated_on = result[2]
 
+        # Return None if any of the important column is missing.
+        if not result[0] or not result[1]:
+            return None
+
         self.__touch_metadata_on_need(metric_name, updated_on)
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
         return bg_accessor.Metric(metric_name, id, metadata)
