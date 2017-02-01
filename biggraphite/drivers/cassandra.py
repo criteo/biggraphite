@@ -1067,6 +1067,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         row_size_ms_stage = _row_size_ms(stage)
         first_row = bg_accessor.round_down(time_start_ms, row_size_ms_stage)
         last_row = bg_accessor.round_down(time_end_ms, row_size_ms_stage)
+
         res = []
         # xrange(a,b) does not contain b, so we use last_row+1
         for row_start_ms in xrange(first_row, last_row + 1, row_size_ms_stage):

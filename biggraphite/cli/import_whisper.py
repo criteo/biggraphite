@@ -45,13 +45,14 @@ _WORKER = None
 log = logging.getLogger(__name__)
 
 
-def metric_name_from_wsp(root_dir, wsp_path):
+def metric_name_from_wsp(root_dir, prefix, wsp_path):
     """Return the name of a metric given a wsp file path and a root directory.
 
     The path do not have to exist.
 
     Args:
       root_dir: A directory that is parent to all metrics.
+      prefix: Prefix to preprend to metric names.
       wsp_path: The name of a file ending with wsp file in root_dir.
 
     Returns:
@@ -60,7 +61,7 @@ def metric_name_from_wsp(root_dir, wsp_path):
     relpath = os.path.relpath(wsp_path, root_dir)
     assert ".." not in relpath, "%s not a child of %" % (root_dir, wsp_path)
     relpath_noext = os.path.splitext(relpath)[0]
-    return relpath_noext.replace(os.path.sep, ".")
+    return prefix + relpath_noext.replace(os.path.sep, ".")
 
 
 class _Worker(object):
@@ -102,16 +103,9 @@ class _Worker(object):
         with open(path) as f:
             buf = f.read()
 
-        # Two or more archives can contain a given timestamp.
-        # As archives are from most precise to least precise, we track the oldest
-        # point we've found in more precise archives and ignore the newer ones.
-        prev_archive_starts_at = float("inf")
         stage0 = True
         for archive in archives:
             offset = archive["offset"]
-            step = archive["secondsPerPoint"]
-            archive_starts_at = float("inf")
-            expected_next_timestamp = 0
             stage = bg_accessor.Stage(
                 precision=archive["secondsPerPoint"],
                 points=archive["points"],
@@ -119,26 +113,15 @@ class _Worker(object):
             stage0 = False
             if stage in self._opts.ignored_stages:
                 continue
+
             for _ in range(archive["points"]):
                 timestamp, value = _POINT_STRUCT.unpack_from(buf, offset)
-                # Detect holes in data. The heuristic is the following:
-                # - If a value is non-zero, it is assumed to be meaningful.
-                # - If it is a zero with a fresh timestamp relative to the last
-                #   time we saw meaningful data, it is assumed to be meaningful.
-                # So it unfortunately skips leading zeroes after a gap.
-                if timestamp != expected_next_timestamp and value == 0:
-                    expected_next_timestamp += step
-                    continue
-                else:
-                    expected_next_timestamp = timestamp + step
-                archive_starts_at = min(timestamp, archive_starts_at)
-
-                if timestamp < prev_archive_starts_at:
-                    if timestamp >= self.time_start and timestamp <= self.time_end:
-                        res.append((timestamp, value, 1, stage))
                 offset += whisper.pointSize
 
-            prev_archive_starts_at = archive_starts_at
+                if timestamp == 0:
+                    continue
+                elif timestamp >= self.time_start and timestamp <= self.time_end:
+                    res.append((timestamp, value, 1, stage))
 
         return res
 
@@ -146,20 +129,26 @@ class _Worker(object):
         if not self._accessor.is_connected:
             self._accessor.connect()
 
-        name = metric_name_from_wsp(self._opts.root_directory, path)
+        name = metric_name_from_wsp(
+            self._opts.root_directory,
+            self._opts.prefix, path)
         metadata = self._read_metadata(name, path)
+        log.debug("%s: %s" % (name, metadata.as_string_dict()))
+
         if not metadata:
             return 0
 
         metric = self._accessor.make_metric(name, metadata)
-        self._accessor.create_metric(metric)
+        if not self._opts.no_metadata:
+            self._accessor.create_metric(metric)
 
-        if self._opts.no_data:
-            return 0
+        ret = 0
+        if not self._opts.no_data:
+            points = self._read_points(path)
+            self._accessor.insert_downsampled_points(metric, points)
+            ret = len(points)
 
-        points = self._read_points(path)
-        self._accessor.insert_downsampled_points(metric, points)
-        return len(points)
+        return ret
 
 
 def _setup_process(opts):
@@ -181,6 +170,8 @@ def _parse_opts(args):
         description="Import whisper files into BigGraphite.")
     parser.add_argument("root_directory", metavar="WHISPER_DIR",
                         help="directory in which to find whisper files")
+    parser.add_argument("--prefix", metavar="WHISPER_PREFIX", default="",
+                        help="prefix to prepend to metric names")
     parser.add_argument("--quiet", action="store_const", default=False, const=True,
                         help="Show no output unless there are problems.")
     parser.add_argument("--process", metavar="N", type=int,
@@ -188,6 +179,8 @@ def _parse_opts(args):
                         default=multiprocessing.cpu_count())
     parser.add_argument("--no-data", action="store_true",
                         help="Do not import data, only metadata.")
+    parser.add_argument("--no-metadata", action="store_true",
+                        help="Do not import metadata, only data.")
     parser.add_argument("--ignored_stages", nargs="*",
                         help="Do not import data for these stages.",
                         default=[])
