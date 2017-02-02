@@ -33,12 +33,12 @@ class TestUtils(unittest.TestCase):
 
     def test_metric_name_from_wsp(self):
         examples = [
-            ("/tmp/", "/tmp/a/b/c.wsp", "a.b.c"),
-            ("/tmp", "/tmp/a/b/c.wsp", "a.b.c"),
-            ("/", "/a/b/c.wsp", "a.b.c"),
+            ("/tmp/", "/tmp/a/b/c.wsp", "p.a.b.c"),
+            ("/tmp", "/tmp/a/b/c.wsp", "p.a.b.c"),
+            ("/", "/a/b/c.wsp", "p.a.b.c"),
         ]
         for root, wsp, name in examples:
-            self.assertEqual(name, import_whisper.metric_name_from_wsp(root, wsp))
+            self.assertEqual(name, import_whisper.metric_name_from_wsp(root, "p.", wsp))
 
 
 class TestMain(bg_test_utils.TestCaseWithFakeAccessor):

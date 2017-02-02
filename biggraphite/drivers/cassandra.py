@@ -1067,6 +1067,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         row_size_ms_stage = _row_size_ms(stage)
         first_row = bg_accessor.round_down(time_start_ms, row_size_ms_stage)
         last_row = bg_accessor.round_down(time_end_ms, row_size_ms_stage)
+
         res = []
         # xrange(a,b) does not contain b, so we use last_row+1
         for row_start_ms in xrange(first_row, last_row + 1, row_size_ms_stage):
@@ -1136,6 +1137,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         id = result[0]
         config = result[1]
         updated_on = result[2]
+
+        # Return None if any of the important column is missing.
+        if not result[0] or not result[1]:
+            return None
 
         self.__touch_metadata_on_need(metric_name, updated_on)
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
