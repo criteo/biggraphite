@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
+## [Unreleased]
+### Added
+- new column (read_on) in metric_metadata for adding statistics on read metrics (#107)
+
 [Unreleased]: https://github.com/criteo/biggraphite/compare/v0.7.0...HEAD
 [0.7]: https://github.com/criteo/biggraphite/compare/v0.7.0
 [0.6]: https://github.com/criteo/biggraphite/compare/v0.6.0
