@@ -252,6 +252,7 @@ _METADATA_CREATION_CQL_METRICS_METADATA = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
     "  name text,"
     "  updated_on  timeuuid,"
+    "  read_on  timeuuid,"
     "  id uuid,"
     "  config map<text, text>,"
     "  PRIMARY KEY ((name))"
@@ -259,6 +260,14 @@ _METADATA_CREATION_CQL_METRICS_METADATA = str(
 )
 _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (updated_on)"
+    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
+    "  WITH OPTIONS = {"
+    "    'mode': 'SPARSE'"
+    "  };" % {"table": "metrics_metadata"},
+]
+
+_METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (read_on)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'mode': 'SPARSE'"
@@ -315,6 +324,7 @@ _METADATA_CREATION_CQL = ([
                           + _METADATA_CREATION_CQL_PARENT_INDEXES
                           + _METADATA_CREATION_CQL_ID_INDEXES
                           + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
+                          + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
 )
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
@@ -757,6 +767,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__metrics = {}
         self.__enable_metrics = enable_metrics
+        self.__read_on_counter = 0
+        self.__read_on_sampling_rate = 0.1
         if writer is None:
             # TODO: Currently a random shard is good enough.
             # We should use a counter stored in cassandra instead.
@@ -820,6 +832,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__insert_metrics_metadata_statement = __prepare(
             "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
             " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
+        )
+        self.__update_metric_read_on_metadata_statement = __prepare(
+            "UPDATE \"%s\".metrics_metadata SET read_on=now()"
+            " WHERE name=?;" % self.keyspace_metadata
         )
 
     def _connect_clusters(self):
@@ -1093,13 +1109,28 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         return res
 
+    def _update_metric_read_on(self, metric_name):
+        queries = []
+        rate = int(1 / self.__read_on_sampling_rate)
+        if self.__read_on_counter % rate == 0:
+            log.debug('updating read_on for %s' % metric_name)
+            queries.append((
+                self.__update_metric_read_on_metadata_statement,
+                [metric_name],
+            ))
+            self._execute_concurrent_metadata(
+                queries,
+                raise_on_first_error=False)
+
     def _select_metric(self, metric_name):
         """Fetch metric metadata."""
+        self.__read_on_counter += 1
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         result = list(self._execute_metadata(
             self.__select_metric_metadata_statement, (encoded_metric_name, )))
         if not result:
             return None
+        self._update_metric_read_on(metric_name)
         return result[0]
 
     def has_metric(self, metric_name):
