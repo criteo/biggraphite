@@ -11,3 +11,4 @@ pytest
 pytest-benchmark
 pygal<2.2
 pygaljs
+dpkt

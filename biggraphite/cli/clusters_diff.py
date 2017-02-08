@@ -1,5 +1,17 @@
 #!/usr/bin/env python
-# coding: utf-8
+# Copyright 2016 Criteo
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Compare two Graphite clusters for a given list of queries.
 
 Through this module, a "query" is "the name of a query", a string.
@@ -32,27 +44,34 @@ class RequestError(Error):
 class Request(object):
     """Runs HTTP requests and parses JSON."""
 
-    def __init__(self, url, auth_key, timeout_s):
+    def __init__(self, url, auth_key, timeout_s, data=None):
         """Create a Request."""
-        self._request = self._prepare(url, auth_key)
+        self._request = self._prepare(url, auth_key, data=data)
         self._timeout_s = timeout_s
 
-    def _prepare(self, url, auth_key):
+    def _prepare(self, url, auth_key, data=None):
         """Create an http request."""
-        headers = {
-            "Authorization": "Basic %s" % auth_key,
-        }
-        request = urllib2.Request(url, None, headers)
+        headers = {}
+        if auth_key is not None:
+            headers["Authorization"] = "Basic %s" % auth_key
+        request = urllib2.Request(url, data, headers)
         return request
 
     def _parse_request_result(self, json_str):
         """Parse a jsonObject into a list of DiffableTarget."""
         if not json_str:
             return []
-        json_data = json.loads(json_str)
+
+        try:
+            json_data = json.loads(json_str)
+        except ValueError:
+            return []
 
         diffable_targets = []
         for json_object in json_data:
+            if "target" not in json_object:
+                continue
+
             target = json_object["target"]
             # target are not always formated in the same way in every cluster, so we delete spaces
             target = target.replace(" ", "")
