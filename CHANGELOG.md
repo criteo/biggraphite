@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Added
+- [BREAKING] New column (read_on) in metric_metadata for adding statistics on read metrics (#107)
+  need to run the following cql to migrate theschema
+```SQL
+   ALTER TABLE biggraphite_metadata.metrics_metadata
+   ADD read_on timeuuid;
+```
+
 ## [0.7.0]
 ### Added
 - Prometheus support and additional metrics
@@ -27,6 +36,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - We are going to do releases from now on
+
 
 [Unreleased]: https://github.com/criteo/biggraphite/compare/v0.7.0...HEAD
 [0.7]: https://github.com/criteo/biggraphite/compare/v0.7.0
