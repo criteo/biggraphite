@@ -26,6 +26,7 @@ bg_test_utils.prepare_graphite()
 
 from biggraphite.plugins import graphite as bg_graphite  # noqa
 from graphite import readers  # noqa
+import mock
 
 _METRIC_NAME = "test_metric"
 
@@ -103,6 +104,19 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
         expected_points = range((end-start)//step)
         self.assertEqual(expected_points, points)
+
+    def test_carbon_protocol_read(self):
+        self.reader._metric_name = 'fake.name'
+        with mock.patch('graphite.carbonlink.CarbonLink.query') as carbonlink_query_mock:
+            carbonlink_query_mock.return_value = [(864005.0, 100.0), (864065.0, 101.0), (864125.0, 102.0)]
+
+            (start, end, step), points = self.fetch(
+                start_time=self._POINTS_START+3,
+                end_time=self._POINTS_END-3,
+                now=self._POINTS_END+10,
+            )
+        # Check that this returns at least one value different from None.
+        self.assertNotEqual(points[0], None)
 
     def test_get_intervals(self):
         # start and end are the expected results, aligned on the precision

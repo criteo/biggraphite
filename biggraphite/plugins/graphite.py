@@ -23,6 +23,7 @@ from graphite import node
 from graphite import readers
 from graphite.logger import log
 from graphite.render import hashing
+from graphite.carbonlink import CarbonLink
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils
@@ -99,6 +100,17 @@ class Reader(object):
             ts_and_points = self._accessor.fetch_points(
                 self._metric, start_time, end_time, stage)
 
+        cached_datapoints = []
+        try:
+            if stage.stage0:
+                cached_datapoints = CarbonLink.query(self._metric_name)
+        except:
+            log.exception("Failed CarbonLink query '%s'" % self._metric_name)
+            cached_datapoints = []
+
+        if isinstance(cached_datapoints, dict):
+            cached_datapoints = cached_datapoints.items()
+
         def read_points():
             read_start = time.time()
             # TODO: Consider wrapping an array (using NaN for None) for
@@ -107,6 +119,17 @@ class Reader(object):
             for ts, point in ts_and_points:
                 index = stage.step(ts) - start_step
                 points[index] = point
+
+            for (timestamp, value) in cached_datapoints:
+                step = int(timestamp - (timestamp % stage.precision)) / stage.precision
+
+                try:
+                    index = step - start_step
+                    if index < 0:
+                        continue
+                    points[index] = value
+                except:
+                    pass
 
             now = time.time()
             log.rendering(
