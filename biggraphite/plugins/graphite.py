@@ -23,6 +23,7 @@ from graphite import node
 from graphite import readers
 from graphite.logger import log
 from graphite.render import hashing
+from graphite import carbonlink
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils
@@ -99,6 +100,14 @@ class Reader(object):
             ts_and_points = self._accessor.fetch_points(
                 self._metric, start_time, end_time, stage)
 
+        cached_datapoints = None
+        try:
+            if stage.stage0:
+                cached_datapoints = carbonlink.CarbonLink.query(self._metric_name)
+        except Exception:
+            log.exception("Failed CarbonLink query '%s'" % self._metric_name)
+            cached_datapoints = []
+
         def read_points():
             read_start = time.time()
             # TODO: Consider wrapping an array (using NaN for None) for
@@ -108,12 +117,32 @@ class Reader(object):
                 index = stage.step(ts) - start_step
                 points[index] = point
 
+            if cached_datapoints:
+                points = _merge_cached_points(points)
+
             now = time.time()
             log.rendering(
                 'fetch(%s, %d, %d) - %d points - read: %f secs - total: %f secs' % (
                     self._metric_name, start_time, end_time, len(points),
                     now - read_start, now - fetch_start))
             return (start_time, end_time, stage.precision), points
+
+        def _merge_cached_points(points):
+            if not cached_datapoints:
+                return points
+
+            for (timestamp, value) in cached_datapoints:
+                step = int(timestamp - (timestamp % stage.precision)) / stage.precision
+
+                try:
+                    index = step - start_step
+                    if index < 0:
+                        continue
+                    points[index] = value
+                except Exception:
+                    pass
+
+            return points
 
         log.rendering('fetch(%s, %d, %d) - started' % (
             self._metric_name, start_time, end_time))
