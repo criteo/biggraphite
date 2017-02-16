@@ -592,6 +592,9 @@ class MetricMetadata(object):
     @classmethod
     def from_string_dict(cls, d):
         """Turn a dict of string to string into a MetricMetadata."""
+        if d is None:
+            return cls()
+
         return cls(
             aggregator=Aggregator.from_config_name(d.get("aggregator")),
             retention=Retention.from_string(d.get("retention")),
