@@ -78,6 +78,8 @@ DEFAULT_TIMEOUT_QUERY_UTIL = 120
 
 DIRECTORY_SEPARATOR = '.'
 
+_consistency_validator = lambda k: k if k in cassandra.ConsistencyLevel.name_to_value.keys() else None
+
 OPTIONS = {
     "keyspace": str,
     "contact_points": _utils.list_from_str,
@@ -95,6 +97,12 @@ OPTIONS = {
     "enable_metrics": bool,
     "writer": lambda k: None if k is None else int(k),
     "replica": lambda k: 0 if k is None else int(k),
+    "meta_write_consistency": _consistency_validator,
+    "meta_serial_consistency": _consistency_validator,
+    "meta_read_consistency": _consistency_validator,
+    "meta_background_consistency": _consistency_validator,
+    "data_write_consistency": _consistency_validator,
+    "data_read_consistency": _consistency_validator,
 }
 
 
@@ -165,6 +173,30 @@ def add_argparse_arguments(parser):
         "--cassandra_replica", type=int,
         help="Cassandra replica",
         default=None)
+    parser.add_argument(
+        "--meta_write_consistency", metavar="META_WRITE_CONS",
+        help="Metadata write consistency",
+        default=DEFAULT_META_WRITE_CONSISTENCY)
+    parser.add_argument(
+        "--meta_read_consistency", metavar="META_READ_CONS",
+        help="Metadata read consistency",
+        default=DEFAULT_META_READ_CONSISTENCY)
+    parser.add_argument(
+        "--meta_serial_consistency", metavar="META_SERIAL_CONS",
+        help="Metadata serial consistency",
+        default=DEFAULT_META_SERIAL_CONSISTENCY)
+    parser.add_argument(
+        "--meta_background_consistency", metavar="META_BACKGROUND_CONS",
+        help="Metadata background consistency",
+        default=DEFAULT_META_BACKGROUND_CONSISTENCY)
+    parser.add_argument(
+        "--data_write_consistency", metavar="DATA_WRITE_CONS",
+        help="Data write consistency",
+        default=DEFAULT_DATA_WRITE_CONSISTENCY)
+    parser.add_argument(
+        "--data_read_consistency", metavar="DATA_READ_CONS",
+        help="Data read consistency",
+        default=DEFAULT_DATA_READ_CONSISTENCY)
 
 
 MINUTE = 60
@@ -208,14 +240,15 @@ class InvalidGlobError(InvalidArgumentError):
 
 # CONSISTENCY PARAMETERS
 # ======================
-# Currently these are explicitely set to the defaults.
-_META_WRITE_CONSISTENCY = cassandra.ConsistencyLevel.ONE
-_META_SERIAL_CONSISTENCY = cassandra.ConsistencyLevel.LOCAL_SERIAL
-_META_READ_CONSISTENCY = cassandra.ConsistencyLevel.ONE
 
-_DATA_WRITE_CONSISTENCY = cassandra.ConsistencyLevel.ONE
-_DATA_READ_CONSISTENCY = cassandra.ConsistencyLevel.ONE
-_META_BACKGROUND_CONSISTENCY = cassandra.ConsistencyLevel.LOCAL_QUORUM
+# Currently these are explicitely set to the defaults.
+DEFAULT_META_WRITE_CONSISTENCY = "ONE"
+DEFAULT_META_SERIAL_CONSISTENCY = "LOCAL_SERIAL"
+DEFAULT_META_READ_CONSISTENCY = "ONE"
+
+DEFAULT_DATA_WRITE_CONSISTENCY = "ONE"
+DEFAULT_DATA_READ_CONSISTENCY = "ONE"
+DEFAULT_META_BACKGROUND_CONSISTENCY = "LOCAL_QUORUM"
 
 
 # HEURISTIC PARAMETERS
@@ -464,7 +497,13 @@ class _LazyPreparedStatements(object):
     bulkimport data.
     """
 
-    def __init__(self, session, keyspace, shard, bulkimport=False):
+    def __init__(self,
+                 session,
+                 keyspace,
+                 shard,
+                 bulkimport=False,
+                 data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
+                 data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY):
         self._keyspace = keyspace
         self._session = session
         self._bulkimport = bulkimport
@@ -472,6 +511,8 @@ class _LazyPreparedStatements(object):
         self.__stage_to_select = {}
         self.__data_files = {}
         self._shard = shard
+        self._data_write_consistency = cassandra.ConsistencyLevel.name_to_value[data_write_consistency]
+        self._data_read_consistency = cassandra.ConsistencyLevel.name_to_value[data_read_consistency]
 
         release_version = session.get_pools()[0].host.release_version
         if version.LooseVersion(release_version) >= version.LooseVersion('3.9'):
@@ -630,7 +671,7 @@ class _LazyPreparedStatements(object):
 
         statement_str = statement_str % {"table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
-        statement.consistency_level = _DATA_WRITE_CONSISTENCY
+        statement.consistency_level = self._data_write_consistency
         self.__stage_to_insert[stage] = statement
         return statement, args
 
@@ -656,7 +697,7 @@ class _LazyPreparedStatements(object):
         ) % {"columns": ", ".join(columns),
              "table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
-        statement.consistency_level = _DATA_READ_CONSISTENCY
+        statement.consistency_level = self._data_read_consistency
         self.__stage_to_select[stage] = statement
         return statement, args
 
@@ -706,7 +747,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  enable_metrics=False,
                  bulkimport=DEFAULT_BULKIMPORT,
                  writer=None,
-                 replica=0):
+                 replica=0,
+                 meta_write_consistency=DEFAULT_META_WRITE_CONSISTENCY,
+                 meta_read_consistency=DEFAULT_META_READ_CONSISTENCY,
+                 meta_serial_consistency=DEFAULT_META_SERIAL_CONSISTENCY,
+                 meta_background_consistency=DEFAULT_META_BACKGROUND_CONSISTENCY,
+                 data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
+                 data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY):
         """Record parameters needed to connect.
 
         Args:
@@ -769,6 +816,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__enable_metrics = enable_metrics
         self.__read_on_counter = 0
         self.__read_on_sampling_rate = 0.1
+        self._meta_write_consistency = cassandra.ConsistencyLevel.name_to_value[meta_write_consistency]
+        self._meta_read_consistency = cassandra.ConsistencyLevel.name_to_value[meta_read_consistency]
+        self._meta_serial_consistency = cassandra.ConsistencyLevel.name_to_value[meta_serial_consistency]
+        self._meta_background_consistency = cassandra.ConsistencyLevel.name_to_value[meta_background_consistency]
+        self._data_write_consistency = cassandra.ConsistencyLevel.name_to_value[data_write_consistency]
+        self._data_read_consistency = cassandra.ConsistencyLevel.name_to_value[data_read_consistency]
         if writer is None:
             # TODO: Currently a random shard is good enough.
             # We should use a counter stored in cassandra instead.
@@ -797,7 +850,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__lazy_statements._shard = value
 
     def _prepare_statements(self):
-        def __prepare(cql, consistency=_META_WRITE_CONSISTENCY):
+        def __prepare(cql, consistency=self._meta_write_consistency):
             statement = self.__session_metadata.prepare(cql)
             statement.consistency_level = consistency
             return statement
@@ -813,13 +866,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
             % (self.keyspace_metadata, components_names, components_marks)
         )
-        self.__insert_directory_statement.serial_consistency_level = _META_SERIAL_CONSISTENCY
+        self.__insert_directory_statement.serial_consistency_level = self._meta_serial_consistency
         # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_metadata_statement = __prepare(
             "SELECT id, config, toUnixTimestamp(updated_on)"
             " FROM \"%s\".metrics_metadata WHERE name = ?;"
             % self.keyspace_metadata,
-            _META_READ_CONSISTENCY
+            self._meta_read_consistency
         )
         self.__update_metric_metadata_statement = __prepare(
             "UPDATE \"%s\".metrics_metadata SET config=?, updated_on=now()"
@@ -1210,7 +1263,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for query in queries:
             statement = c_query.SimpleStatement(
                 query,
-                consistency_level=_META_READ_CONSISTENCY,
+                consistency_level=self._meta_read_consistency,
             )
             statements_with_params.append((statement, ()))
 
@@ -1495,7 +1548,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 count = 1
             else:
                 batch = c_query.BatchStatement(
-                    consistency_level=_DATA_WRITE_CONSISTENCY,
+                    consistency_level=self._data_write_consistency,
                     batch_type=c_query.BatchType.UNLOGGED
                 )
                 for statement, args in statements_and_args:
@@ -1752,7 +1805,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
-        select.consistency_level = _META_BACKGROUND_CONSISTENCY
+        select.consistency_level = self._meta_background_consistency
         select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
         select.request_timeout = DEFAULT_TIMEOUT_QUERY_UTIL
 
