@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Added
+- Configurable consistency settings (#242)
 - [BREAKING] New column (read_on) in metric_metadata for adding statistics on read metrics (#107)
   need to run the following cql to migrate theschema
 ```SQL

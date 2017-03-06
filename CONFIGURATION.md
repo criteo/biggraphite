@@ -16,6 +16,12 @@ This is the main backend for BigGraphite and the one that should be used in prod
 - ```BG_CASSANDRA_PORT```: port to use to contact Cassandra (default: ```9042```)
 - ```BG_CASSANDRA_CONNECTIONS```: number of Cassandra workers to use (default: ```4```)
 - ```BG_CASSANDRA_TIMEOUT```: default timeout for operations (default: ```None```)
+- ```BG_CASSANDRA_META_WRITE_CONSISTENCY```: Metadata write consistency (default: ```ONE```)
+- ```BG_CASSANDRA_META_READ_CONSISTENCY```: Metadata read consistency (default: ```ONE```)
+- ```BG_CASSANDRA_META_SERIAL_CONSISTENCY```: Metadata serial consistency (default: ```LOCAL_SERIAL```)
+- ```BG_CASSANDRA_META_BACKGROUND_CONSISTENCY```: Metadata background consistency (default: ```LOCAL_QUORUM```)
+- ```BG_CASSANDRA_DATA_READ_CONSISTENCY```: data read consistency (default: ```ONE```)
+- ```BG_CASSANDRA_META_WRITE_CONSISTENCY```: Data write consistency (default: ```ONE```)
 
 ## Memory Backend
 
