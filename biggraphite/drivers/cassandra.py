@@ -882,6 +882,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
             % self.keyspace_metadata,
             self._meta_read_consistency
         )
+        self.__select_metric_statement = __prepare(
+            "SELECT * FROM \"%s\".metrics WHERE name = ?;"
+            % self.keyspace_metadata,
+            self._meta_read_consistency
+        )
+        self.__select_directory_statement = __prepare(
+            "SELECT * FROM \"%s\".directories WHERE name = ?;"
+            % self.keyspace_metadata,
+            self._meta_read_consistency
+        )
         self.__update_metric_metadata_statement = __prepare(
             "UPDATE \"%s\".metrics_metadata SET config=?, updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
@@ -1212,7 +1222,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return True
 
     def has_directory(self, directory):
-        return list(self.glob_directory_names(directory))
+        encoded_directory = bg_accessor.encode_metric_name(directory)
+        result = list(self._execute_metadata(
+            self.__select_directory_statement, (encoded_directory, )))
+        return bool(result)
 
     def __touch_metadata_on_need(self, metric_name, updated_on):
         if (int(time.time()) - int(updated_on / 1000)) >= self.__metadata_touch_ttl_sec:
