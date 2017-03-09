@@ -1624,7 +1624,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         def directories_to_create(result):
             for response in result:
-                if not response.success or not list(response.result_or_exc):
+                if response.success and not response.result_or_exc:
                     dir_name = response.result_or_exc.response_future.query.values[0]
                     log.info("Scheduling repair for '%s'" % dir_name)
                     components = self._components_from_name(dir_name + DIRECTORY_SEPARATOR + '_')
