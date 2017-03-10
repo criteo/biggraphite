@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [0.8.0] - 2017-03-10
 ### Added
 - Configurable consistency settings (#242)
 - [BREAKING] New column (read_on) in metric_metadata for adding statistics on read metrics (#107)
@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    ALTER TABLE biggraphite_metadata.metrics_metadata
    ADD read_on timeuuid;
 ```
+- Added a tool to replay graphite traffic
+- Support Carbon Link protocol
+
+### Fixed
+- Fix multi-cluster support
+- Be more robust when metadata is missing
+
+### Changed
+- Added some randomness to cache expiration
 
 ## [0.7.0]
 ### Added
@@ -39,7 +48,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.0...HEAD
+[0.8]: https://github.com/criteo/biggraphite/compare/v0.8.0...HEAD
 [0.7]: https://github.com/criteo/biggraphite/compare/v0.7.0
 [0.6]: https://github.com/criteo/biggraphite/compare/v0.6.0
-

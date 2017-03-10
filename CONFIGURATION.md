@@ -22,6 +22,7 @@ This is the main backend for BigGraphite and the one that should be used in prod
 - ```BG_CASSANDRA_META_BACKGROUND_CONSISTENCY```: Metadata background consistency (default: ```LOCAL_QUORUM```)
 - ```BG_CASSANDRA_DATA_READ_CONSISTENCY```: data read consistency (default: ```ONE```)
 - ```BG_CASSANDRA_META_WRITE_CONSISTENCY```: Data write consistency (default: ```ONE```)
+- ```BG_CASSANDRA_REPLICA_ID```: Identifier of this replica (default: ```0```)
 
 ## Memory Backend
 
