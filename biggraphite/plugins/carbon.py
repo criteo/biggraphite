@@ -74,7 +74,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
         self.reactor.callInThread(self._createMetrics)
         self._lc = task.LoopingCall(self._background)
-        self._lc.start(50, now=False)
+        self._lc.start(settings['CARBON_METRIC_INTERVAL'], now=False)
 
     @property
     def reactor(self):
