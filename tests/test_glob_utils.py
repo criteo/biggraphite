@@ -67,6 +67,7 @@ class TestGlobUtilsInternals(unittest.TestCase):
 
     def test_glob_to_regex(self):
         def filter_metrics(metrics, glob):
+            print(glob + "   ===>   " + bg_glob._glob_to_regex(glob))
             glob_re = re.compile(bg_glob._glob_to_regex(glob))
             return filter(glob_re.match, metrics)
 
@@ -82,6 +83,10 @@ class TestGlobUtilsInternals(unittest.TestCase):
             (['a.b', 'a.b.c', 'a.x.y', 'a.x.z'],
              'a.{b,x}.{c,{y,z}}',
              ['a.b.c', 'a.x.y', 'a.x.z']),
+            # issue 240
+            (['fib.bar', 'fib.bart', 'foo.baaa', 'foo.bar', 'foo.bart', 'foo.bli', 'foo.blo'],
+             'foo.{bar*,bli}',
+             ['foo.bar', 'foo.bart', 'foo.bli']),
         ]
         for (full, glob, filtered) in scenarii:
             self.assertEqual(filtered, filter_metrics(full, glob))

@@ -14,6 +14,7 @@
 # limitations under the License.
 """Globbing utility module."""
 
+from enum import Enum
 import itertools
 import re
 
@@ -56,14 +57,113 @@ def _is_valid_glob(glob):
     return depth == 0
 
 
-def _glob_to_regex(glob):
-    """Convert a Graphite globbing globtern into a regular expression.
+class TokenType(Enum):
+    """Represents atomic types used to tokenize Graphite globbing patterns."""
 
-    This is a modified implementation of fnmatch.translate that behaves slightly
-    differently. It now handles the brace syntax for value choice (e.g. {aa,ab}
-    for aa or ab). It handles * as being anything except a dot. It also returns
-    a regex that only matches whole strings, and that does not handle multiline
-    matches.
+    PATH_SEPARATOR = 0
+    LITERAL = 1
+    WILD_CHAR = 2
+    WILD_SEQUENCE = 3
+    WILD_PATH = 4
+    CHAR_SELECT_BEGIN = 5
+    CHAR_SELECT_NEGATED_BEGIN = 6
+    CHAR_SELECT_RANGE_DASH = 7
+    CHAR_SELECT_END = 8
+    EXPR_SELECT_BEGIN = 9
+    EXPR_SELECT_SEPARATOR = 10
+    EXPR_SELECT_END = 11
+
+
+def tokenize(glob):
+    """Convert a glob expression to a stream of tokens.
+
+    Tokens have the form (type: TokenType, data: String).
+
+    Args:
+      glob: Graphite glob pattern.
+
+    Returns:
+      Iterator on a token stream.
+    """
+    SPECIAL_CHARS = '.?*[-]{,}'
+    is_escaped = False
+    is_char_select = False
+    tmp = ""
+    token = None
+    i = -1
+    while i+1 < len(glob):
+        i += 1
+        c = glob[i]
+
+        # Literal handling
+        if is_escaped:
+            tmp += c
+            is_escaped = False
+            continue
+        elif c == '\\':
+            is_escaped = True
+            continue
+        elif c not in SPECIAL_CHARS or (c == '-' and not is_char_select):
+            if token and token != TokenType.LITERAL:
+                yield token, None
+                token, tmp = TokenType.LITERAL, ""
+            token = TokenType.LITERAL
+            tmp += c
+            continue
+        elif token:
+            yield token, tmp
+            token, tmp = None, ""
+
+        # Special chars handling
+        if c == '.':
+            yield TokenType.PATH_SEPARATOR, ""
+        elif c == '?':
+            yield TokenType.WILD_CHAR, ""
+        elif c == '*':
+            # Look-ahead for wild path (globstar)
+            if i+1 < len(glob) and glob[i+1] == '*':
+                i += 1
+                yield TokenType.WILD_PATH, ""
+            else:
+                yield TokenType.WILD_SEQUENCE, ""
+        elif c == '[':
+            is_char_select = True
+            # Look-ahead for negated selector (not in)
+            if i+1 < len(glob) and glob[i+1] == '!':
+                i += 1
+                yield TokenType.CHAR_SELECT_NEGATED_BEGIN, ""
+            else:
+                yield TokenType.CHAR_SELECT_BEGIN, ""
+        elif c == '-':
+            yield TokenType.CHAR_SELECT_RANGE_DASH, ""
+        elif c == ']':
+            is_char_select = False
+            yield TokenType.CHAR_SELECT_END, ""
+        elif c == '{':
+            yield TokenType.EXPR_SELECT_BEGIN, ""
+        elif c == ',':
+            yield TokenType.EXPR_SELECT_SEPARATOR, ""
+        elif c == '}':
+            yield TokenType.EXPR_SELECT_END, ""
+        else:
+            raise Exception("Unexpected character '%s'" % c)
+
+    # Do not forget trailing token, if any
+    if token:
+        yield token, tmp
+
+
+def _glob_to_regex(glob):
+    """Convert a Graphite globbing pattern into a regular expression.
+
+    This function does not check for glob validity, if you want usable regexes
+    then you must check _is_valid_glob() first.
+
+    Uses _tokenize() to obtain a token stream, then does simple substitution
+    from token type and data to equivalent regular expression.
+
+    It handles * as being anything except a dot.
+    It returns a regex that only matches whole strings (i.e. ^regex$).
 
     Args:
       glob: Valid Graphite glob pattern.
@@ -71,71 +171,35 @@ def _glob_to_regex(glob):
     Returns:
       Regex corresponding to the provided glob.
     """
-    i = 0
-    n = len(glob)
-    res = ''
-    while i < n:
-        c = glob[i]
-        i += 1
-        # Single character wildcard
-        if c == '?':
-            res += '.'
-        # Multi-character wildcard and globstar
-        elif c == '*':
-            # Look-ahead for potential globstar
-            if i < n and glob[i] == '*':
-                res += '.*'
-                i += 1
-            else:
-                res += '[^.]*'
-        # Character selection (with negation)
-        elif c == '[':
-            j = i
-            if j < n and glob[j] == '!':
-                j += 1
-            if j < n and glob[j] == ']':
-                j += 1
-            while j < n and glob[j] != ']':
-                j += 1
-            if j >= n:
-                res = res + '\\['
-            else:
-                tmp = glob[i:j].replace('\\', '\\\\')
-                i = j+1
-                if tmp[0] == '!':
-                    tmp = '^' + tmp[1:]
-                elif tmp[0] == '^':
-                    tmp = '\\' + tmp
-                res += '[' + tmp + ']'
-        # Word selection (supports nesting)
-        elif c == '{':
-            depth = 1
-            tmp = '('
-            j = i
-            # Look-ahead for the whole brace-enclosed expression
-            while j < n and depth > 0:
-                c = glob[j]
-                j += 1
-                if c == '{':
-                    tmp += '('
-                    depth += 1
-                elif c == '}':
-                    tmp += ')'
-                    depth -= 1
-                elif c == ',':
-                    tmp += '|'
-                else:
-                    tmp += c
-            # Escape the current brace in case it is mismatched
-            if depth > 0:
-                res += '\\{'
-            else:
-                i = j
-                res += tmp
-        # Default: escape character
+    ans = ""
+    for token, data in tokenize(glob):
+        if token == TokenType.PATH_SEPARATOR:
+            ans += re.escape('.')
+        elif token == TokenType.LITERAL:
+            ans += re.escape(data)
+        elif token == TokenType.WILD_CHAR:
+            ans += "."
+        elif token == TokenType.WILD_SEQUENCE:
+            ans += "[^.]*"
+        elif token == TokenType.WILD_PATH:
+            ans += ".*"
+        elif token == TokenType.CHAR_SELECT_BEGIN:
+            ans += "["
+        elif token == TokenType.CHAR_SELECT_NEGATED_BEGIN:
+            ans += "[^"
+        elif token == TokenType.CHAR_SELECT_RANGE_DASH:
+            ans += "-"
+        elif token == TokenType.CHAR_SELECT_END:
+            ans += "]"
+        elif token == TokenType.EXPR_SELECT_BEGIN:
+            ans += "("
+        elif token == TokenType.EXPR_SELECT_SEPARATOR:
+            ans += "|"
+        elif token == TokenType.EXPR_SELECT_END:
+            ans += ")"
         else:
-            res = res + re.escape(c)
-    return '^' + res + '$'
+            raise Exception("Unexpected token type '%s' with data '%s'" % (token, data))
+    return '^' + ans + '$'
 
 
 def glob(metric_names, glob_pattern):
@@ -259,6 +323,9 @@ class SequenceIn(GlobExpressionWithValues):
 
 class GraphiteGlobParser:
     """Utility class for parsing graphite glob expressions."""
+
+    # TODO(d.forest): upgrade to new tokenizer here
+    # TODO(d.forest): after upgrade, try to improve Cassandra query generation
 
     def __init__(self):
         """Build a parser, fill in default values."""
