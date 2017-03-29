@@ -16,6 +16,7 @@
 from __future__ import print_function
 
 import unittest
+import os
 
 from biggraphite import utils as bg_utils
 
@@ -68,6 +69,19 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
 
     def test_set_log_level(self):
         bg_utils.set_log_level({"log_level": "INFO"})
+
+    def test_manipulate_paths_like_upstream(self):
+        sys_path = []
+        bg_utils.manipulate_paths_like_upstream("/a/b/c/bin/bg-carbon-aggregator-cache", sys_path)
+        self.assertEqual(1, len(sys_path))
+        self.assertEqual("/a/b/c/lib", sys_path[0])
+
+    def test_setup_graphite_root_path(self):
+        bg_utils.setup_graphite_root_path("/fake/path/to/carbon/file")
+        assert "GRAPHITE_ROOT" not in os.environ
+        bg_utils.setup_graphite_root_path("/opt/graphite/lib/carbon/file")
+        assert "GRAPHITE_ROOT" in os.environ
+        self.assertEqual(os.environ["GRAPHITE_ROOT"], '/opt/graphite')
 
 
 if __name__ == "__main__":

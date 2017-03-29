@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Simulates carbon-cache after loading the carbon plugin.
+"""Simulates carbon-aggregator-cache after loading the carbon plugin.
 
 This fail is required as there is no way to load a plugin from
 carbon configuration, such as what
@@ -38,7 +38,7 @@ def main(_executable=sys.argv[0], _sys_path=sys.path):
         # used to setup default paths. Try to make it somewhat compatible
         # when carbon is installed in its default directory.
         bg_utils.setup_graphite_root_path(carbon_util.__file__)
-        carbon_util.run_twistd_plugin("carbon-cache")
+        carbon_util.run_twistd_plugin("carbon-aggregator-cache")
     except carbon_exceptions.CarbonConfigException as exc:
         # This is what carbon cache does, we preserve that behaviour.
         raise SystemExit(str(exc))
