@@ -14,6 +14,7 @@
 # limitations under the License.
 """Utility module."""
 
+import os
 import logging
 import distutils
 import prometheus_client
@@ -237,3 +238,26 @@ def settings_from_confattr(conf, prefix="bg_"):
             settings[option] = validator(value)
 
     return settings
+
+
+def manipulate_paths_like_upstream(_executable, sys_path):
+    """Replicate the sys.path magic from carbon-aggregator-cache.
+
+    Upstream's carbon-aggregator-cache adds the lib sister directory of its
+    parent bin directory to sys.path. This does the same.
+    """
+    bin_dir = os.path.dirname(os.path.abspath(_executable))
+    root_dir = os.path.dirname(bin_dir)
+    lib_dir = os.path.join(root_dir, "lib")
+    sys_path.insert(0, lib_dir)
+
+
+def setup_graphite_root_path(carbon_util_file):
+    """Setup GRAPHITE_ROOT.
+
+    This is then used to setup default paths. Try to make it somewhat compatible
+    when carbon is installed in its default directory.
+    """
+    if os.path.dirname(carbon_util_file) == "/opt/graphite/lib/carbon":
+        if "GRAPHITE_ROOT" not in os.environ:
+            os.environ["GRAPHITE_ROOT"] = "/opt/graphite"
