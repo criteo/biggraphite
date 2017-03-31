@@ -684,9 +684,14 @@ class _LazyPreparedStatements(object):
         return statement, args
 
     def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
-        statement = self.__stage_to_select.get(stage)
         limit = (row_max_offset - row_min_offset) * bg_accessor.SHARD_MAX_REPLICAS
         args = (metric_id, row_start_ms, row_min_offset, row_max_offset, limit)
+
+        # Don't execute useless queries.
+        if limit <= 0:
+            return None
+
+        statement = self.__stage_to_select.get(stage)
         if statement:
             return statement, args
 
@@ -1176,7 +1181,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 row_min_offset=row_min_offset,
                 row_max_offset=row_max_offset,
             )
-            res.append(select)
+            if select is not None:
+                res.append(select)
 
         return res
 
