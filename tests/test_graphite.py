@@ -72,7 +72,13 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.create_metric(self._METRIC)
         self.accessor.insert_points(self._METRIC, self._POINTS)
         self.accessor.flush()
-        self.reader = bg_graphite.Reader(self.accessor, self.metadata_cache, _METRIC_NAME)
+        self.finder = bg_graphite.Finder(
+            accessor=self.accessor,
+            metadata_cache=self.metadata_cache,
+        )
+        self.carbonlink = self.finder.carbonlink()
+        self.reader = bg_graphite.Reader(
+            self.accessor, self.metadata_cache, self.carbonlink, _METRIC_NAME)
 
     def fetch(self, *args, **kwargs):
         result = self.reader.fetch(*args, **kwargs)

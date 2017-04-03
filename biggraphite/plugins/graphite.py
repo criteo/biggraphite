@@ -21,9 +21,9 @@ import threading
 from graphite import intervals
 from graphite import node
 from graphite import readers
+from graphite import carbonlink
 from graphite.logger import log
 from graphite.render import hashing
-from graphite import carbonlink
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils
@@ -40,17 +40,29 @@ class Error(Exception):
 class Reader(object):
     """As per the Graphite API, fetches points for and metadata for a given metric."""
 
-    __slots__ = ("_accessor", "_metadata_cache", "_metric", "_metric_name", )
+    __slots__ = (
+        "_accessor", "_metadata_cache", "_carbonlink",
+        "_metric", "_metric_name", )
 
-    def __init__(self, accessor, metadata_cache, metric_name):
+    def __init__(self, accessor, metadata_cache, carbonlink, metric_name):
         """Create a new reader."""
         assert accessor
         assert metadata_cache
 
         self._accessor = accessor
         self._metadata_cache = metadata_cache
+        self._carbonlink = carbonlink
         self._metric = None
         self._metric_name = metric_name
+
+    def __get_cached_datapoints(self, stage):
+        cached_datapoints = []
+        try:
+            if stage.stage0 and self._carbonlink:
+                cached_datapoints = self._carbonlink.query(self._metric_name)
+        except Exception:
+            log.exception("Failed CarbonLink query '%s'" % self._metric_name)
+        return cached_datapoints
 
     def __get_time_info(self, start_time, end_time, now):
         """Constrain the provided range in an aligned interval within retention."""
@@ -63,8 +75,24 @@ class Reader(object):
         return retention.align_time_window(start_time, end_time, now)
 
     def __refresh_metric(self):
+        """Set self._metric."""
         if self._metric is None:
             self._metric = self._metadata_cache.get_metric(self._metric_name)
+
+    def _merge_cached_points(self, stage, start_step, points, cached_points):
+        """Merge points from carbonlink with points from database."""
+        if not cached_points:
+            return points
+
+        for (timestamp, value) in cached_points:
+            step = int(timestamp - (timestamp % stage.precision)) / stage.precision
+
+            index = step - start_step
+            if index < 0 or index > len(points):
+                continue
+            points[index] = value
+
+        return points
 
     def fetch(self, start_time, end_time, now=None):
         """Fetch point for a given interval as per the Graphite API.
@@ -100,13 +128,7 @@ class Reader(object):
             ts_and_points = self._accessor.fetch_points(
                 self._metric, start_time, end_time, stage)
 
-        cached_datapoints = None
-        try:
-            if stage.stage0:
-                cached_datapoints = carbonlink.CarbonLink.query(self._metric_name)
-        except Exception:
-            log.exception("Failed CarbonLink query '%s'" % self._metric_name)
-            cached_datapoints = []
+        cached_datapoints = self.__get_cached_datapoints(stage)
 
         def read_points():
             read_start = time.time()
@@ -118,7 +140,8 @@ class Reader(object):
                 points[index] = point
 
             if cached_datapoints:
-                points = _merge_cached_points(points)
+                points = self._merge_cached_points(
+                    stage, start_step, points, cached_datapoints)
 
             now = time.time()
             log.rendering(
@@ -126,23 +149,6 @@ class Reader(object):
                     self._metric_name, start_time, end_time, len(points),
                     now - read_start, now - fetch_start))
             return (start_time, end_time, stage.precision), points
-
-        def _merge_cached_points(points):
-            if not cached_datapoints:
-                return points
-
-            for (timestamp, value) in cached_datapoints:
-                step = int(timestamp - (timestamp % stage.precision)) / stage.precision
-
-                try:
-                    index = step - start_step
-                    if index < 0:
-                        continue
-                    points[index] = value
-                except Exception:
-                    pass
-
-            return points
 
         log.rendering('fetch(%s, %d, %d) - started' % (
             self._metric_name, start_time, end_time))
@@ -169,15 +175,19 @@ class Reader(object):
 class Finder(object):
     """Finder plugin for BigGraphite."""
 
-    def __init__(self, directories=None, accessor=None, metadata_cache=None):
+    def __init__(self, directories=None, accessor=None,
+                 metadata_cache=None, carbonlink=None):
         """Build a new finder.
 
         Args:
           directories: Ignored (here only for compatibility)
           accessor: Accessor for injection (e.g. for testing, not used by Graphite)
+          metadata_cache: Cache (for injection)
+          carbonlink: Carbonlink (for injection)
         """
         self._accessor = accessor
         self._cache = metadata_cache
+        self._carbonlink = carbonlink
         self._django_cache = None
         self._cache_timeout = None
         self._lock = threading.RLock()
@@ -199,6 +209,16 @@ class Finder(object):
                     raise e
                 self._accessor = accessor
         return self._accessor
+
+    def carbonlink(self):
+        """Return a carbonlink."""
+        with self._lock:
+            if not self._carbonlink:
+                if callable(carbonlink.CarbonLink):
+                    self._carbonlink = carbonlink.CarbonLink()
+                else:
+                    self._carbonlink = carbonlink.CarbonLink
+        return self._carbonlink
 
     def cache(self):
         """Return a metadata cache."""
@@ -240,7 +260,8 @@ class Finder(object):
         metric_names, directories = results
 
         for metric_name in metric_names:
-            reader = Reader(self.accessor(), self.cache(), metric_name)
+            reader = Reader(
+                self.accessor(), self.cache(), self.carbonlink(), metric_name)
             yield node.LeafNode(metric_name, reader)
 
         for directory in directories:
