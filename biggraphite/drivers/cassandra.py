@@ -382,6 +382,7 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "  AND default_time_to_live = %(default_time_to_live)d"
     "  AND memtable_flush_period_in_ms = %(memtable_flush_period_in_ms)d"
     "  AND comment = '%(comment)s'"
+    "  AND gc_grace_seconds = 86400" # We don't do explicit deletes.
     "  AND compaction = {"
     "    'class': '%(compaction_strategy)s',"
     "    'timestamp_resolution': 'MICROSECONDS',"
@@ -402,6 +403,7 @@ _DATAPOINTS0_CREATION_CQL_TEMPLATE = str(
     "  AND default_time_to_live = %(default_time_to_live)d"
     "  AND memtable_flush_period_in_ms = %(memtable_flush_period_in_ms)d"
     "  AND comment = '%(comment)s'"
+    "  AND gc_grace_seconds = 86400"
     "  AND compaction = {"
     "    'class': '%(compaction_strategy)s',"
     "    'timestamp_resolution': 'MICROSECONDS',"
