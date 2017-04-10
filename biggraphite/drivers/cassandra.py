@@ -621,6 +621,8 @@ class _LazyPreparedStatements(object):
             "created_by": "biggraphite",
             "schema_version": 0,
             "stage": stage.as_full_string,
+            "row_size_ms": _row_size_ms(stage),
+            "row_size": _row_size_ms(stage) / stage.precision_ms,
         }
         kwargs = {
             "table": self._get_table_name(stage),
