@@ -28,10 +28,10 @@ def list_metrics(accessor, pattern):
     """
     metric_names = accessor.glob_metric_names(pattern)
 
-    return filter(None, [
-        accessor.get_metric(metric)
-        for metric in metric_names
-    ])
+    for metric in metric_names:
+        if metric is None:
+            continue
+        yield accessor.get_metric(metric)
 
 
 class CommandList(command.BaseCommand):

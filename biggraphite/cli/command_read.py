@@ -72,7 +72,7 @@ class CommandRead(command.BaseCommand):
         """
         accessor.connect()
 
-        metrics = list_metrics(accessor, opts.metrics)
+        metrics = list(list_metrics(accessor, opts.metrics))
 
         forced_stage = bg_accessor.Stage.from_string(opts.stage) if opts.stage else None
         time_start = opts.time_start

@@ -135,6 +135,30 @@ def make_metric(name, metadata=None, accessor=None, **kwargs):
         return accessor.make_metric(name, metadata)
 
 
+def _make_easily_queryable_points(start, end, period):
+    """Return points that aggregates easily.
+
+    Averaging over each period gives range((end-start)/period).
+    Taking last or max for each period gives [x*3 for x in range(end-start)].
+    Taking min for each period gives [-1]*(end-start).
+    """
+    assert period % 4 == 0
+    assert start % period == 0
+    subperiod = period / 4
+    res = []
+    for t in xrange(start, end, period):
+        current_period = (t - start) // period
+        # A fourth of points are -1
+        res.append((t+0*subperiod, -1))
+        # A fourth of points are +1
+        res.append((t+1*subperiod, +1))
+        # A fourth of points are the start timestamp
+        res.append((t+2*subperiod, current_period * 3))
+        # A fourth of points are missing
+
+    return res
+
+
 class TestCaseWithTempDir(unittest.TestCase):
     """A TestCase with a temporary directory."""
 

@@ -33,6 +33,7 @@ from biggraphite.cli import (
     command_write,
     command_syncdb,
     command_daemon,
+    command_copy,
 )
 
 
@@ -48,6 +49,7 @@ COMMANDS = [
     command_write.CommandWrite(),
     command_syncdb.CommandSyncdb(),
     command_daemon.CommandDaemon(),
+    command_copy.CommandCopy(),
 ]
 
 
