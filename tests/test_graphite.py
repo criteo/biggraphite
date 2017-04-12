@@ -31,37 +31,12 @@ from graphite import readers  # noqa
 _METRIC_NAME = "test_metric"
 
 
-# TODO: Move this to test_utils.
-def _make_easily_queryable_points(start, end, period):
-    """Return points that aggregates easily.
-
-    Averaging over each period gives range((end-start)/period).
-    Taking last or max for each period gives [x*3 for x in range(end-start)].
-    Taking min for each period gives [-1]*(end-start).
-    """
-    assert period % 4 == 0
-    assert start % period == 0
-    subperiod = period / 4
-    res = []
-    for t in xrange(start, end, period):
-        current_period = (t - start) // period
-        # A fourth of points are -1
-        res.append((t+0*subperiod, -1))
-        # A fourth of points are +1
-        res.append((t+1*subperiod, +1))
-        # A fourth of points are the start timestamp
-        res.append((t+2*subperiod, current_period * 3))
-        # A fourth of points are missing
-
-    return res
-
-
 class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3600
     _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s:48*3600s")
-    _POINTS = _make_easily_queryable_points(
+    _POINTS = bg_test_utils._make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
     )
     _METRIC = bg_test_utils.make_metric(_METRIC_NAME, retention=_RETENTION)
