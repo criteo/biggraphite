@@ -21,6 +21,7 @@ from distutils import version
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
 from biggraphite.drivers import cassandra as bg_cassandra
+from cassandra.cluster import ResultSet as cassandraResultSet
 
 _METRIC = bg_test_utils.make_metric("test.metric")
 
@@ -82,6 +83,16 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(_USEFUL_POINTS[:10], fetched[:10])
         self.assertEqual(_USEFUL_POINTS[-10:], fetched[-10:])
         self.assertEqual(_USEFUL_POINTS, fetched)
+
+    def test_insert_fetch_raw(self):
+        self.accessor.insert_points(_METRIC, _POINTS)
+        self.accessor.flush()
+        self.addCleanup(self.accessor.drop_all_metrics)
+
+        raw_fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END, raw=True)
+        self.assertEqual(_QUERY_RANGE, sum([len(list(res)) for _, res in raw_fetched]))
+        for _, res in raw_fetched:
+            self.assertEqual(type(res), cassandraResultSet)
 
     def test_insert_fetch_replicas(self):
         self.accessor.shard = bg_accessor.pack_shard(replica=0, writer=0)

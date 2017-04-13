@@ -185,7 +185,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         metric_name = ".".join(self._components_from_name(metric_name))
         return self._name_to_metric.get(metric_name)
 
-    def fetch_points(self, metric, time_start, time_end, stage):
+    def fetch_points(self, metric, time_start, time_end, stage, raw=False):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).fetch_points(
             metric, time_start, time_end, stage)
@@ -204,8 +204,11 @@ class _MemoryAccessor(bg_accessor.Accessor):
         query_results = [(True, rows)]
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
-        return bg_accessor.PointGrouper(
-            metric, time_start_ms, time_end_ms, stage, query_results)
+        if raw:
+            return query_results
+        else:
+            return bg_accessor.PointGrouper(
+                metric, time_start_ms, time_end_ms, stage, query_results)
 
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""

@@ -23,6 +23,7 @@ import logging
 from biggraphite.cli import command
 from biggraphite.cli.command_list import list_metrics
 from biggraphite.drivers.cassandra import TooManyMetrics
+from biggraphite import accessor as bg_accessor
 
 
 log = logging.getLogger(__name__)
@@ -122,11 +123,38 @@ class CommandCopy(command.BaseCommand):
             rounded_time_start = stage.round_up(time_start)
             rounded_time_end = stage.round_up(time_end)
 
-            points = []
-            res = accessor.fetch_points(src_metric, rounded_time_start, rounded_time_end, stage)
-            # TODO (t.chataigner) : store aggregated points correctly
-            for timestamp, value in res:
-                if timestamp >= rounded_time_start and timestamp <= rounded_time_end:
-                    points.append((timestamp, value, 1, stage))
+            query_results = accessor.fetch_points(
+                src_metric, rounded_time_start, rounded_time_end, stage, raw=True)
 
+            points = CommandCopy._parse_points(query_results, stage)
             accessor.insert_downsampled_points(dst_metric, points)
+
+    @staticmethod
+    def _parse_points(query_results, stage):
+        aggregated_stage = stage.aggregated()
+        replica_to_pts = {}
+        replica_count = {}
+        for r in range(bg_accessor.SHARD_MAX_REPLICAS):
+            replica_to_pts[r] = []
+
+        for successful, rows_or_exception in query_results:
+            if not successful:
+                continue
+            for row in rows_or_exception:
+                if aggregated_stage:
+                    (time_start_ms, offset, shard, value, count) = row
+                else:
+                    (time_start_ms, offset, value) = row
+                    shard = 0
+                    count = 1
+                r = (shard & bg_accessor.SHARD_REPLICA_MASK) >> bg_accessor.SHARD_REPLICA_SHIFT
+                timestamp = (time_start_ms + offset * stage.precision_ms) / 1000.0
+
+                replica_to_pts[r].append((timestamp, value, count))
+                replica_count[r] = replica_count.get(r, 0) + count
+
+        if not replica_count:
+            return []
+        selected_replica = max(replica_count, key=replica_count.get)
+
+        return [(ts, val, c, stage) for ts, val, c in replica_to_pts[selected_replica]]
