@@ -237,7 +237,7 @@ class TestPointGrouper(unittest.TestCase):
         expected_results = [(0.0, 1), (1.0, 2), (2.0, 3)]
         self.assertEquals(list(results), expected_results)
 
-    def test_downsampling(self):
+    def test_aggregating(self):
         """Test that we can aggregate a stage."""
         stage0 = _METRIC.metadata.retention.stage0
         stage1 = _METRIC.metadata.retention.stages[1]
@@ -245,6 +245,16 @@ class TestPointGrouper(unittest.TestCase):
         results = bg_accessor.PointGrouper(
             _METRIC, 0, 3600, stage1, data, source_stage=stage0)
         expected_results = [(0.0, 2.0)]
+        self.assertEquals(list(results), expected_results)
+
+    def test_without_aggregating(self):
+        """Test that we can merge instead of aggregate a stage."""
+        stage0 = _METRIC.metadata.retention.stage0
+        stage1 = _METRIC.metadata.retention.stages[1]
+        data = [(True, [(0, 0, 1), (0, 1, 2)]), (True, [(0, 2, 3)])]
+        results = bg_accessor.PointGrouper(
+            _METRIC, 0, 3600, stage1, data, source_stage=stage0, aggregated=False)
+        expected_results = [(0.0, 6.0, 3.0)]
         self.assertEquals(list(results), expected_results)
 
     def test_aggregated(self):
