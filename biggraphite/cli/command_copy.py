@@ -123,10 +123,11 @@ class CommandCopy(command.BaseCommand):
             rounded_time_end = stage.round_up(time_end)
 
             points = []
-            res = accessor.fetch_points(src_metric, rounded_time_start, rounded_time_end, stage)
-            # TODO (t.chataigner) : store aggregated points correctly
-            for timestamp, value in res:
+            res = accessor.fetch_points(
+                src_metric, rounded_time_start, rounded_time_end, stage, downsampled=False)
+
+            for timestamp, value, count in res:
                 if timestamp >= rounded_time_start and timestamp <= rounded_time_end:
-                    points.append((timestamp, value, 1, stage))
+                    points.append((timestamp, value, count, stage))
 
             accessor.insert_downsampled_points(dst_metric, points)

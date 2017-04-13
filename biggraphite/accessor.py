@@ -726,7 +726,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def fetch_points(self, metric, time_start, time_end, stage):
+    def fetch_points(self, metric, time_start, time_end, stage, downsampled=True):
         """Fetch points from time_start included to time_end excluded.
 
         Args:
@@ -736,6 +736,7 @@ class Accessor(object):
           time_end: timestamp in seconds from the Unix Epoch as an int, exclusive,
             must be a multiple of stage.precision
           stage: the retention stage at which to fetch data
+          downsampled : flag used by the returned PointGrouper
 
         Yields:
           pairs of (timestamp, value) to indicate value is an aggregate for the range
@@ -897,7 +898,7 @@ class PointGrouper(object):
     """
 
     def __init__(self, metric, time_start_ms, time_end_ms, stage, query_results,
-                 source_stage=None):
+                 source_stage=None, downsampled=True):
         """Constructor for PointGrouper.
 
         Args:
@@ -910,6 +911,7 @@ class PointGrouper(object):
           query_results: query results to fetch values from.
           source_stage: the retentation stage we are consuming points from.
             if None, this is equivalent to stage.
+          downsampled: flag to specify if points should be downsampled or just merged.
         """
         self.metric = metric
         self.time_start_ms = time_start_ms
@@ -917,6 +919,7 @@ class PointGrouper(object):
         self.stage = stage
         self.source_stage = source_stage or stage
         self.query_results = query_results
+        self.downsampled = downsampled
         self.simple = self.source_stage.stage0 and self.stage == self.source_stage
         if not self.simple:
             self.current_values = []
@@ -940,7 +943,7 @@ class PointGrouper(object):
         """
         # This is the first point we encounter, do not emit it on its own,
         # rather wait until we have found values fitting in the next period.
-        ret = (None, None)
+        ret = (None, None, None)
         max_count = 0
         if self.current_timestamp_ms is None:
             return ret
@@ -950,14 +953,22 @@ class PointGrouper(object):
             r_count = sum(self.current_counts[r])
             if not r_count:
                 continue
-            aggregate = self.metric.metadata.aggregator.downsample(
-                values=self.current_values[r],
-                counts=self.current_counts[r],
-                newest_first=True,
-            )
-            if aggregate is not None:
+            if self.downsampled:
+                aggregate_count = None
+                aggregate_val = self.metric.metadata.aggregator.downsample(
+                        values=self.current_values[r],
+                        counts=self.current_counts[r],
+                        newest_first=True,
+                )
+            else:
+                aggregate_val, aggregate_count = self.metric.metadata.aggregator.merge(
+                    values=self.current_values[r],
+                    counts=self.current_counts[r],
+                    newest_first=True,
+                )
+            if aggregate_val is not None:
                 if r_count > max_count:
-                    ret = (self.current_timestamp_ms / 1000.0, aggregate)
+                    ret = (self.current_timestamp_ms / 1000.0, aggregate_val, aggregate_count)
                     max_count = r_count
                 del self.current_values[r][:]
                 del self.current_counts[r][:]
@@ -996,9 +1007,9 @@ class PointGrouper(object):
                 if self.current_timestamp_ms != timestamp_ms:
                     # This needs to be optimized because in the common case
                     # there is absolutely nothing to aggregate.
-                    ts, point = self.run_aggregator()
+                    ts, point, agg_count = self.run_aggregator()
                     if ts is not None:
-                        yield (ts, point)
+                        yield (ts, point) if self.downsampled else (ts, point, agg_count)
 
                     self.current_timestamp_ms = timestamp_ms
 
@@ -1006,9 +1017,9 @@ class PointGrouper(object):
                 self.current_counts[replica].append(count)
 
         if not same_stage or aggregated_stage:
-            ts, point = self.run_aggregator()
+            ts, point, agg_count = self.run_aggregator()
             if ts is not None:
-                yield (ts, point)
+                yield (ts, point) if self.downsampled else (ts, point, agg_count)
 
         if first_exc:
             raise RetryableError(first_exc)
@@ -1033,7 +1044,8 @@ class PointGrouper(object):
                 assert timestamp_ms < self.time_end_ms
 
                 # Non aggregated stages are pretty simple, nothing to do.
-                yield (timestamp_ms / 1000.0, value)
+                yield ((timestamp_ms / 1000.0, value) if self.downsampled
+                       else (timestamp_ms / 1000.0, value, 1))
 
         if first_exc:
             raise RetryableError(first_exc)
