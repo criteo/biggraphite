@@ -1133,7 +1133,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self._execute(
                     session, "TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
 
-    def fetch_points(self, metric, time_start, time_end, stage):
+    def fetch_points(self, metric, time_start, time_end, stage, raw=False):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).fetch_points(
             metric, time_start, time_end, stage)
@@ -1152,9 +1152,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
             statements_and_args,
             results_generator=True,
         )
-        return bg_accessor.PointGrouper(
-            metric, time_start_ms, time_end_ms, stage, query_results
-        )
+        if raw:
+            return query_results
+        else:
+            return bg_accessor.PointGrouper(
+                metric, time_start_ms, time_end_ms, stage, query_results
+            )
 
     def _fetch_points_make_selects(self, metric_id, time_start_ms,
                                    time_end_ms, stage):

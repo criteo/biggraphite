@@ -119,14 +119,36 @@ class CommandCopy(command.BaseCommand):
         """Copy a metric."""
         log.info("Copying points from '%s' to '%s'" % (src_metric.name, dst_metric.name))
         for stage in src_metric.retention.stages:
+            aggregated_stage = stage.aggregated()
             rounded_time_start = stage.round_up(time_start)
             rounded_time_end = stage.round_up(time_end)
 
+            query_results = accessor.fetch_points(
+                src_metric, rounded_time_start, rounded_time_end, stage, raw=True)
+
+            # Parse points
+            ts_to_pts = {}
+            for successful, rows_or_exception in query_results:
+                if not successful:
+                    continue
+                for row in rows_or_exception:
+                    if aggregated_stage:
+                        # No need to fetch the shard/replica since we will
+                        # select the value with the biggest count for each timestamp
+                        (time_start_ms, offset, _, value, count) = row
+                    else:
+                        (time_start_ms, offset, value) = row
+                        count = 1
+                    timestamp = (time_start_ms + offset * stage.precision_ms) / 1000.0
+
+                    _, current_count = ts_to_pts.get(timestamp, (None, -1))
+                    if count > current_count:
+                        ts_to_pts[timestamp] = (value, count)
+
+            # Prepare the points list
             points = []
-            res = accessor.fetch_points(src_metric, rounded_time_start, rounded_time_end, stage)
-            # TODO (t.chataigner) : store aggregated points correctly
-            for timestamp, value in res:
-                if timestamp >= rounded_time_start and timestamp <= rounded_time_end:
-                    points.append((timestamp, value, 1, stage))
+            for ts, v in ts_to_pts.items():
+                value, count = v
+                points.append((ts, value, count, stage))
 
             accessor.insert_downsampled_points(dst_metric, points)

@@ -726,7 +726,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def fetch_points(self, metric, time_start, time_end, stage):
+    def fetch_points(self, metric, time_start, time_end, stage, raw=False):
         """Fetch points from time_start included to time_end excluded.
 
         Args:
@@ -736,6 +736,7 @@ class Accessor(object):
           time_end: timestamp in seconds from the Unix Epoch as an int, exclusive,
             must be a multiple of stage.precision
           stage: the retention stage at which to fetch data
+          raw: flag to avoid wrapping points in a PointGroup
 
         Yields:
           pairs of (timestamp, value) to indicate value is an aggregate for the range
