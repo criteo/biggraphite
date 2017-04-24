@@ -1,6 +1,6 @@
 # Commande line
 humanize
-ipython
+ipython<6
 parsedatetime
 progressbar2
 scandir
