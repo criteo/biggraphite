@@ -41,9 +41,10 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.create_metric(self._METRIC_1)
         self.accessor.create_metric(self._METRIC_2)
         self.accessor.insert_points(self._METRIC_1, self._POINTS)
+        self.accessor.flush()
 
     def test_copy_metric(self):
-        """Test copy of a single metric."""
+        """Test copy of a single metric with aggregated points."""
         cmd_copy = command_copy.CommandCopy()
 
         # Chack that _METRIC_2 is empty
@@ -58,18 +59,21 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         # Copy points from _METRIC_1 to _METRIC_2
         cmd_copy._copy_metric(self.accessor, self._METRIC_1, self._METRIC_2,
                               self._POINTS_START, self._POINTS_END)
+        self.accessor.flush()
 
         # Check that both metrics have same points
         for i in range(3):
             pts = self.accessor.fetch_points(
                 self._METRIC_1,
                 self._POINTS_START, self._POINTS_END,
-                stage=self._METRIC_1.retention[i]
+                stage=self._METRIC_1.retention[i],
+                aggregated=False
             )
             pts_copy = self.accessor.fetch_points(
                 self._METRIC_2,
                 self._POINTS_START, self._POINTS_END,
-                stage=self._METRIC_2.retention[i]
+                stage=self._METRIC_2.retention[i],
+                aggregated=False
             )
             self.assertEqual(list(pts), list(pts_copy))
 

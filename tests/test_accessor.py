@@ -30,7 +30,7 @@ class TestAggregator(unittest.TestCase):
 
     # This does not test seralisation as TestRetention exercise that already.
 
-    def test_downsample(self):
+    def test_aggregate(self):
         values = [_NAN, 0, 1, _NAN, 2, 3, _NAN]
         counts = [0, 1, 1, 0, 2, 1, 0]
         expectations = (
@@ -42,28 +42,28 @@ class TestAggregator(unittest.TestCase):
         )
         for name, value_expected in expectations:
             aggregator = bg_accessor.Aggregator.from_config_name(name)
-            downsampled = aggregator.downsample(
+            aggregated = aggregator.aggregate(
                 values=values, counts=counts, newest_first=True)
-            self.assertEqual(value_expected, downsampled)
+            self.assertEqual(value_expected, aggregated)
 
-    def test_downsample_nan(self):
+    def test_aggregate_nan(self):
         values = [_NAN, _NAN]
         counts = [0, 0]
         for aggregator in bg_accessor.Aggregator:
-            downsampled = aggregator.downsample(
+            aggregated = aggregator.aggregate(
                 values=values, counts=counts, newest_first=True)
-            self.assertTrue(math.isnan(downsampled), aggregator)
+            self.assertTrue(math.isnan(aggregated), aggregator)
 
-    def test_downsample_newest_last(self):
+    def test_aggregate_newest_last(self):
         aggregator = bg_accessor.Aggregator.last
         values = [10, 20, _NAN, ]
-        downsampled = aggregator.downsample(values=values, newest_first=False)
-        self.assertEqual(20, downsampled)
+        aggregated = aggregator.aggregate(values=values, newest_first=False)
+        self.assertEqual(20, aggregated)
 
-    def test_downsample_no_values(self):
+    def test_aggregate_no_values(self):
         aggregator = bg_accessor.Aggregator.last
-        downsampled = aggregator.downsample(values=[], newest_first=False)
-        self.assertTrue(math.isnan(downsampled))
+        aggregated = aggregator.aggregate(values=[], newest_first=False)
+        self.assertTrue(math.isnan(aggregated))
 
     def test_merge(self):
         values = [10, 20]
@@ -237,14 +237,24 @@ class TestPointGrouper(unittest.TestCase):
         expected_results = [(0.0, 1), (1.0, 2), (2.0, 3)]
         self.assertEquals(list(results), expected_results)
 
-    def test_downsampling(self):
-        """Test that we can downsample a stage."""
+    def test_aggregating(self):
+        """Test that we can aggregate a stage."""
         stage0 = _METRIC.metadata.retention.stage0
         stage1 = _METRIC.metadata.retention.stages[1]
         data = [(True, [(0, 0, 1), (0, 1, 2)]), (True, [(0, 2, 3)])]
         results = bg_accessor.PointGrouper(
             _METRIC, 0, 3600, stage1, data, source_stage=stage0)
         expected_results = [(0.0, 2.0)]
+        self.assertEquals(list(results), expected_results)
+
+    def test_without_aggregating(self):
+        """Test that we can merge instead of aggregate a stage."""
+        stage0 = _METRIC.metadata.retention.stage0
+        stage1 = _METRIC.metadata.retention.stages[1]
+        data = [(True, [(0, 0, 1), (0, 1, 2)]), (True, [(0, 2, 3)])]
+        results = bg_accessor.PointGrouper(
+            _METRIC, 0, 3600, stage1, data, source_stage=stage0, aggregated=False)
+        expected_results = [(0.0, 6.0, 3.0)]
         self.assertEquals(list(results), expected_results)
 
     def test_aggregated(self):
