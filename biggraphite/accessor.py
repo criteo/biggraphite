@@ -139,7 +139,7 @@ class Aggregator(enum.Enum):
     def __init__(self, carbon_name):
         """Set attributes."""
         self.carbon_name = carbon_name
-        self._downsample = getattr(self, "_downsample_" + self.name)
+        self._aggregate = getattr(self, "_aggregate_" + self.name)
         self._merge = getattr(self, "_merge_" + self.name)
 
     def merge(self, values=[], counts=[], newest_first=False):
@@ -187,7 +187,7 @@ class Aggregator(enum.Enum):
         total, count = self.__sum_and_count(values, counts)
         return total, count
 
-    def downsample(self, values=[], counts=[], newest_first=False):
+    def aggregate(self, values=[], counts=[], newest_first=False):
         """Aggregate together values of a given stage.
 
         Args:
@@ -198,19 +198,19 @@ class Aggregator(enum.Enum):
           newest_first: if True, values are in reverse order.
 
         Returns:
-          The downsampled value, NaN if values is empty or all values are NaN.
+          The aggregated value, NaN if values is empty or all values are NaN.
         """
         if not values:
             return _NAN
         if not counts:
             counts = [1] * len(values)
-        return self._downsample(values, counts, newest_first)
+        return self._aggregate(values, counts, newest_first)
 
-    def _downsample_average(self, values, counts, values_newest_first):
+    def _aggregate_average(self, values, counts, values_newest_first):
         total, count = self.__sum_and_count(values, counts)
         return total / count
 
-    def _downsample_last(self, values, counts, values_newest_first):
+    def _aggregate_last(self, values, counts, values_newest_first):
         if not values_newest_first:
             values = reversed(values)
         for v in values:
@@ -218,15 +218,15 @@ class Aggregator(enum.Enum):
                 return v
         return _NAN
 
-    def _downsample_maximum(self, values, counts, values_newest_first):
+    def _aggregate_maximum(self, values, counts, values_newest_first):
         _, maximum = self.__min_and_max(values)
         return maximum
 
-    def _downsample_minimum(self, values, counts, values_newest_first):
+    def _aggregate_minimum(self, values, counts, values_newest_first):
         minimum, _ = self.__min_and_max(values)
         return minimum
 
-    def _downsample_total(self, values, counts, values_newest_first):
+    def _aggregate_total(self, values, counts, values_newest_first):
         total, _ = self.__sum_and_count(values, counts)
         return total
 
@@ -814,7 +814,7 @@ class Accessor(object):
 
         Args:
           metric: The metric definition as per get_metric.
-          downsampled: An iterable of (timestamp in seconds, values as double)
+          datapoints: An iterable of (timestamp in seconds, values as double)
           on_done(e: Exception): called on done, with an exception or None if succesfull
         """
         if not isinstance(metric, Metric):
@@ -950,7 +950,7 @@ class PointGrouper(object):
             r_count = sum(self.current_counts[r])
             if not r_count:
                 continue
-            aggregate = self.metric.metadata.aggregator.downsample(
+            aggregate = self.metric.metadata.aggregator.aggregate(
                 values=self.current_values[r],
                 counts=self.current_counts[r],
                 newest_first=True,
