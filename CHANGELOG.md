@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.2] - 2017-04-25
+### Fixed
+- Fix ipython and cassandra versions
+
 ## [0.8.1] - 2017-04-05
 ### Fixed
 - Better handling of Cassandra exceptions
@@ -56,7 +60,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/criteo/biggraphite/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/criteo/biggraphite/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/criteo/biggraphite/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/criteo/biggraphite/compare/v0.6.0...v0.7.0
