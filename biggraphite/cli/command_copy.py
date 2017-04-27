@@ -19,10 +19,12 @@ from __future__ import print_function
 import time
 import datetime
 import logging
+import copy
 
 from biggraphite.cli import command
 from biggraphite.cli.command_list import list_metrics
 from biggraphite.drivers.cassandra import TooManyMetrics
+from biggraphite import accessor as bg_accessor
 
 
 log = logging.getLogger(__name__)
@@ -73,6 +75,17 @@ class CommandCopy(command.BaseCommand):
             help="Only show commands to create/upgrade the schema.",
             required=False,
         )
+        parser.add_argument(
+            "--src_retention",
+            help="Retention used to read points from the source metrics.",
+            required=False,
+        )
+        parser.add_argument(
+            "--dst_retention",
+            help="Retention used to write points to the destination metrics.\
+                  It only works if retentions are similar, i.e. with same precisions.",
+            required=False,
+        )
 
     def run(self, accessor, opts):
         """Copy metrics and directories.
@@ -82,7 +95,9 @@ class CommandCopy(command.BaseCommand):
         accessor.connect()
 
         metric_tuples = self._get_metric_tuples(
-            accessor, opts.src, opts.dst, opts.recursive, opts.dry_run)
+            accessor, opts.src, opts.dst, opts.recursive,
+            opts.src_retention, opts.dst_retention, opts.dry_run)
+
         if opts.dry_run:
             for m, _ in metric_tuples:
                 log.info("Metric to copy : %s" % m.name)
@@ -95,7 +110,8 @@ class CommandCopy(command.BaseCommand):
             self._copy_metric(accessor, src_metric, dst_metric, time_start, time_end)
 
     @staticmethod
-    def _get_metric_tuples(accessor, src, dst, recursive, dry_run=True):
+    def _get_metric_tuples(accessor, src, dst, recursive,
+                           src_retention, dst_retention, dry_run=True):
         pattern = "%s.**" % src if recursive else src
         try:
             src_metrics = list_metrics(accessor, pattern)
@@ -104,30 +120,51 @@ class CommandCopy(command.BaseCommand):
             return
 
         for src_metric in src_metrics:
+            if src_retention and src_metric.metadata.retention.as_string != src_retention:
+                src_metric.metadata.retention = bg_accessor.Retention.from_string(src_retention)
+
             dst_metric_name = src_metric.name.replace(src, dst, 1)
             dst_metric = accessor.get_metric(dst_metric_name)
+
             if dst_metric is None:
                 log.debug("Metric '%s' was not found and will be created" % dst_metric_name)
+                dst_metadata = copy.deepcopy(src_metric.metadata)
+                if dst_retention:
+                    dst_metadata.retention = bg_accessor.Retention.from_string(dst_retention)
+                dst_metric = accessor.make_metric(dst_metric_name, dst_metadata)
                 if not dry_run:
-                    dst_metric = accessor.make_metric(dst_metric_name, src_metric.metadata)
                     accessor.create_metric(dst_metric)
+            elif dst_retention and dst_metric.metadata.retention.as_string != dst_retention:
+                log.debug("Metric '%s' was found without '%s' retention and will be updated" % (
+                    dst_metric_name, dst_retention))
+                dst_metric.metadata.retention = bg_accessor.Retention.from_string(dst_retention)
+                if not dry_run:
+                    accessor.update_metric(dst_metric_name, dst_metric.metadata)
 
             yield (src_metric, dst_metric)
 
     @staticmethod
     def _copy_metric(accessor, src_metric, dst_metric, time_start, time_end):
-        """Copy a metric."""
+        """Copy a metric.
+
+        Points are copied only from a given stage to a stage with the same precision
+        """
         log.info("Copying points from '%s' to '%s'" % (src_metric.name, dst_metric.name))
-        for stage in src_metric.retention.stages:
-            rounded_time_start = stage.round_up(time_start)
-            rounded_time_end = stage.round_up(time_end)
+        src_precision_to_stage = {s.precision: s for s in src_metric.retention.stages}
+        for dst_stage in dst_metric.retention.stages:
+            if dst_stage.precision not in src_precision_to_stage:
+                continue
+            src_stage = src_precision_to_stage[dst_stage.precision]
+
+            rounded_time_start = src_stage.round_up(time_start)
+            rounded_time_end = src_stage.round_up(time_end)
+
+            res = accessor.fetch_points(
+                src_metric, rounded_time_start, rounded_time_end, src_stage, aggregated=False)
 
             points = []
-            res = accessor.fetch_points(
-                src_metric, rounded_time_start, rounded_time_end, stage, aggregated=False)
-
             for timestamp, value, count in res:
                 if timestamp >= rounded_time_start and timestamp <= rounded_time_end:
-                    points.append((timestamp, value, count, stage))
+                    points.append((timestamp, value, count, dst_stage))
 
             accessor.insert_downsampled_points(dst_metric, points)

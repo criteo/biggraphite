@@ -24,8 +24,9 @@ from biggraphite import accessor as bg_accessor
 
 class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
     _POINTS_START = 3600 * 24 * 10
-    _POINTS_END = _POINTS_START + 3600
+    _POINTS_END = _POINTS_START + 3 * 3600
     _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s:48*3600s")
+    _RETENTION_BIS = bg_accessor.Retention.from_string("20*10s:14400*60s:500*3600s")
     _POINTS = bg_test_utils._make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
     )
@@ -33,6 +34,8 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
     _METRIC_1 = bg_test_utils.make_metric(_METRIC_1_NAME, retention=_RETENTION)
     _METRIC_2_NAME = "test.origin.metric_2.tata"
     _METRIC_2 = bg_test_utils.make_metric(_METRIC_2_NAME, retention=_RETENTION)
+    _METRIC_3_NAME = "test.origin.metric_3.tata"
+    _METRIC_3 = bg_test_utils.make_metric(_METRIC_3_NAME, retention=_RETENTION_BIS)
 
     def setUp(self):
         """Set up a subdirectory of metrics to copy."""
@@ -77,8 +80,36 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
             )
             self.assertEqual(list(pts), list(pts_copy))
 
-    def test_get_metric_tuples(self):
-        """Test retrieve of a single metric."""
+    def test_copy_metric_with_retention(self):
+        """Test copy of a metric with aggregated points and retention override.
+
+        A given dst_stage should have the same points of the src_stage
+        that have the same precision, or no point at all.
+        """
+        cmd_copy = command_copy.CommandCopy()
+        cmd_copy._copy_metric(self.accessor, self._METRIC_1, self._METRIC_3,
+                              self._POINTS_START, self._POINTS_END)
+        self.accessor.flush()
+        for i in range(3):
+            pts = self.accessor.fetch_points(
+                self._METRIC_1,
+                self._POINTS_START, self._POINTS_END,
+                stage=self._METRIC_1.retention[i],
+                aggregated=False
+            )
+            pts_copy = self.accessor.fetch_points(
+                self._METRIC_3,
+                self._POINTS_START, self._POINTS_END,
+                stage=self._METRIC_3.retention[i],
+                aggregated=False
+            )
+            if i == 0:
+                self.assertNotEqual(list(pts), list(pts_copy))
+            else:
+                self.assertEqual(list(pts), list(pts_copy))
+
+    def test_get_metric_tuples_with_metric(self):
+        """Test retrieve of a single couple of metrics."""
         cmd_copy = command_copy.CommandCopy()
 
         # Test with metric names arguments
@@ -88,19 +119,38 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         metric_tuples = cmd_copy._get_metric_tuples(
             accessor=self.accessor,
             src=self._METRIC_1_NAME, dst=self._METRIC_2_NAME,
+            src_retention="", dst_retention="",
             recursive=False, dry_run=False
         )
         self.assertEqual(list(metric_tuples), expected_metric_tuples)
 
+    def test_get_metric_tuples_with_directory(self):
+        """Test retrieve of a single couple of metrics."""
+        cmd_copy = command_copy.CommandCopy()
         # Test with subdirectory names arguments
         self.assertEqual(len(list(list_metrics(self.accessor, "*.**"))), 2)
         metric_tuples = cmd_copy._get_metric_tuples(
             accessor=self.accessor,
             src="test", dst="copy",
+            src_retention="", dst_retention="",
             recursive=True, dry_run=False
         )
         self.assertEqual(len(list(metric_tuples)), 2)
         self.assertEqual(len(list(list_metrics(self.accessor, "*.**"))), 4)
+
+    def test_get_metric_tuples_with_retention(self):
+        """Test retrieve of a single couples of metrics overrinding retentions."""
+        cmd_copy = command_copy.CommandCopy()
+        metric_tuples = cmd_copy._get_metric_tuples(
+            accessor=self.accessor,
+            src=self._METRIC_1_NAME, dst=self._METRIC_2_NAME,
+            src_retention="18*42s", dst_retention="50*300s",
+            recursive=False, dry_run=False
+        )
+        retention_str = [m.metadata.retention.as_string for m in list(metric_tuples)[0]]
+        self.assertEqual(len(retention_str), 2)
+        self.assertIn("18*42s", retention_str)
+        self.assertIn("50*300s", retention_str)
 
 
 if __name__ == "__main__":
