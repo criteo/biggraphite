@@ -919,11 +919,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
 
     def _connect_clusters(self):
+        connection_class = getConnectionClass()
         self.__cluster_metadata, self.__session_metadata = self._connect(
-            self.contact_points_metadata, self.port_metadata)
+            self.contact_points_metadata, self.port_metadata, connection_class)
         if self.contact_points_data != self.contact_points_metadata:
             self.__cluster_data, self.__session_data = self._connect(
-                self.contact_points_data, self.port)
+                self.contact_points_data, self.port, connection_class)
         else:
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
@@ -935,7 +936,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__metrics["metadata"] = expose_metrics(self.__cluster_metadata.metrics, 'metadata')
             self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, 'data')
 
-    def _connect(self, contact_points, port):
+    def _connect(self, contact_points, port, connection_class):
         cluster = c_cluster.Cluster(
             contact_points, port,
             compression=self.__compression,
@@ -943,7 +944,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
 
         # Limits in flight requests
-        cluster.connection_class = getConnectionClass()
+        cluster.connection_class = connection_class
         session = cluster.connect()
         session.row_factory = c_query.tuple_factory  # Saves 2% CPU
         if self.__timeout:
