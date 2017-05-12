@@ -56,7 +56,7 @@ pip install -r tests-requirements.txt
 pip install -e .
 
 # Install Cassandra
-export CASSANDRA_VERSION=3.9
+export CASSANDRA_VERSION=3.10
 wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
 tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
 export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}
@@ -119,6 +119,7 @@ Beware that the current schema uses SimpleStrategy with 1 replica: in production
 ```bash
 $ ${CASSANDRA_HOME}/bin/cassandra
 $ ${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
+$ export BG_COMPONENTS_MAX_LEN=12
 $ bgutil syncdb
 ```
 
