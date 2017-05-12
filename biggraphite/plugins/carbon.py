@@ -104,6 +104,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
         metric = self.cache.get_metric(metric_name=metric_name)
+        if not metric:
+            raise Exception('Could not find %s' % (metric_name))
 
         # Round down timestamp because inner functions expect integers.
         datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
