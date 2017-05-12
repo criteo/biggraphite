@@ -167,7 +167,6 @@ WEBAPP_DIR = "%s/webapp/" % os.environ['BG_VENV']
 You can now start Graphite Web:
 
 ```bash
-pip install -e .
 export DJANGO_SETTINGS_MODULE=graphite.settings
 django-admin migrate
 django-admin migrate --run-syncdb
