@@ -37,3 +37,32 @@ reduces the number of round-trips between graphite/carbon and cassandra.
 - ```BG_CACHE_SIZE```: size of the cache.
 - ```BG_CACHE_TTL```: TTL of items in the cache
 - ```BG_CACHE_SYNC```: when using disk cache, should writes be synchronous or not.
+
+## Logging
+
+See:
+* http://python-guide-pt-br.readthedocs.io/en/latest/writing/logging/
+* https://docs.djangoproject.com/en/1.11/topics/logging/
+
+If you want to enable BigGraphite logging, please put the following in local_settings.py
+
+```python
+LOGGING = {
+  # [...]
+  'loggers': {
+    'biggraphite': {
+      'handlers': ['warning_file', 'debug_file', 'file', 'console'],
+      'level': 'INFO',
+      'propagate': False,
+    },
+  }
+}
+```
+
+If you want to do that outside of django, just add:
+```python
+import logging
+from logging import config
+
+config.dictConfig(LOGGING)
+```

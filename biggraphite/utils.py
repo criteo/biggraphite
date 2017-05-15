@@ -180,7 +180,13 @@ def add_argparse_arguments(parser):
 
 def set_log_level(settings):
     """Set logs level according to settings."""
-    logger = logging.getLogger()
+    logger = logging.getLogger('biggraphite')
+    # Install a handler if there are none.
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+        logger.addHandler(handler)
     logger.setLevel(settings.get("loglevel", DEFAULT_LOG_LEVEL))
 
 
