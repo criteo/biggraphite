@@ -57,7 +57,7 @@ class CommandClean(command.BaseCommand):
             help="Specify the age of metrics in seconds to evict"
                  " (ie: 3600 to delete older than one hour metrics)",
             type=int,
-            default=24 * 60 * 60,
+            default=3 * 24 * 60 * 60,
             action='store'
         )
         parser.add_argument(

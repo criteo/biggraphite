@@ -44,14 +44,24 @@ from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
 
 import prometheus_client as pm
-pm_deleted_directories = pm.Counter('biggraphite_cassandra_deleted_directories',
-                                    'Number of directory that have been deleted so far')
-pm_repaired_directories = pm.Counter('biggraphite_cassandra_repaired_directories',
-                                     'Number of missing directory created')
-pm_expired_metrics = pm.Counter('biggraphite_cassandra_expired_metrics',
-                                'Number of metrics that has been cleaned due to expiration')
+
+pm_deleted_directories = pm.Counter(
+    'biggraphite_cassandra_deleted_directories',
+    'Number of directory that have been deleted so far')
+pm_repaired_directories = pm.Counter(
+    'biggraphite_cassandra_repaired_directories',
+    'Number of missing directory created')
+pm_expired_metrics = pm.Counter(
+    'biggraphite_cassandra_expired_metrics',
+    'Number of metrics that has been cleaned due to expiration')
 
 log = logging.getLogger(__name__)
+
+MINUTE = 60
+HOUR = 60 * MINUTE
+DAY = 24 * HOUR
+GLOBSTAR = bg_glob.Globstar()
+ANYSEQUENCE = bg_glob.AnySequence()
 
 # Round the row size to 1000 seconds
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
@@ -75,6 +85,8 @@ DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN = 4
 DEFAULT_MAX_CONCURRENT_CONNECTIONS = 100
 DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
+DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
+DEFAULT_READ_ON_SAMPLING_RATE = 0.1
 
 DIRECTORY_SEPARATOR = '.'
 
@@ -111,6 +123,8 @@ OPTIONS = {
     "meta_background_consistency": _consistency_validator,
     "data_write_consistency": _consistency_validator,
     "data_read_consistency": _consistency_validator,
+    "updated_on_ttl_sec": int,
+    "read_on_sampling_rate": int,
 }
 
 
@@ -205,13 +219,14 @@ def add_argparse_arguments(parser):
         "--data_read_consistency", metavar="DATA_READ_CONS",
         help="Data read consistency",
         default=DEFAULT_DATA_READ_CONSISTENCY)
-
-
-MINUTE = 60
-HOUR = 60 * MINUTE
-DAY = 24 * HOUR
-GLOBSTAR = bg_glob.Globstar()
-ANYSEQUENCE = bg_glob.AnySequence()
+    parser.add_argument(
+        "--cassandra_updated_on_ttl_sec",
+        help="Update 'updated_on' field every x seconds.",
+        default=DEFAULT_UPDATED_ON_TTL_SEC)
+    parser.add_argument(
+        "--cassandra_read_on_sampling_rate",
+        help="Updated 'read_on' field every x calls.",
+        default=DEFAULT_READ_ON_SAMPLING_RATE)
 
 
 class Error(bg_accessor.Error):
@@ -286,8 +301,6 @@ _LAST_COMPONENT = "__END__"
 _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
-
-_METADATA_TOUCH_TTL_SEC = 3 * DAY
 
 _METADATA_CREATION_CQL_METRICS_METADATA = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
@@ -770,7 +783,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  meta_serial_consistency=DEFAULT_META_SERIAL_CONSISTENCY,
                  meta_background_consistency=DEFAULT_META_BACKGROUND_CONSISTENCY,
                  data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
-                 data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY):
+                 data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY,
+                 updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
+                 read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE):
         """Record parameters needed to connect.
 
         Args:
@@ -815,7 +830,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__compression = compression
         self.__trace = trace
         self.__bulkimport = bulkimport
-        self.__metadata_touch_ttl_sec = _METADATA_TOUCH_TTL_SEC
+        self.__metadata_touch_ttl_sec = updated_on_ttl_sec,
         self.__downsampler = _downsampling.Downsampler()
         self.__delayed_writer = _delayed_writer.DelayedWriter(self)
         self.__cluster_data = None  # setup by connect()
@@ -832,7 +847,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__metrics = {}
         self.__enable_metrics = enable_metrics
         self.__read_on_counter = 0
-        self.__read_on_sampling_rate = 0.1
+        self.__read_on_sampling_rate = read_on_sampling_rate,
         self._meta_write_consistency = consistency_name_to_value[meta_write_consistency]
         self._meta_read_consistency = consistency_name_to_value[meta_read_consistency]
         self._meta_serial_consistency = consistency_name_to_value[meta_serial_consistency]
