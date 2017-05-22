@@ -1634,14 +1634,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         def directories_to_create(result):
             for response in result:
-                if response.success and not response.result_or_exc:
-                    dir_name = response.result_or_exc.response_future.query.values[0]
-                    log.info("Scheduling repair for '%s'" % dir_name)
-                    components = self._components_from_name(dir_name + DIRECTORY_SEPARATOR + '_')
-                    queries = self._create_parent_dirs_queries(components)
-                    for query in queries:
-                        pm_repaired_directories.inc()
-                        yield query
+                if not response.success:
+                    log.warning(str(response.result_or_exc))
+                    continue
+                results = list(response.result_or_exc)
+                if results:
+                    continue
+                dir_name = response.result_or_exc.response_future.query.values[0]
+                log.info("Scheduling repair for '%s'" % dir_name)
+                components = self._components_from_name(dir_name + DIRECTORY_SEPARATOR + '_')
+                queries = self._create_parent_dirs_queries(components)
+                for query in queries:
+                    pm_repaired_directories.inc()
+                    yield query
 
         log.info("Start creating missing directories")
         token = start_token
@@ -1713,12 +1718,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         def directories_to_remove(result):
             for response in result:
-                if not response.success or not list(response.result_or_exc):
-                    dir_name = response.result_or_exc.response_future\
-                                                     .query.values[0].rpartition('.')[0]
-                    log.info("Scheduling delete for '%s'" % dir_name)
-                    pm_deleted_directories.inc()
-                    yield delete_empty_dir_stm, (dir_name,)
+                if not response.success:
+                    log.warning(str(response.result_or_exc))
+                    continue
+                results = list(response.result_or_exc)
+                if results:
+                    continue
+                dir_name = response.result_or_exc.response_future.query.values[0]
+                dir_name = dir_name.rpartition('.')[0]
+                log.info("Scheduling delete for '%s'" % dir_name)
+                pm_deleted_directories.inc()
+                yield delete_empty_dir_stm, (dir_name,)
 
         log.info("Starting cleanup of empty dir")
         token = start_token
@@ -1740,7 +1750,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 raise_on_first_error=False)
             for ret in rets:
                 if not ret.success:
-                    log.warn(str(ret.result_or_exc))
+                    log.warning(str(ret.result_or_exc))
 
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
