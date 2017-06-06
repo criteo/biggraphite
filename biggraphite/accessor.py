@@ -848,6 +848,28 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
+    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1):
+        """Call callback on each metric.
+
+        This operation can potentially be very slow.
+
+        This will list each metrics matching the arguments and call
+        `callback(metric, done, total)`.
+
+        Args:
+          callback: callable(metric: Metric, done: int, total: int)
+          start_key: string, start at key >= start_key.
+          end_key: string, stop at key < end_key.
+          shard: int, shard to repair.
+          nshards: int, number of shards.
+
+        """
+        assert shard >= 0
+        assert nshards > 0
+        assert shard < nshards
+        self._check_connected()
+
+    @abc.abstractmethod
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Repair potential corruptions in the database.
 
