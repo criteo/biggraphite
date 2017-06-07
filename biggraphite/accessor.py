@@ -509,14 +509,16 @@ class Retention(object):
         # There is always at least one stage.
         return self.stages[-1]
 
-    def align_time_window(self, start_time, end_time, now):
+    def align_time_window(self, start_time, end_time, now, shift=False):
         """Constrain the provided range in an aligned interval within retention."""
         stage = self.find_stage_for_ts(searched=start_time, now=now)
 
         now = stage.round_up(now)
 
-        oldest_timestamp = now - stage.duration
-        start_time = max(start_time, oldest_timestamp)
+        if shift:
+            oldest_timestamp = now - stage.duration
+            start_time = max(start_time, oldest_timestamp)
+        start_time = min(now, start_time)
         start_time = stage.round_down(start_time)
 
         end_time = min(now, end_time)
