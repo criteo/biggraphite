@@ -64,7 +64,7 @@ class Reader(object):
             log.exception("Failed CarbonLink query '%s'" % self._metric_name)
         return cached_datapoints
 
-    def __get_time_info(self, start_time, end_time, now):
+    def __get_time_info(self, start_time, end_time, now, shift=False):
         """Constrain the provided range in an aligned interval within retention."""
         self.__refresh_metric()
         if self._metric and self._metric.retention:
@@ -72,7 +72,8 @@ class Reader(object):
         else:
             retention = bg_accessor.Retention.from_string("60*60s")
 
-        return retention.align_time_window(start_time, end_time, now)
+        return retention.align_time_window(
+            start_time, end_time, now, shift=shift)
 
     def __refresh_metric(self):
         """Set self._metric."""
@@ -168,7 +169,7 @@ class Reader(object):
 
         # Call __get_time_info with the widest conceivable range will make it be
         # shortened to the widest range available according to retention policy.
-        start, end, unused_stage = self.__get_time_info(0, now, now)
+        start, end, unused_stage = self.__get_time_info(0, now, now, shift=True)
         return intervals.IntervalSet([intervals.Interval(start, end)])
 
 

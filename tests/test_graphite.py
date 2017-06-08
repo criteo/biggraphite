@@ -105,7 +105,6 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         now_rounded = 10000000 * self._RETENTION[2].precision
         now = now_rounded - 3
         res = self.reader.get_intervals(now=now)
-
         self.assertEqual(self._RETENTION.duration, res.size)
         self.assertEqual(1, len(res.intervals))
         self.assertEqual(now_rounded, res.intervals[0].end)

@@ -90,3 +90,31 @@ def date_time_from_str(datetime_str):
         # Failed to parse
         raise ValueError("Could not parse date/time string: " + datetime_str)
     return parsed_datetime
+
+
+def add_sharding_arguments(parser):
+    """Add sharding arguments to a parser.
+
+    repair()/clean()/map() all use the same arguments, this
+    utility function will add the related command line options.
+    """
+    parser.add_argument(
+        "--start-key",
+        help="Start key.",
+    )
+    parser.add_argument(
+        "--end-key",
+        help="End key.",
+    )
+    parser.add_argument(
+        "--shard",
+        help="Shard number.",
+        type=int,
+        default=0,
+    )
+    parser.add_argument(
+        "--nshards",
+        help="Number of shards.",
+        type=int,
+        default=1,
+    )

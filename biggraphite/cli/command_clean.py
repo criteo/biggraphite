@@ -57,29 +57,10 @@ class CommandClean(command.BaseCommand):
             help="Specify the age of metrics in seconds to evict"
                  " (ie: 3600 to delete older than one hour metrics)",
             type=int,
-            default=24 * 60 * 60,
+            default=3 * 24 * 60 * 60,
             action='store'
         )
-        parser.add_argument(
-            "--start-key",
-            help="Start key.",
-        )
-        parser.add_argument(
-            "--end-key",
-            help="End key.",
-        )
-        parser.add_argument(
-            "--shard",
-            help="Shard number.",
-            type=int,
-            default=0,
-        )
-        parser.add_argument(
-            "--nshards",
-            help="Number of shards.",
-            type=int,
-            default=1,
-        )
+        command.add_sharding_arguments(parser)
 
     def run(self, accessor, opts, on_progress=None):
         """Run some cleanups.

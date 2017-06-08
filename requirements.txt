@@ -4,6 +4,7 @@ ipython<6
 parsedatetime
 progressbar2
 scandir
+tabulate
 
 # Memory driver
 sortedcontainers

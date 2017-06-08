@@ -80,10 +80,6 @@ class _MemoryAccessor(bg_accessor.Accessor):
         super(_MemoryAccessor, self).shutdown(*args, **kwargs)
         self.is_connected = False
 
-    def repair(self, *args, **kwargs):
-        """See the real Accessor for a description."""
-        pass
-
     def background(self):
         """Perform periodic background operations."""
         if self.__downsampler:
@@ -215,14 +211,38 @@ class _MemoryAccessor(bg_accessor.Accessor):
         log.warn("%s is not implemented" % self.touch_metric.__name__)
         pass
 
-    def clean(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
-              callback_on_progress=None):
-        """See bg_accessor.Accessor."""
-        super(_MemoryAccessor, self).clean(max_age)
+    def repair(self, *args, **kwargs):
+        """See the real Accessor for a description."""
+        super(_MemoryAccessor, self).repair(*args, **kwargs)
+        callback_on_progress = kwargs.pop('callback_on_progress')
 
-        # TODO Implements the function
-        log.warn("%s is not implemented" % self.clean.__name__)
-        pass
+        def _callback(m, i, t):
+            callback_on_progress(i, t)
+            # TODO Implements the function
+            log.warn("%s is not implemented" % self.repair.__name__)
+
+        self.map(_callback, *args, **kwargs)
+
+    def clean(self, *args, **kwargs):
+        """See bg_accessor.Accessor."""
+        super(_MemoryAccessor, self).clean(*args, **kwargs)
+        callback_on_progress = kwargs.pop('callback_on_progress')
+
+        def _callback(m, i, t):
+            callback_on_progress(i, t)
+            # TODO Implements the function
+            log.warn("%s is not implemented" % self.clean.__name__)
+
+        self.map(_callback, *args, **kwargs)
+
+    def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0):
+        """See bg_accessor.Accessor."""
+        super(_MemoryAccessor, self).map(callback, start_key, end_key, shard, nshards)
+
+        metrics = self._name_to_metric
+        total = len(metrics)
+        for i, metric in enumerate(metrics.values()):
+            callback(metric, i, total)
 
 
 def build(*args, **kwargs):

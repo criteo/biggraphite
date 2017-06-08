@@ -509,14 +509,16 @@ class Retention(object):
         # There is always at least one stage.
         return self.stages[-1]
 
-    def align_time_window(self, start_time, end_time, now):
+    def align_time_window(self, start_time, end_time, now, shift=False):
         """Constrain the provided range in an aligned interval within retention."""
         stage = self.find_stage_for_ts(searched=start_time, now=now)
 
         now = stage.round_up(now)
 
-        oldest_timestamp = now - stage.duration
-        start_time = max(start_time, oldest_timestamp)
+        if shift:
+            oldest_timestamp = now - stage.duration
+            start_time = max(start_time, oldest_timestamp)
+        start_time = min(now, start_time)
         start_time = stage.round_down(start_time)
 
         end_time = min(now, end_time)
@@ -845,6 +847,28 @@ class Accessor(object):
         """
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
+        self._check_connected()
+
+    @abc.abstractmethod
+    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1):
+        """Call callback on each metric.
+
+        This operation can potentially be very slow.
+
+        This will list each metrics matching the arguments and call
+        `callback(metric, done, total)`.
+
+        Args:
+          callback: callable(metric: Metric, done: int, total: int)
+          start_key: string, start at key >= start_key.
+          end_key: string, stop at key < end_key.
+          shard: int, shard to repair.
+          nshards: int, number of shards.
+
+        """
+        assert shard >= 0
+        assert nshards > 0
+        assert shard < nshards
         self._check_connected()
 
     @abc.abstractmethod

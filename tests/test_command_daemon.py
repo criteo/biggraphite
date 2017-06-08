@@ -30,12 +30,14 @@ class TestCommandDaemon(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.drop_all_metrics()
 
         cmd = command_daemon.CommandDaemon()
-        cmd._run_webserver = lambda x, y, z: time.sleep(666)
+        command_daemon._run_webserver = lambda x, y, z: time.sleep(666)
 
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(['--clean-backend', '--clean-cache', '--max-age=12'])
+        opts = parser.parse_args(
+            ['--clean-backend', '--clean-cache', '--max-age=12']
+        )
 
         def run():
             cmd.run(self.accessor, opts)
