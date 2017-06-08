@@ -1322,15 +1322,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         def _extract_results(query_results):
             n_metrics = 0
-            for success, results in query_results:
-                for result in results:
-                    n_metrics += 1
-                    if n_metrics > self.max_metrics_per_pattern:
-                        raise TooManyMetrics(
-                            "Query %s on %s yields more than %d results" %
-                            (glob, table, self.max_metrics_per_pattern)
-                        )
-                    yield result[0]
+            try:
+                for success, results in query_results:
+                    for result in results:
+                        n_metrics += 1
+                        if n_metrics > self.max_metrics_per_pattern:
+                            raise TooManyMetrics(
+                                "Query %s on %s yields more than %d results" %
+                                (glob, table, self.max_metrics_per_pattern)
+                            )
+                        yield result[0]
+            except cassandra.DriverException as e:
+                raise CassandraError('Failed to glob: %s on %s' % (table, glob), e)
 
         return _extract_results(query_results)
 
