@@ -17,7 +17,6 @@ from __future__ import absolute_import  # Otherwise graphite is this module.
 
 import time
 import threading
-import hashlib
 
 from graphite import intervals
 from graphite import node
@@ -36,12 +35,12 @@ from biggraphite import graphite_utils
 _CONFIG_NAME = "biggraphite"
 
 try:
-    BaseReader = readers.utils.BaseReader
-except:
+    BaseReader = readers.utils.BaseReaders
+except AttributeError:
     BaseReader = object
 try:
     BaseFinder = finders.utils.BaseFinder
-except:
+except AttributeError:
     BaseFinder = object
 
 
@@ -256,7 +255,6 @@ class Finder(BaseFinder):
         with self._lock:
             if not self._django_cache:
                 from django.conf import settings as django_settings
-                from django.core.cache.backends import base
                 from django.core.cache import cache
                 self._django_cache = cache
                 self._cache_timeout = django_settings.FIND_CACHE_DURATION
@@ -288,7 +286,6 @@ class Finder(BaseFinder):
             log.rendering(
                 'find(%s) - %f secs' % (query.pattern, time.time() - find_start))
             cache_hit = False
-
 
         if not cache_hit:
             self.django_cache().set(cache_key, (success, results), self._cache_timeout)
