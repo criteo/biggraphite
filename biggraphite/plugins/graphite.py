@@ -21,6 +21,7 @@ import threading
 from graphite import intervals
 from graphite import node
 from graphite import readers
+from graphite import finders
 from graphite import carbonlink
 from graphite.logger import log
 from graphite.render import hashing
@@ -32,12 +33,21 @@ from biggraphite import graphite_utils
 
 _CONFIG_NAME = "biggraphite"
 
+try:
+    BaseReader = readers.utils.BaseReader
+except:
+    BaseReader = object
+try:
+    BaseFinder = finders.utils.BaseFinder
+except:
+    BaseFinder = object
+
 
 class Error(Exception):
     """Base class for all exceptions from this module."""
 
 
-class Reader(object):
+class Reader(BaseReader):
     """As per the Graphite API, fetches points for and metadata for a given metric."""
 
     __slots__ = (
@@ -173,8 +183,10 @@ class Reader(object):
         return intervals.IntervalSet([intervals.Interval(start, end)])
 
 
-class Finder(object):
+class Finder(BaseFinder):
     """Finder plugin for BigGraphite."""
+
+    local = False
 
     def __init__(self, directories=None, accessor=None,
                  metadata_cache=None, carbonlink=None):
@@ -247,13 +259,17 @@ class Finder(object):
         # TODO: we should probably consider query.startTime and query.endTime
         #  to filter out metrics that had no points in this interval.
 
+        leaves_only = hasattr(query, 'leaves_only') and query.leaves_only
         cache_key = "find:%s" % (hashing.compactHash(query.pattern))
         results = self.django_cache().get(cache_key)
         if results:
             cache_hit = True
         else:
             find_start = time.time()
-            results = glob_utils.graphite_glob(self.accessor(), query.pattern)
+            results = glob_utils.graphite_glob(
+                self.accessor(), query.pattern,
+                metrics=True, directories=not leaves_only
+            )
             log.rendering(
                 'find(%s) - %f secs' % (query.pattern, time.time() - find_start))
             cache_hit = False
