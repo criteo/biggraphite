@@ -1305,6 +1305,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
             components.append([_LAST_COMPONENT])
             queries = self.__generate_normal_names_queries(table, components)
 
+        if self.cache:
+            cached_results = self.cache.get_many(queries)
+            for query in cached_results:
+                queries.remove(query)
+
         statements_with_params = []
         for query in queries:
             statement = c_query.SimpleStatement(
@@ -1322,18 +1327,35 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         def _extract_results(query_results):
             n_metrics = 0
+            fetched_results = collections.defaultdict(list)
+
+            too_many_metrics = TooManyMetrics(
+                "Query %s on %s yields more than %d results" %
+                (glob, table, self.max_metrics_per_pattern)
+            )
+
+            for query, names in cached_results.items():
+                for name in names:
+                    n_metrics += 1
+                    if n_metrics > self.max_metrics_per_pattern:
+                        raise too_many_metrics
+                    yield name
+
             try:
                 for success, results in query_results:
+                    query = results.response_future.query.query_string
                     for result in results:
                         n_metrics += 1
+                        name = result[0]
+                        fetched_results[query].append(name)
                         if n_metrics > self.max_metrics_per_pattern:
-                            raise TooManyMetrics(
-                                "Query %s on %s yields more than %d results" %
-                                (glob, table, self.max_metrics_per_pattern)
-                            )
-                        yield result[0]
+                            raise too_many_metrics
+                        yield name
             except cassandra.DriverException as e:
                 raise CassandraError('Failed to glob: %s on %s' % (table, glob), e)
+
+            if self.cache:
+                self.cache.set_many(fetched_results, timeout=self.cache_metadata_ttl)
 
         return _extract_results(query_results)
 

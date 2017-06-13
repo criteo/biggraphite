@@ -17,6 +17,7 @@ from __future__ import absolute_import  # Otherwise graphite is this module.
 
 import time
 import threading
+import hashlib
 
 from graphite import intervals
 from graphite import node
@@ -27,6 +28,7 @@ from graphite.logger import log
 from graphite.render import hashing
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import glob_utils
 from biggraphite import graphite_utils
 
@@ -220,6 +222,11 @@ class Finder(BaseFinder):
                     log.exception("failed to connect()")
                     accessor.shutdown()
                     raise e
+                accessor.set_cache(
+                    bg_accessor_cache.DjangoCache(self.django_cache()),
+                    metadata_ttl=django_settings.FIND_CACHE_DURATION,
+                    data_ttl=django_settings.DEFAULT_CACHE_DURATION
+                )
                 self._accessor = accessor
         return self._accessor
 
@@ -249,6 +256,7 @@ class Finder(BaseFinder):
         with self._lock:
             if not self._django_cache:
                 from django.conf import settings as django_settings
+                from django.core.cache.backends import base
                 from django.core.cache import cache
                 self._django_cache = cache
                 self._cache_timeout = django_settings.FIND_CACHE_DURATION
@@ -260,19 +268,33 @@ class Finder(BaseFinder):
         #  to filter out metrics that had no points in this interval.
 
         leaves_only = hasattr(query, 'leaves_only') and query.leaves_only
-        cache_key = "find:%s" % (hashing.compactHash(query.pattern))
-        results = self.django_cache().get(cache_key)
-        if results:
+        cache_key = "find_nodes:%s" % (hashing.compactHash(query.pattern))
+        cached = self.django_cache().get(cache_key)
+        if cached:
             cache_hit = True
+            success, results = cached
         else:
             find_start = time.time()
-            results = glob_utils.graphite_glob(
-                self.accessor(), query.pattern,
-                metrics=True, directories=not leaves_only
-            )
+            try:
+                results = glob_utils.graphite_glob(
+                    self.accessor(), query.pattern,
+                    metrics=True, directories=not leaves_only
+                )
+                success = True
+            except bg_accessor.Error as e:
+                success = False
+                results = e
+
             log.rendering(
                 'find(%s) - %f secs' % (query.pattern, time.time() - find_start))
             cache_hit = False
+
+
+        if not cache_hit:
+            self.django_cache().set(cache_key, (success, results), self._cache_timeout)
+
+        if not success:
+            raise results
 
         metric_names, directories = results
 
@@ -283,6 +305,3 @@ class Finder(BaseFinder):
 
         for directory in directories:
             yield node.BranchNode(directory)
-
-        if not cache_hit:
-            self.django_cache().set(cache_key, results, self._cache_timeout)

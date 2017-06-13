@@ -50,7 +50,7 @@ class InvalidArgumentError(Error):
     """Callee did not follow requirements on the arguments."""
 
 
-class Cache(object):
+class MetadataCache(object):
     """A metadata cache."""
 
     __metaclass__ = abc.ABCMeta
@@ -190,7 +190,7 @@ class Cache(object):
         pass
 
 
-class MemoryCache(Cache):
+class MemoryCache(MetadataCache):
     """A per-process memory cache."""
 
     def __init__(self, accessor, settings):
@@ -258,7 +258,7 @@ class MemoryCache(Cache):
                 callback_on_progress(done, total)
 
 
-class DiskCache(Cache):
+class DiskCache(MetadataCache):
     """A metadata cache that can be shared between processes trusting each other.
 
     open() and close() are the only thread unsafe methods.
