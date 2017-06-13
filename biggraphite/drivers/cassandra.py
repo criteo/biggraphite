@@ -1309,6 +1309,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             cached_results = self.cache.get_many(queries)
             for query in cached_results:
                 queries.remove(query)
+        else:
+            cached_results = {}
 
         statements_with_params = []
         for query in queries:

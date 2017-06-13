@@ -97,7 +97,7 @@ class CommandClean(command.BaseCommand):
             if opts.clean_backend:
                 logging.info("Cleaning backend, removing things before %d",
                              opts.max_age)
-                bg_acc.clean(opts.max_age,
+                bg_acc.clean(max_age=opts.max_age,
                              shard=opts.shard, nshards=opts.nshards,
                              start_key=opts.start_key,
                              end_key=opts.end_key,

@@ -227,6 +227,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_MemoryAccessor, self).clean(*args, **kwargs)
         callback_on_progress = kwargs.pop('callback_on_progress')
+        kwargs.pop('max_age', None)
 
         def _callback(m, i, t):
             callback_on_progress(i, t)
