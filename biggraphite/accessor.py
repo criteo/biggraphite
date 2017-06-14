@@ -667,6 +667,7 @@ class Accessor(object):
         """Set internal variables."""
         self.backend_name = backend_name
         self.is_connected = False
+        self.cache = None
 
     def __enter__(self):
         """Call connect()."""
@@ -677,6 +678,18 @@ class Accessor(object):
         """Call shutdown()."""
         self.shutdown()
         return False
+
+    def set_cache(self, cache, data_ttl=60, metadata_ttl=60):
+        """Allows a caller to set a cache for this accessor.
+
+        Args:
+          cache: an AccessorCache or similar.
+          data_ttl: int, TTL in seconds to apply to data.
+          metadata_ttl: int, TTL in seconds to apply to metadata.
+        """
+        self.cache = cache
+        self.cache_data_ttl = data_ttl
+        self.cache_metadata_ttl = metadata_ttl
 
     @abc.abstractmethod
     def connect(self):

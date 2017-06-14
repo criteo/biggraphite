@@ -246,12 +246,14 @@ def glob(metric_names, glob_pattern):
     return filter(maybe_matched_prefilter, metric_names)
 
 
-def graphite_glob(accessor, graphite_glob):
+def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
     """Get metrics and directories matching a Graphite glob.
 
     Args:
       accessor: BigGraphite accessor
       graphite_glob: Graphite glob expression
+      metrics: True if metrics should be fetched
+      directories: True if directories should be fetched
 
     Returns:
       A tuple:
@@ -264,11 +266,18 @@ def graphite_glob(accessor, graphite_glob):
 
     glob_re = re.compile(_glob_to_regex(graphite_glob))
 
-    metrics = accessor.glob_metric_names(graphite_glob)
-    metrics = filter(glob_re.match, metrics)
+    if metrics:
+        metrics = accessor.glob_metric_names(graphite_glob)
+        metrics = filter(glob_re.match, metrics)
+    else:
+        metrics = []
 
-    directories = accessor.glob_directory_names(graphite_glob)
-    directories = filter(glob_re.match, directories)
+    if directories:
+        directories = accessor.glob_directory_names(graphite_glob)
+        directories = filter(glob_re.match, directories)
+    else:
+        directories = []
+
     return (metrics, directories)
 
 
