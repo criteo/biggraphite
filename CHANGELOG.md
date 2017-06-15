@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.5] - 2017-06-15
+### Fixed
+- Fixed the time info of empty timeseries
+- Fix error handling in repair()/clean()
+
+### New
+- Added bgutil stats
+- Better caching for find()
+- Use new Graphite-Web API for FindQuery
+- Make read_on/updated_on more configurable
+
 ## [0.8.4] - 2017-05-15
 ### Fixed
 - Better logging
@@ -71,7 +82,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.5...HEAD
+[0.8.5]: https://github.com/criteo/biggraphite/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/criteo/biggraphite/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/criteo/biggraphite/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/criteo/biggraphite/compare/v0.8.1...v0.8.2
