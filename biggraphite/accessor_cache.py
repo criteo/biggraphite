@@ -107,7 +107,7 @@ class DjangoCache(AccessorCache):
     def set_many(self, data, timeout=None, version=None):
         """Set a bunch of keys in the cache."""
         new_data = {self._make_key(key): value for key, value in data.items()}
-        return self.__cache.set_many(new_data, timeout=None, version=None)
+        return self.__cache.set_many(new_data, timeout=timeout, version=None)
 
     def get_many(self, keys, version=None):
         """Fetch a bunch of keys from the cache."""

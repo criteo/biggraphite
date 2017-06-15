@@ -668,6 +668,8 @@ class Accessor(object):
         self.backend_name = backend_name
         self.is_connected = False
         self.cache = None
+        self.cache_data_ttl = None
+        self.cache_metadata_ttl = None
 
     def __enter__(self):
         """Call connect()."""
