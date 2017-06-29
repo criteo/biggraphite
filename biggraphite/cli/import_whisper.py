@@ -18,16 +18,17 @@ from __future__ import print_function
 
 from multiprocessing import dummy as multiprocessing_dummy
 import argparse
+import datetime
 import logging
 import multiprocessing
 import os
+import progressbar
+import re
 import scandir
 import struct
 import sys
 import time
-import datetime
 
-import progressbar
 import whisper
 
 from biggraphite import accessor as bg_accessor
@@ -170,6 +171,8 @@ def _parse_opts(args):
         description="Import whisper files into BigGraphite.")
     parser.add_argument("root_directory", metavar="WHISPER_DIR",
                         help="directory in which to find whisper files")
+    parser.add_argument("--filter", type=str, default=".*\.wsp",
+                        help="Only import metrics matching this filter")
     parser.add_argument("--prefix", metavar="WHISPER_PREFIX", default="",
                         help="prefix to prepend to metric names")
     parser.add_argument("--quiet", action="store_const", default=False, const=True,
@@ -209,9 +212,10 @@ def _parse_opts(args):
 
 # TODO: put that in a thread.
 class _Walker():
-    def __init__(self, root_directory):
+    def __init__(self, root_directory, regexp):
         self.count = 0
         self.root_directory = root_directory
+        self.regexp = re.compile(regexp)
 
     def paths(self, root=None):
         root = root or self.root_directory
@@ -219,7 +223,7 @@ class _Walker():
             if entry.is_dir():
                 for filename in self.paths(entry.path):
                     yield filename
-            elif entry.name.endswith(".wsp"):
+            elif self.regexp.match(entry.name):
                 self.count += 1
                 yield os.path.join(root, entry.name)
 
@@ -243,7 +247,7 @@ def main(args=None):
         print("Running without PyPy, this is about 20 times slower", file=out_fd)
         out_fd.flush()
 
-    walker = _Walker(opts.root_directory)
+    walker = _Walker(opts.root_directory, opts.filter)
     paths = walker.paths()
     total_points = 0
     max_value = progressbar.UnknownLength

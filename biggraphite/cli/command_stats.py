@@ -39,7 +39,7 @@ tabulate.tabulate_formats = list(sorted(tabulate._table_formats.keys()))
 
 
 class Namespaces(object):
-    """Helper for namespaces.
+    r"""Helper for namespaces.
 
     The config file would look like:
     ```

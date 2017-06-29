@@ -1724,7 +1724,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         Slight change for start_key and end_key, they are intrepreted as
         tokens directly.
         """
-
         start_token, stop_token = self._get_search_range(start_key, end_key, shard, nshards)
 
         select = self._prepare_background_request(

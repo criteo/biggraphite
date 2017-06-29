@@ -53,6 +53,7 @@ class Downsampler(object):
         Arg:
           metric: Metric
           points: iterable of (timestamp, value)
+
         Returns:
           Iterable of (timestamp, value, count, precision).
         """
@@ -92,7 +93,7 @@ class MetricAggregates(object):
     )
 
     def __init__(self, metric_metadata, stage0_capacity=DEFAULT_STAGE0_CAPACITY):
-        """"Initialize a MetricAggregates object.
+        """Initialize a MetricAggregates object.
 
         Args:
           metric_metadata: MetricMetadata object.
@@ -122,7 +123,7 @@ class MetricAggregates(object):
         self._counts = array.array("i", [0] * stages)
 
     def _get_expired_stage0_points(self, points):
-        """"Put stage0 data points in stage0 buffer and return expired stage0 points.
+        """Put stage0 data points in stage0 buffer and return expired stage0 points.
 
         Args:
           points: iterable of (timestamp, value).
@@ -185,7 +186,7 @@ class MetricAggregates(object):
         return updated, expired
 
     def _get_non_expired_stage0_points(self):
-        """"Get current (non expired) stage0 points.
+        """Get current (non expired) stage0 points.
 
         Returns:
           The list of (timestamp, value) of non-expired stage0 points.
@@ -209,7 +210,7 @@ class MetricAggregates(object):
         return result
 
     def _update_stage0(self, points):
-        """"Put stage0 points in stage0 buffer and return all stage0 points.
+        """Put stage0 points in stage0 buffer and return all stage0 points.
 
         Args:
           points: iterable of (timestamp, value).
@@ -226,7 +227,7 @@ class MetricAggregates(object):
         return (updated, expired, non_expired)
 
     def _merge(self, stage, result, points):
-        """"Merge stage0 points into result.
+        """Merge stage0 points into result.
 
         Args:
           stage: Stage object.
@@ -312,7 +313,7 @@ class MetricAggregates(object):
         return result
 
     def update(self, points):
-        """"Compute aggregated values and store them.
+        """Compute aggregated values and store them.
 
         Only the expired points will be taken into account in the updated
         The points have to be sorted by increasing timestamp.

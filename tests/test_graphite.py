@@ -111,7 +111,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
 
 class FakeFindQuery(object):
-    """"Fake Query object for testing puposes.
+    """Fake Query object for testing puposes.
 
     We don't use the Graphite Query because it imports too many things from Django.
     """
