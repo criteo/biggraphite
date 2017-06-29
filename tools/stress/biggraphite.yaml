@@ -1,0 +1,44 @@
+keyspace: biggraphite_stress
+
+keyspace_definition: |
+  CREATE KEYSPACE biggraphite_stress
+    WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
+    AND durable_writes = false
+    ;
+
+table: datapoints_0
+table_definition: |
+  CREATE TABLE datapoints_0 (
+        metric uuid,
+        time_start_ms bigint,
+        offset smallint,
+        value double,
+        PRIMARY KEY((metric, time_start_ms), offset)
+  ) WITH CLUSTERING ORDER BY (offset DESC, shard ASC)
+    AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
+    AND compaction = {'class': 'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy', 'compaction_window_size': '3', 'compaction_window_unit': 'HOURS'  }
+    AND compression = {'chunk_length_in_kb': '64', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+    AND default_time_to_live = 692100
+    AND gc_grace_seconds = 86400
+    AND memtable_flush_period_in_ms = 300000
+    ;
+
+columnspec:
+  - name: metric
+    population: uniform(1..100000)  # The number of different metrics
+  - name: time_start
+    population: seq(1..5)
+  - name: offset
+    cluster: fixed(1000)
+  - name: value
+    population: uniform(0..1000)
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED             # type of batch to use
+  select: fixed(1)/100
+
+queries:
+  simple1:
+    cql: SELECT time_start_ms, offset, value FROM datapoints_0 WHERE metric = ? AND time_start_ms = ? AND offset = ?
+    fields: samerow
