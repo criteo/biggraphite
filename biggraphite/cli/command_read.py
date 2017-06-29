@@ -121,5 +121,5 @@ class CommandRead(command.BaseCommand):
         print("Points:")
 
         for point in points:
-            print('%s: %s' % (point[0], point[1]))
+            print('%s: %f' % (point[0], point[1]))
         print()
