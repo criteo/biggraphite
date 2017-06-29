@@ -174,7 +174,7 @@ class TestCaseWithTempDir(unittest.TestCase):
 
 
 class TestCaseWithFakeAccessor(TestCaseWithTempDir):
-    """"A TestCase with a FakeAccessor."""
+    """A TestCase with a FakeAccessor."""
 
     KEYSPACE = "fake_keyspace"
     CACHE_CLASS = bg_metadata_cache.MemoryCache
@@ -206,7 +206,7 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
     HAS_CASSANDRA_HOME, "CASSANDRA_HOME must be set to a >=3.5 install",
 )
 class TestCaseWithAccessor(TestCaseWithTempDir):
-    """"A TestCase with an Accessor for an ephemeral Cassandra cluster."""
+    """A TestCase with an Accessor for an ephemeral Cassandra cluster."""
 
     KEYSPACE = "testkeyspace"
     CACHE_CLASS = bg_metadata_cache.MemoryCache
