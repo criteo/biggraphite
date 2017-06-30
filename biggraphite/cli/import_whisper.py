@@ -223,7 +223,7 @@ class _Walker():
             if entry.is_dir():
                 for filename in self.paths(entry.path):
                     yield filename
-            elif self.regexp.match(entry.name):
+            elif self.regexp.match(os.path.join(root, entry.name)):
                 self.count += 1
                 yield os.path.join(root, entry.name)
 

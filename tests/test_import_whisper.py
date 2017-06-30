@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 from os import path as os_path
+from distutils.dir_util import mkpath
 import tempfile
 import shutil
 import time
@@ -77,6 +78,29 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
         points_again = list(self.accessor.fetch_points(
             metric, time_from, time_to, metric.retention[0]))
         self.assertEqual(points[-high_precision_duration:], points_again)
+
+    def test_filter_paths(self):
+        metrics = [
+            'a/toto/lulu/b/c.wsp',
+            'a/toto/lulu/d/e.wsp',
+            'a/toto/hello.wsp',
+            'a/toto/world.wsp',
+        ]
+        root = self.tempdir
+        for metric in metrics:
+            metric_path = os_path.join(root, metric)
+            mkpath(os_path.dirname(metric_path))
+            with open(metric_path, 'w'):
+                pass
+
+        paths = list(import_whisper._Walker(root, '.*\.wsp').paths())
+        self.assertEqual(len(paths), 4)
+        paths = list(import_whisper._Walker(root, '.*/toto/lulu/.*\.wsp').paths())
+        self.assertEqual(len(paths), 2)
+        paths = list(import_whisper._Walker(root, '.*(hello|world)\.wsp').paths())
+        self.assertEqual(len(paths), 2)
+        paths = list(import_whisper._Walker(root, '.*/d/.*\.wsp').paths())
+        self.assertEqual(len(paths), 1)
 
     def _call_main(self):
         import_whisper.main([
