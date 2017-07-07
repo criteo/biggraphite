@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.7] - 2017-07-07
+### Fixed
+- Infinite caching for metadata.
+
 ## [0.8.6] - 2017-06-15
 ### Fixed
 - Infinite caching for metadata.
@@ -86,8 +90,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.6...HEAD
-[0.8.5]: https://github.com/criteo/biggraphite/compare/v0.8.6...v0.8.6
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.7...HEAD
+[0.8.6]: https://github.com/criteo/biggraphite/compare/v0.8.6...v0.8.7
+[0.8.5]: https://github.com/criteo/biggraphite/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/criteo/biggraphite/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/criteo/biggraphite/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/criteo/biggraphite/compare/v0.8.2...v0.8.3
