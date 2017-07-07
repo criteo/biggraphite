@@ -830,7 +830,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__compression = compression
         self.__trace = trace
         self.__bulkimport = bulkimport
-        self.__metadata_touch_ttl_sec = updated_on_ttl_sec,
+        self.__metadata_touch_ttl_sec = updated_on_ttl_sec
         self.__downsampler = _downsampling.Downsampler()
         self.__delayed_writer = _delayed_writer.DelayedWriter(self)
         self.__cluster_data = None  # setup by connect()
@@ -1855,7 +1855,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                DEFAULT_MAX_BATCH_UTIL))
         has_metric_query = self._prepare_background_request(
             "SELECT name FROM \"%s\".metrics"
-            " WHERE parent LIKE ? LIMIT 1;"
+            " WHERE parent = ? LIMIT 1;"
             % (self.keyspace_metadata, ))
         delete_empty_dir_stm = self._prepare_background_request(
             "DELETE FROM \"%s\".directories"
@@ -1866,7 +1866,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for row in result:
                 name, next_token = row
                 if name:
-                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + '%',))
+                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR,))
 
         def directories_to_remove(result):
             for response in result:
@@ -1878,7 +1878,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     continue
                 dir_name = response.result_or_exc.response_future.query.values[0]
                 dir_name = dir_name.rpartition('.')[0]
-                log.info("Scheduling delete for '%s'" % dir_name)
+                log.info("Scheduling delete for empty dir '%s'" % dir_name)
                 pm_deleted_directories.inc()
                 yield delete_empty_dir_stm, (dir_name,)
 
@@ -1957,7 +1957,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         def run(rows):
             for name, _ in rows:
-                log.info("Scheduling delete for %s", name)
+                log.info("Scheduling delete for obsolete metric %s", name)
                 pm_expired_metrics.inc()
                 yield (delete, (name,))
                 yield (delete_metadata, (name,))
