@@ -1916,9 +1916,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
 
+        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
         self._clean_expired_metrics(max_age, start_key, end_key, shard, nshards,
                                     callback_on_progress)
-        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
