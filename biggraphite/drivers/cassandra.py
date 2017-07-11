@@ -1855,7 +1855,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                DEFAULT_MAX_BATCH_UTIL))
         has_metric_query = self._prepare_background_request(
             "SELECT name FROM \"%s\".metrics"
-            " WHERE parent = ? LIMIT 1;"
+            " WHERE parent LIKE ? LIMIT 1;"
             % (self.keyspace_metadata, ))
         delete_empty_dir_stm = self._prepare_background_request(
             "DELETE FROM \"%s\".directories"
@@ -1866,7 +1866,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for row in result:
                 name, next_token = row
                 if name:
-                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR,))
+                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + '%',))
 
         def directories_to_remove(result):
             for response in result:
@@ -1916,9 +1916,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
 
+        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
         self._clean_expired_metrics(max_age, start_key, end_key, shard, nshards,
                                     callback_on_progress)
-        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
