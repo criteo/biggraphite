@@ -1855,7 +1855,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                DEFAULT_MAX_BATCH_UTIL))
         has_metric_query = self._prepare_background_request(
             "SELECT name FROM \"%s\".metrics"
-            " WHERE parent = ? LIMIT 1;"
+            " WHERE parent LIKE ? LIMIT 1;"
             % (self.keyspace_metadata, ))
         delete_empty_dir_stm = self._prepare_background_request(
             "DELETE FROM \"%s\".directories"
@@ -1866,7 +1866,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for row in result:
                 name, next_token = row
                 if name:
-                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR,))
+                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + '%',))
 
         def directories_to_remove(result):
             for response in result:
