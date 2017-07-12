@@ -1153,6 +1153,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).fetch_points(
             metric, time_start, time_end, stage)
 
+        self._update_metric_read_on(metric.name)
+
         log.debug(
             "fetch: [%s, start=%d, end=%d, stage=%s]",
             metric.name, time_start, time_end, stage)
@@ -1206,27 +1208,27 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return res
 
     def _update_metric_read_on(self, metric_name):
-        queries = []
         rate = int(1 / self.__read_on_sampling_rate)
-        if self.__read_on_counter % rate == 0:
-            log.debug('updating read_on for %s' % metric_name)
-            queries.append((
-                self.__update_metric_read_on_metadata_statement,
-                [metric_name],
-            ))
-            self._execute_concurrent_metadata(
-                queries,
-                raise_on_first_error=False)
+
+        skip = self.__read_on_counter % rate > 0
+        self.__read_on_counter += 1
+
+        if skip:
+            return
+
+        log.debug('updating read_on for %s' % metric_name)
+        self._execute_async_metadata(
+            self.__update_metric_read_on_metadata_statement,
+            (metric_name,)
+        )
 
     def _select_metric(self, metric_name):
         """Fetch metric metadata."""
-        self.__read_on_counter += 1
         encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
         result = list(self._execute_metadata(
             self.__select_metric_metadata_statement, (encoded_metric_name, )))
         if not result:
             return None
-        self._update_metric_read_on(metric_name)
         return result[0]
 
     def has_metric(self, metric_name):
