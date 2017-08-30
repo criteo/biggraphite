@@ -1,8 +1,28 @@
 language: python
-python:
-  - 2.7
-jdk:
-  - oraclejdk8
+
+matrix:
+  include:
+    - python: '2.7'
+      env: TOXENV=py27-coverage
+    - python: 'pypy'
+      env: TOXENV=pypy-coverage
+    - python: 'pypy'
+      env: TOXENV=pylama
+    - language: java
+      jdk: oraclejdk8
+      env: JAVA=true
+      addons:
+        apt:
+          packages:
+            - oracle-java8-installer
+
+env:
+  global:
+    - JAVA=false # Default
+    ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
+    - CASSANDRA_VERSION=3.11.0
+    - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
+
 
 install:
   ### Java: We download now some dependencies to limit the number of messages later
@@ -23,22 +43,6 @@ sudo: required
 
 ### As of 2016-11, when Sudo is required, java8 is removed (WHY?)
 dist: trusty
-addons:
-  apt:
-    packages:
-      - oracle-java8-installer
-
-env:
-  global:
-    - JAVA=false # Default
-    ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
-    - CASSANDRA_VERSION=3.11.0
-    - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
-  matrix:
-    - TOXENV=pylama
-    - TOXENV=pypy-coverage
-    - TOXENV=py27-coverage
-    - JAVA=true
 
 ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
 before_install:
