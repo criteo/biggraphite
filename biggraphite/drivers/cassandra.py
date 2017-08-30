@@ -36,6 +36,7 @@ from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
 from cassandra import query as c_query
 from cassandra import marshal as c_marshal
+from cassandra import auth
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -101,6 +102,8 @@ def _consistency_validator(k):
 
 
 OPTIONS = {
+    "username": str,
+    "password": str,
     "keyspace": str,
     "contact_points": _utils.list_from_str,
     "contact_points_metadata": _utils.list_from_str,
@@ -134,6 +137,14 @@ def add_argparse_arguments(parser):
         "--cassandra_keyspace", metavar="NAME",
         help="Cassandra keyspace.",
         default=DEFAULT_KEYSPACE)
+    parser.add_argument(
+        "--cassandra_username",
+        help="Cassandra username.",
+        default=None)
+    parser.add_argument(
+        "--cassandra_password",
+        help="Cassandra password.",
+        default=None)
     parser.add_argument(
         "--cassandra_contact_points", metavar="HOST[,HOST,...]",
         help="Hosts used for discovery.",
@@ -763,6 +774,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def __init__(self,
                  keyspace='biggraphite',
+                 username=None,
+                 password=None,
                  contact_points=DEFAULT_CONTACT_POINTS,
                  port=DEFAULT_PORT,
                  contact_points_metadata=None,
@@ -819,6 +832,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         self.keyspace = keyspace
         self.keyspace_metadata = keyspace + "_metadata"
+        if username is not None and password is not None:
+            self.auth_provider = auth.PlainTextAuthProvider(username, password)
+        else:
+            self.auth_provider = None
         self.contact_points_data = contact_points
         self.contact_points_metadata = contact_points_metadata
         self.port = port
@@ -954,6 +971,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         cluster = c_cluster.Cluster(
             contact_points, port,
             compression=self.__compression,
+            auth_provider=self.auth_provider,
             metrics_enabled=False,
         )
 
