@@ -36,6 +36,7 @@
 
     <modules>
         <module>tools/bg-generate-cassandra-sstables</module>
+        <module>tools/graphiteindex</module>
     </modules>
 
     <properties>
@@ -44,6 +45,10 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+
+        <!-- Dependency versions -->
+        <cassandra.version>3.11.0</cassandra.version>
+        <junit.version>4.12</junit.version>
     </properties>
 
     <dependencyManagement>
@@ -53,18 +58,25 @@
                 <artifactId>super-csv</artifactId>
                 <version>2.4.0</version>
             </dependency>
-            <!-- Check the compatiblity matrix: https://docs.datastax.com/en/developer/driver-matrix/doc/javaDrivers.html -->
+            <!--
+                Check the compatiblity matrix:
+                https://docs.datastax.com/en/developer/driver-matrix/doc/javaDrivers.html
+            -->
             <dependency>
                 <groupId>org.apache.cassandra</groupId>
                 <artifactId>cassandra-all</artifactId>
-                <version>3.9</version>
+                <version>${cassandra.version}</version>
             </dependency>
-            <!-- The shaded version uses its own version of Netty (that is not the same one than the one used by cassandra-all.
-            cassandra-driver-core.pom should declared its Netty dependencies as optional, but they are not...
-            So we have to exclude them :-( -->
+            <!--
+                The shaded version uses its own version of Netty (that is not the same one
+                than the one used by cassandra-all).
+                cassandra-driver-core.pom should declare its Netty dependencies as
+                optional, but they don't, so we have to exclude them :-(
+            -->
             <dependency>
                 <groupId>com.datastax.cassandra</groupId>
                 <artifactId>cassandra-driver-core</artifactId>
+                <!-- TODO(d.forest): update to 3.3.0 -->
                 <version>3.1.0</version>
                 <classifier>shaded</classifier>
                 <exclusions>
@@ -89,7 +101,7 @@
             <dependency>
                 <groupId>junit</groupId>
                 <artifactId>junit</artifactId>
-                <version>4.12</version>
+                <version>${junit.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
