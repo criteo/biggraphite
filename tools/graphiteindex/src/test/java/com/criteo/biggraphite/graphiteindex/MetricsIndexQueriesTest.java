@@ -1,10 +1,13 @@
 package com.criteo.biggraphite.graphiteindex;
 
 import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
-
-import java.util.*;
-
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;

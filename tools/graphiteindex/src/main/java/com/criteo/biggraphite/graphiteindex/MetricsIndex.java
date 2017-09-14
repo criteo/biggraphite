@@ -2,7 +2,6 @@ package com.criteo.biggraphite.graphiteindex;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.lang.IllegalStateException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,11 +24,11 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.automaton.RegExp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.lucene.store.IOContext;
 
 public class MetricsIndex implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(MetricsIndex.class);
