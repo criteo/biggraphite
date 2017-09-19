@@ -38,8 +38,35 @@ import org.apache.lucene.search.ControlledRealTimeReopenThread;
 public class MetricsIndex implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(MetricsIndex.class);
 
+    public static void copyRamToFilesystemAndForceMerge(
+        final MetricsIndex ram, final MetricsIndex fs
+    )
+        throws IllegalStateException, IOException
+    {
+        if (!ram.isInMemory()) {
+            throw new IllegalStateException("Attempting to copy from a FS-based index");
+        }
+        if (fs.isInMemory()) {
+            throw new IllegalStateException("Attempting to copy to a Memory-based index");
+        }
+
+        // Ensure Directory is up to date and references to previous generation files were dropped.
+        ram.writer.commit();
+        ram.searcherMgr.maybeRefreshBlocking();
+
+        // Copy the contents of the RAM directory into FS directory
+        for (String fileName : ram.directory.listAll()) {
+            fs.directory.copyFrom(ram.directory, fileName, fileName, IOContext.DEFAULT);
+        }
+
+        // Force final merge of index segments into a single one.
+        fs.initialize();
+        fs.writer.forceMerge(1);
+        fs.forceCommit();
+    }
+
     private final String name;
-    private Optional<Path> indexPath;
+    private final Optional<Path> indexPath;
     private Directory directory;
     private IndexWriter writer;
     private SearcherManager searcherMgr;
@@ -69,12 +96,23 @@ public class MetricsIndex implements Closeable {
             directory = new RAMDirectory();
         }
 
-        initialize(directory);
+        this.directory = directory;
+        initialize();
     }
 
-    private void initialize(Directory directory)
+    private void initialize()
         throws IOException
     {
+        if (reopener != null) {
+            reopener.close();
+        }
+        if (searcherMgr != null) {
+            searcherMgr.close();
+        }
+        if (writer != null) {
+            writer.close();
+        }
+
         IndexWriterConfig config = new IndexWriterConfig();
         // XXX(d.forest): do we want a different setRAMBufferSizeMB?
 
@@ -99,35 +137,6 @@ public class MetricsIndex implements Closeable {
 
     public boolean isInMemory() {
         return !indexPath.isPresent();
-    }
-
-    // TODO(d.forest): make this a static “copyAndForceMerge” procedure and have two independant
-    //                 instances for Memtable and OnDisk
-    public void makePersistent(Path indexPath)
-        throws IllegalStateException, IOException
-    {
-        if (!(directory instanceof RAMDirectory)) {
-            throw new IllegalStateException("Attempting to make a non-volatile index persistent");
-        }
-
-        // FIXME(d.forest): race condition & exceptions if a search occurs during makePersistent?
-        reopener.close();
-        searcherMgr.close();
-
-        // Force in-memory merge of all segments into one before copying to disk.
-        // XXX(d.forest): is it actually necessary to force commit before merging?
-        writer.commit();
-        writer.forceMerge(1);
-        writer.commit();
-        writer.close();
-
-        Directory onDiskDirectory = FSDirectory.open(indexPath);
-        for (String file : this.directory.listAll()) {
-            onDiskDirectory.copyFrom(this.directory, file, file, IOContext.DEFAULT);
-        }
-
-        this.indexPath = Optional.of(indexPath);
-        initialize(onDiskDirectory);
     }
 
     public synchronized void forceCommit()
