@@ -9,7 +9,9 @@ import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.Scorer;
 
-public class MetricsIndexCollector implements Collector, LeafCollector {
+public class MetricsIndexCollector
+    implements Collector, LeafCollector
+{
     private final Consumer<Document> consumer;
     private LeafReader reader;
 

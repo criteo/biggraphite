@@ -6,38 +6,42 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.StringField;
 
-public class MetricPath {
+public class MetricPath
+{
     public static final char ELEMENT_SEPARATOR = '.';
 
     public static final String FIELD_PATH = "path";
     public static final String FIELD_LENGTH = "length";
     public static final String FIELD_PART_PREFIX = "p";
 
-    public static Document toDocument(String path) {
+    public static Document toDocument(String path)
+    {
         Document doc = new Document();
 
         int length = iterateOnElements(
             path,
             (element, depth) -> doc.add(
                 new StringField(
-                    MetricPath.FIELD_PART_PREFIX + depth,
+                    FIELD_PART_PREFIX + depth,
                     element,
                     Field.Store.NO
                 )
             )
         );
 
-        doc.add(new StringField(MetricPath.FIELD_PATH, path, Field.Store.YES));
-        doc.add(new IntPoint(MetricPath.FIELD_LENGTH, length));
+        doc.add(new StringField(FIELD_PATH, path, Field.Store.YES));
+        doc.add(new IntPoint(FIELD_LENGTH, length));
 
         return doc;
     }
 
-    public static String fromDocument(Document doc) {
+    public static String fromDocument(Document doc)
+    {
         return doc.getField(FIELD_PATH).stringValue();
     }
 
-    public static int iterateOnElements(String path, BiConsumer<String, Integer> f) {
+    public static int iterateOnElements(String path, BiConsumer<String, Integer> f)
+    {
         int depth = 0;
         int start = 0;
         int end = path.indexOf(ELEMENT_SEPARATOR, start);

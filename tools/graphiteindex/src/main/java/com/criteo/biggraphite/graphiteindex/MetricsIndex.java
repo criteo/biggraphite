@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.IntPoint;
-import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
@@ -17,27 +16,29 @@ import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BooleanQuery.Builder;
 import org.apache.lucene.search.Collector;
+import org.apache.lucene.search.ControlledRealTimeReopenThread;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.RegexpQuery;
+import org.apache.lucene.search.SearcherFactory;
+import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.NRTCachingDirectory;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.automaton.RegExp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.store.NRTCachingDirectory;
-import org.apache.lucene.search.SearcherManager;
-import org.apache.lucene.search.SearcherFactory;
-import org.apache.lucene.search.ControlledRealTimeReopenThread;
 
-public class MetricsIndex implements Closeable {
+public class MetricsIndex
+    implements Closeable
+{
     private static final Logger logger = LoggerFactory.getLogger(MetricsIndex.class);
 
+    // XXX(d.forest): probably useless since memtables do not have sstable offsets...
     public static void copyRamToFilesystemAndForceMerge(
         final MetricsIndex ram, final MetricsIndex fs
     )
@@ -81,9 +82,6 @@ public class MetricsIndex implements Closeable {
     public MetricsIndex(String name, Optional<Path> indexPath)
         throws IOException
     {
-        this.name = name;
-        this.indexPath = indexPath;
-
         Directory directory;
         if (indexPath.isPresent()) {
             directory = FSDirectory.open(indexPath.get());
@@ -96,11 +94,14 @@ public class MetricsIndex implements Closeable {
             directory = new RAMDirectory();
         }
 
+        this.name = name;
+        this.indexPath = indexPath;
         this.directory = directory;
+
         initialize();
     }
 
-    private void initialize()
+    private synchronized void initialize()
         throws IOException
     {
         if (reopener != null) {
@@ -203,6 +204,7 @@ public class MetricsIndex implements Closeable {
             pattern,
             (element, depth) -> {
                 // Wildcard-only fields do not filter anything
+                // TODO(d.forest): detect several wildcards?
                 if (element == "*") {
                     return;
                 }
