@@ -29,44 +29,70 @@ import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.automaton.RegExp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.store.NRTCachingDirectory;
+import org.apache.lucene.search.SearcherManager;
+import org.apache.lucene.search.SearcherFactory;
+import org.apache.lucene.search.ControlledRealTimeReopenThread;
 
 public class MetricsIndex implements Closeable {
     private static final Logger logger = LoggerFactory.getLogger(MetricsIndex.class);
 
+    private final String name;
     private Optional<Path> indexPath;
     private Directory directory;
     private IndexWriter writer;
-    private DirectoryReader reader;
-    private IndexSearcher searcher;
+    private SearcherManager searcherMgr;
+    private ControlledRealTimeReopenThread<IndexSearcher> reopener;
 
-    public MetricsIndex()
+    public MetricsIndex(String name)
         throws IOException
     {
-        initialize(new RAMDirectory());
+        this(name, Optional.empty());
     }
 
-    public MetricsIndex(Path indexPath)
+    public MetricsIndex(String name, Optional<Path> indexPath)
         throws IOException
     {
-        initialize(FSDirectory.open(indexPath));
+        this.name = name;
+        this.indexPath = indexPath;
+
+        Directory directory;
+        if (indexPath.isPresent()) {
+            directory = FSDirectory.open(indexPath.get());
+
+            // Adds a RAMDirectory cache, which helps with low-frequently updates and
+            // high-frequency re-open, which is likely to be the case for Graphite metrics.
+            // 8MB max segment size, 64MB max cached bytes.
+            directory = new NRTCachingDirectory(directory, 8, 64);
+        } else {
+            directory = new RAMDirectory();
+        }
+
+        initialize(directory);
     }
 
     private void initialize(Directory directory)
         throws IOException
     {
         IndexWriterConfig config = new IndexWriterConfig();
+        // XXX(d.forest): do we want a different setRAMBufferSizeMB?
 
         this.directory = directory;
         this.writer = new IndexWriter(directory, config);
-        this.reader = DirectoryReader.open(writer);
-        this.searcher = new IndexSearcher(reader);
+        this.searcherMgr = new SearcherManager(writer, new SearcherFactory());
+
+        // Enforce changes becoming visible to search within 10 to 30 seconds.
+        this.reopener = new ControlledRealTimeReopenThread<>(this.writer, searcherMgr, 30, 10);
+        this.reopener.start();
     }
 
     @Override
     public void close()
         throws IOException
     {
-        reader.close();
+        reopener.close();
+        searcherMgr.close();
         writer.close();
         directory.close();
     }
@@ -75,18 +101,24 @@ public class MetricsIndex implements Closeable {
         return !indexPath.isPresent();
     }
 
-    public synchronized void makePersistent(Path indexPath)
+    // TODO(d.forest): make this a static “copyAndForceMerge” procedure and have two independant
+    //                 instances for Memtable and OnDisk
+    public void makePersistent(Path indexPath)
         throws IllegalStateException, IOException
     {
         if (!(directory instanceof RAMDirectory)) {
             throw new IllegalStateException("Attempting to make a non-volatile index persistent");
         }
 
-        commit();
-        reader.close();
+        // FIXME(d.forest): race condition & exceptions if a search occurs during makePersistent?
+        reopener.close();
+        searcherMgr.close();
 
         // Force in-memory merge of all segments into one before copying to disk.
+        // XXX(d.forest): is it actually necessary to force commit before merging?
+        writer.commit();
         writer.forceMerge(1);
+        writer.commit();
         writer.close();
 
         Directory onDiskDirectory = FSDirectory.open(indexPath);
@@ -94,47 +126,39 @@ public class MetricsIndex implements Closeable {
             onDiskDirectory.copyFrom(this.directory, file, file, IOContext.DEFAULT);
         }
 
+        this.indexPath = Optional.of(indexPath);
         initialize(onDiskDirectory);
     }
 
-    public synchronized void commit()
+    public synchronized void forceCommit()
     {
-        logger.debug("Committing");
+        logger.debug("{} - Forcing commit and refreshing searchers", name);
 
         try {
             writer.commit();
+            searcherMgr.maybeRefreshBlocking();
         } catch(IOException e) {
-            logger.error("Cannot commit index", e);
-        }
-
-        try {
-            DirectoryReader newReader = DirectoryReader.openIfChanged(reader);
-            if (newReader != null) {
-                reader = newReader;
-                searcher = new IndexSearcher(reader);
-            }
-        } catch(IOException e) {
-            logger.error("Cannot re-open index reader", e);
+            logger.error("{} - Cannot commit or refresh searchers", name, e);
         }
     }
 
     public void insert(String path)
     {
-        logger.debug("Inserting '{}'", path);
+        logger.debug("{} - Inserting '{}'", name, path);
 
         Document doc = MetricPath.toDocument(path);
 
         try {
             writer.addDocument(doc);
         } catch(IOException e) {
-            logger.error("Cannot insert metric in index", e);
+            logger.error("{} - Cannot insert metric in index", name, e);
         }
     }
 
     public List<String> search(String pattern)
     {
         BooleanQuery query = patternToQuery(pattern);
-        logger.debug("Searching for '{}', generated query: {}", pattern, query);
+        logger.debug("{} - Searching for '{}', generated query: {}", name, pattern, query);
 
         ArrayList<String> results = new ArrayList<>();
         Collector collector = new MetricsIndexCollector(
@@ -142,10 +166,17 @@ public class MetricsIndex implements Closeable {
         );
 
         try {
-            // TODO(d.forest): we should probably use TimeLimitingCollector
-            searcher.search(query, collector);
+            IndexSearcher searcher = searcherMgr.acquire();
+            try {
+                // TODO(d.forest): we should probably use TimeLimitingCollector
+                searcher.search(query, collector);
+            } catch(IOException e) {
+                logger.error("{} - Cannot finish search query", name, e);
+            } finally {
+                searcherMgr.release(searcher);
+            }
         } catch(IOException e) {
-            logger.error("Cannot finish search query", e);
+            logger.error("{} - Cannot acquire index searcher", name, e);
         }
 
         return results;

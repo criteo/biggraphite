@@ -73,7 +73,7 @@ public class MetricsIndexQueriesTest {
     @BeforeClass
     @SuppressWarnings("unchecked")
     public static void buildTestIndex() throws IOException {
-        index = new MetricsIndex();
+        index = new MetricsIndex("test-index");
 
         for (Object[] testQuery : testQueries) {
             Set<String> metricNames = (Set<String>)testQuery[1];
@@ -86,7 +86,7 @@ public class MetricsIndexQueriesTest {
             index.insert(metricName);
         }
 
-        index.commit();
+        index.forceCommit();
     }
 
     @Parameters
@@ -104,6 +104,6 @@ public class MetricsIndexQueriesTest {
     public void test() {
         List<String> results = index.search(query);
         Set<String> uniqueResults = new HashSet<>(results);
-        assertEquals(uniqueResults, expectedResults);
+        assertEquals(expectedResults, uniqueResults);
     }
 }
