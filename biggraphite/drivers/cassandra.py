@@ -1276,9 +1276,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if (int(time.time()) - int(updated_on / 1000)) >= self.__metadata_touch_ttl_sec:
             self.touch_metric(metric_name)
 
-    def get_metric(self, metric_name):
+    def get_metric(self, metric_name, touch=False):
         """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).get_metric(metric_name)
+        super(_CassandraAccessor, self).get_metric(metric_name, touch=touch)
         metric_name = ".".join(self._components_from_name(metric_name)[:-1])
         metric_name = bg_accessor.encode_metric_name(metric_name)
         result = self._select_metric(metric_name)
@@ -1292,7 +1292,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not result[0] or not result[1]:
             return None
 
-        self.__touch_metadata_on_need(metric_name, updated_on)
+        if touch:
+            self.__touch_metadata_on_need(metric_name, updated_on)
+
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
         return bg_accessor.Metric(metric_name, id, metadata)
 

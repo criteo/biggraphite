@@ -175,9 +175,9 @@ class _MemoryAccessor(bg_accessor.Accessor):
         super(_MemoryAccessor, self).has_metric(metric_name)
         return self.get_metric(metric_name) is not None
 
-    def get_metric(self, metric_name):
+    def get_metric(self, metric_name, touch=False):
         """See the real Accessor for a description."""
-        super(_MemoryAccessor, self).get_metric(metric_name)
+        super(_MemoryAccessor, self).get_metric(metric_name, touch=touch)
         metric_name = ".".join(self._components_from_name(metric_name))
         return self._name_to_metric.get(metric_name)
 

@@ -782,7 +782,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def get_metric(self, metric_name):
+    def get_metric(self, metric_name, touch=False):
         """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
 
