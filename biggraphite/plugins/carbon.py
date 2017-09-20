@@ -103,7 +103,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     @WRITE_TIME.time()
     def write(self, metric_name, datapoints):
         # Get a Metric object from metric name.
-        metric = self.cache.get_metric(metric_name=metric_name)
+        metric = self.cache.get_metric(metric_name=metric_name, touch=True)
         if not metric:
             raise Exception('Could not find %s' % (metric_name))
 

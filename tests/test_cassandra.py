@@ -428,7 +428,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.touch_metric = touch_metric_moc
 
         time.sleep(3)
-        self.accessor.get_metric(metric1.name)
+        self.accessor.get_metric(metric1.name, touch=True)
         self.assertEquals(isUpdated[0], True)
 
         self.accessor.touch_metric = old_touch_fn
@@ -449,6 +449,9 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         time.sleep(3)
         self.accessor.get_metric(metric1.name)
+        self.assertEquals(isUpdated[0], False)
+
+        self.accessor.get_metric(metric1.name, touch=True)
         self.assertEquals(isUpdated[0], False)
 
         self.accessor.touch_metric = old_touch_fn
