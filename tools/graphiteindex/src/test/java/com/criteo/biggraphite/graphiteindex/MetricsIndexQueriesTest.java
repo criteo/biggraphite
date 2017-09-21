@@ -8,6 +8,8 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,6 +17,10 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
+/**
+ * Tests queries against an in-memory metrics index.
+ * Offset values are generated using the path's hashCode.
+ */
 @RunWith(Parameterized.class)
 public class MetricsIndexQueriesTest {
     private static Set<String> setOf(String... xs) {
@@ -78,12 +84,12 @@ public class MetricsIndexQueriesTest {
         for (Object[] testQuery : testQueries) {
             Set<String> metricNames = (Set<String>)testQuery[1];
             for (String metricName : metricNames) {
-                index.insert(metricName);
+                index.insert(metricName, (long)metricName.hashCode());
             }
         }
 
         for (String metricName : unmatchedMetricNames) {
-            index.insert(metricName);
+            index.insert(metricName, (long)metricName.hashCode());
         }
 
         index.forceCommit();
@@ -101,9 +107,20 @@ public class MetricsIndexQueriesTest {
     public Set<String> expectedResults;
 
     @Test
-    public void test() {
-        List<String> results = index.search(query);
-        Set<String> uniqueResults = new HashSet<>(results);
-        assertEquals(expectedResults, uniqueResults);
+    public void shouldReturnCorrectSearchResults() {
+        List<Pair<String, Long>> results = index.searchPaths(query);
+        Set<String> uniquePaths = results
+            .stream()
+            .map(Pair::getLeft)
+            .collect(Collectors.toSet());
+
+        assertEquals(expectedResults, uniquePaths);
+    }
+
+    @Test
+    public void shouldStoreAndRetrieveOffsetValues() {
+        for (Pair<String, Long> entry : index.searchPaths(query)) {
+            assertEquals((long)entry.getLeft().hashCode(), entry.getRight().longValue());
+        }
     }
 }

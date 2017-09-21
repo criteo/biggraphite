@@ -6,6 +6,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.index.IndexWriter;
@@ -165,14 +167,43 @@ public class MetricsIndex
         }
     }
 
-    public List<String> search(String pattern)
+    public void insert(String path, long offset)
+    {
+        logger.debug("{} - Inserting '{}' with offset {}", name, path);
+
+        Document doc = MetricPath.toDocument(path, offset);
+
+        try {
+            writer.addDocument(doc);
+        } catch(IOException e) {
+            logger.error("{} - Cannot insert metric in index", name, e);
+        }
+    }
+
+    public List<Long> searchOffsets(String pattern)
+    {
+        return search(pattern, MetricPath::getOffsetFromDocument);
+    }
+
+    public List<Pair<String, Long>> searchPaths(String pattern)
+    {
+        return search(
+            pattern,
+            doc -> Pair.of(
+                MetricPath.getPathFromDocument(doc),
+                MetricPath.getOffsetFromDocument(doc)
+            )
+        );
+    }
+
+    private <T> List<T> search(String pattern, Function<Document, T> handler)
     {
         BooleanQuery query = patternToQuery(pattern);
         logger.debug("{} - Searching for '{}', generated query: {}", name, pattern, query);
 
-        ArrayList<String> results = new ArrayList<>();
+        ArrayList<T> results = new ArrayList<>();
         Collector collector = new MetricsIndexCollector(
-            doc -> results.add(MetricPath.fromDocument(doc))
+            doc -> results.add(handler.apply(doc))
         );
 
         try {

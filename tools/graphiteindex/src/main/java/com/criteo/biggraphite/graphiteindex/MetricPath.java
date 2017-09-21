@@ -4,7 +4,9 @@ import java.util.function.BiConsumer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.IntPoint;
+import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.StoredField;
 
 public class MetricPath
 {
@@ -13,6 +15,7 @@ public class MetricPath
     public static final String FIELD_PATH = "path";
     public static final String FIELD_LENGTH = "length";
     public static final String FIELD_PART_PREFIX = "p";
+    public static final String FIELD_OFFSET = "offset";
 
     public static Document toDocument(String path)
     {
@@ -35,9 +38,22 @@ public class MetricPath
         return doc;
     }
 
-    public static String fromDocument(Document doc)
+    public static Document toDocument(String path, long offset)
+    {
+        Document doc = toDocument(path);
+        doc.add(new StoredField(FIELD_OFFSET, offset));
+
+        return doc;
+    }
+
+    public static String getPathFromDocument(Document doc)
     {
         return doc.getField(FIELD_PATH).stringValue();
+    }
+
+    public static long getOffsetFromDocument(Document doc)
+    {
+        return doc.getField(FIELD_OFFSET).numericValue().longValue();
     }
 
     public static int iterateOnElements(String path, BiConsumer<String, Integer> f)
