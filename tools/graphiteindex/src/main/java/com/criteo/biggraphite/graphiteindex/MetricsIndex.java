@@ -28,48 +28,30 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.NRTCachingDirectory;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.automaton.RegExp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Lucene-based Graphite metrics index.
+ *
+ * TODO(d.forest): switch from String to ByteBuffer to minimize extra garbage/copies?
+ *
+ * TODO(d.forest): this could probably be split in three stages:
+ * - RAM: for memtable index (with NRT)
+ * - FS-RW: for read-write on-disk index, during sstable write/merge (with NRT)
+ * - FS-RO: for read-only on-disk index consultation (without NRT, without writer)
+ */
 public class MetricsIndex
     implements Closeable
 {
     private static final Logger logger = LoggerFactory.getLogger(MetricsIndex.class);
 
-    // XXX(d.forest): probably useless since memtables do not have sstable offsets...
-    public static void copyRamToFilesystemAndForceMerge(
-        final MetricsIndex ram, final MetricsIndex fs
-    )
-        throws IllegalStateException, IOException
-    {
-        if (!ram.isInMemory()) {
-            throw new IllegalStateException("Attempting to copy from a FS-based index");
-        }
-        if (fs.isInMemory()) {
-            throw new IllegalStateException("Attempting to copy to a Memory-based index");
-        }
+    public final String name;
+    public final Optional<Path> indexPath;
 
-        // Ensure Directory is up to date and references to previous generation files were dropped.
-        ram.writer.commit();
-        ram.searcherMgr.maybeRefreshBlocking();
-
-        // Copy the contents of the RAM directory into FS directory
-        for (String fileName : ram.directory.listAll()) {
-            fs.directory.copyFrom(ram.directory, fileName, fileName, IOContext.DEFAULT);
-        }
-
-        // Force final merge of index segments into a single one.
-        fs.initialize();
-        fs.writer.forceMerge(1);
-        fs.forceCommit();
-    }
-
-    private final String name;
-    private final Optional<Path> indexPath;
     private Directory directory;
     private IndexWriter writer;
     private SearcherManager searcherMgr;
@@ -84,6 +66,9 @@ public class MetricsIndex
     public MetricsIndex(String name, Optional<Path> indexPath)
         throws IOException
     {
+        IndexWriterConfig config = new IndexWriterConfig();
+        // XXX(d.forest): do we want a different setRAMBufferSizeMB?
+
         Directory directory;
         if (indexPath.isPresent()) {
             directory = FSDirectory.open(indexPath.get());
@@ -98,27 +83,6 @@ public class MetricsIndex
 
         this.name = name;
         this.indexPath = indexPath;
-        this.directory = directory;
-
-        initialize();
-    }
-
-    private synchronized void initialize()
-        throws IOException
-    {
-        if (reopener != null) {
-            reopener.close();
-        }
-        if (searcherMgr != null) {
-            searcherMgr.close();
-        }
-        if (writer != null) {
-            writer.close();
-        }
-
-        IndexWriterConfig config = new IndexWriterConfig();
-        // XXX(d.forest): do we want a different setRAMBufferSizeMB?
-
         this.directory = directory;
         this.writer = new IndexWriter(directory, config);
         this.searcherMgr = new SearcherManager(writer, new SearcherFactory());
@@ -151,6 +115,24 @@ public class MetricsIndex
             searcherMgr.maybeRefreshBlocking();
         } catch(IOException e) {
             logger.error("{} - Cannot commit or refresh searchers", name, e);
+        }
+    }
+
+    /**
+     * Forces Lucene to merge index segments, then commits to drop old segments.
+     * It is currently used as a final step in index construction to compress everything
+     * into a single index segment.
+     * This can be slow, and should not be used frequently (currently once per index).
+     */
+    public synchronized void forceMerge()
+    {
+        logger.debug("{} - Forcing merge of index segments", name);
+
+        try {
+            writer.forceMerge(1);
+            forceCommit();
+        } catch(IOException e) {
+            logger.error("{} - Cannot force merge of index segments", name, e);
         }
     }
 
