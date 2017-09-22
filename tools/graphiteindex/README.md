@@ -8,9 +8,14 @@ follows the same lifecycle.
 
 ## General ideas
 
+
+
 ## TODO
 
-We may want/need to add rowKey token value to the Lucene index.
+More specific suggestions and TODOs can be found by grepping the source code
+for `XXX|FIXME|TODO` :-)
+
+- We may want/need to add rowKey token value to the Lucene index.
 
 
 ### Index management (Memtable + SSTables)
@@ -29,7 +34,7 @@ Necessary for querying and truncation.
   - SASIIndex::searcherFor
 - org.apache.cassandra.index.sasi.SSTableIndex
   - SSTableIndex.DecoratedKeyFetcher is used as keyFetcher everywhere (and
-    trivially makes use of `sstable.keyAt(offset)`
+    trivially makes use of `sstable.keyAt(offset)`)
 - org.apache.cassandra.index.sasi.plan.QueryPlan
   - QueryPlan.ResultIterator
 - org.apache.cassandra.index.sasi.plan.QueryController
@@ -76,4 +81,14 @@ using the CQL `LIKE` operator with a Graphite globbing pattern:
 
 ```
 SELECT * FROM metadata WHERE metric_path LIKE 'some.*.gl{o,bb}ing.p[a-t]t?rn';
+```
+
+
+### Debugging
+
+To make it easier to follow what is happening, set the logging level to TRACE
+for the whole `graphiteindex` subtree:
+
+```
+nodetool setlogginglevel com.criteo.biggraphite.graphiteindex trace
 ```
