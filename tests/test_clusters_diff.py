@@ -132,13 +132,14 @@ class TestClustersDiff(unittest.TestCase):
     def test_get_url_from_query(self):
         """Should correctly create an url from a query."""
         host = "host"
+        prefix = "foo."
         query = "query 1,*()"
         from_param = "-24hours"
         until_param = "-2minutes"
 
         predicted_url = ("http://host/render/?noCache&format=json&from=-24hours" +
-                         "&until=-2minutes&target=query%201%2C%2A%28%29")
-        url = clusters_diff._get_url_from_query(host, query, from_param, until_param)
+                         "&until=-2minutes&target=foo.query%201%2C%2A%28%29")
+        url = clusters_diff._get_url_from_query(host, prefix, query, from_param, until_param)
 
         self.assertEquals(predicted_url, url)
 
@@ -150,7 +151,7 @@ class TestClustersDiff(unittest.TestCase):
             urlopen.return_value.read.return_value = mocked_return_val
 
             host_result = clusters_diff.fetch_queries(
-                "host", "auth_key", ["query"], "-24hours", "-2minutes",
+                "host", "prefix", "auth_key", ["query"], "-24hours", "-2minutes",
                 "5.0", "0.01", lambda x: x)
 
             self.assertEquals(len(host_result.diffable_queries), 1)
@@ -175,7 +176,7 @@ class TestClustersDiff(unittest.TestCase):
             urlopen.side_effect = clusters_diff.RequestError('not found')
 
             host_result = clusters_diff.fetch_queries(
-                "host", "auth_key", ["query"], "-24hours", "-2minutes",
+                "host", "prefix", "auth_key", ["query"], "-24hours", "-2minutes",
                 "5.0", "0.01", lambda x: None)
 
             self.assertEquals(len(host_result.diffable_queries), 1)

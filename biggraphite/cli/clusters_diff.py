@@ -25,6 +25,7 @@ import json
 import base64
 import time
 import sys
+import logging
 import urllib
 import collections
 import progressbar
@@ -433,23 +434,23 @@ def _read_queries(filename):
     return queries
 
 
-def _get_url_from_query(host, query, from_param, until_param):
+def _get_url_from_query(host, prefix, query, from_param, until_param):
     """Encode an url from a given query for a given host."""
     # If the query is not already url-friendly, we make it be
     if "%" not in query:
         query = urllib.quote(query)
 
     url = "http://%s/render/?noCache&format=json&from=%s&until=%s&target=%s" % (
-        host, from_param, until_param, query)
+        host, from_param, until_param, prefix + query)
     return url
 
 
-def fetch_queries(host, auth_key, queries,
+def fetch_queries(host, prefix, auth_key, queries,
                   from_param, until_param, timeout_s, threshold, progress_cb):
     """Return a list of HostResult."""
     host_result = HostResult(host)
     for n, query in enumerate(queries):
-        url = _get_url_from_query(host, query, from_param, until_param)
+        url = _get_url_from_query(host, prefix, query, from_param, until_param)
         request = Request(url, auth_key, timeout_s)
         try:
             diffable_targets, time_s = request.execute()
@@ -521,6 +522,8 @@ def _parse_opts(args):
     comparison_params = parser.add_argument_group("comparison parameters")
     comparison_params.add_argument("--hosts", metavar="HOST", dest="hosts", action="store",
                                    nargs=2, help="hosts to compare", required=True)
+    comparison_params.add_argument("--prefixes", metavar="PREFIX", dest="prefixes", action="store",
+                                   nargs=2, help="prefix for each host.", required=False, default="")
     comparison_params.add_argument("--input-file", metavar="FILENAME", dest="input_filename",
                                    action="store", help="text file containing one query per line",
                                    required=True)
@@ -553,7 +556,7 @@ def _parse_opts(args):
     opts = parser.parse_args(args)
 
     # compute authentication keys from netrc file
-    opts.auth_keys = []
+    opts.auth_keys = [None, None]
     for host in opts.hosts:
         auth = netrc.netrc().authenticators(host)
         if auth is not None:
@@ -561,7 +564,7 @@ def _parse_opts(args):
             password = auth[2]
             opts.auth_keys.append(base64.encodestring(username + ":" + password).replace("\n", ""))
         else:
-            raise netrc.NetrcParseError("No authenticators for %s" % host)
+            logging.info(netrc.NetrcParseError("No authenticators for %s" % host))
 
     opts.threshold /= 100
 
@@ -579,12 +582,12 @@ def main(args=None):
 
     # host_result_1
     pbar = progressbar.ProgressBar(maxval=len(queries)).start()
-    host_result_1 = fetch_queries(opts.hosts[0], opts.auth_keys[0], queries, opts.from_param,
+    host_result_1 = fetch_queries(opts.hosts[0], opts.prefixes[0], opts.auth_keys[0], queries, opts.from_param,
                                   opts.until_param, opts.timeout_s, opts.threshold, pbar.update)
     pbar.finish()
     # host_result_2
     pbar = progressbar.ProgressBar(maxval=len(queries)).start()
-    host_result_2 = fetch_queries(opts.hosts[1], opts.auth_keys[1], queries, opts.from_param,
+    host_result_2 = fetch_queries(opts.hosts[1], opts.prefixes[1], opts.auth_keys[1], queries, opts.from_param,
                                   opts.until_param, opts.timeout_s, opts.threshold, pbar.update)
     pbar.finish()
 
@@ -618,7 +621,12 @@ def main(args=None):
         )
 
     # print outputs
-    printer = TxtPrinter(fp=open(opts.output_filename, 'w'))
+    if not opts.output_filename:
+        fp = sys.stdout
+    else:
+        fp = open(opts.output_filename, 'w')
+
+    printer = TxtPrinter(fp=fp)
     printer.print_parameters(opts)
 
     printer.print_times(
