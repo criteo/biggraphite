@@ -156,7 +156,7 @@ public class MetricsIndex
 
     public void insert(String path)
     {
-        logger.debug("{} - Inserting '{}'", name, path);
+        logger.trace("{} - Inserting '{}'", name, path);
 
         Document doc = MetricPath.toDocument(path);
 
@@ -169,7 +169,7 @@ public class MetricsIndex
 
     public void insert(String path, long offset)
     {
-        logger.debug("{} - Inserting '{}' with offset {}", name, path);
+        logger.trace("{} - Inserting '{}' with offset {}", name, path);
 
         Document doc = MetricPath.toDocument(path, offset);
 
@@ -199,7 +199,7 @@ public class MetricsIndex
     private <T> List<T> search(String pattern, Function<Document, T> handler)
     {
         BooleanQuery query = patternToQuery(pattern);
-        logger.debug("{} - Searching for '{}', generated query: {}", name, pattern, query);
+        logger.trace("{} - Searching for '{}', generated query: {}", name, pattern, query);
 
         ArrayList<T> results = new ArrayList<>();
         Collector collector = new MetricsIndexCollector(
