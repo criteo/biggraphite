@@ -7,10 +7,12 @@ import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.StoredField;
+import java.util.regex.Pattern;
 
 public class MetricPath
 {
-    public static final char ELEMENT_SEPARATOR = '.';
+    public static final String ELEMENT_SEPARATOR = ".";
+    public static final String ELEMENT_SEPARATOR_REGEXP = Pattern.quote(ELEMENT_SEPARATOR);
 
     public static final String FIELD_PATH = "path";
     public static final String FIELD_LENGTH = "length";
@@ -58,21 +60,11 @@ public class MetricPath
 
     public static int iterateOnElements(String path, BiConsumer<String, Integer> f)
     {
-        int depth = 0;
-        int start = 0;
-        int end = path.indexOf(ELEMENT_SEPARATOR, start);
-        do {
-            if (end == -1) {
-                end = path.length();
-            }
+        String[] elements = path.split(ELEMENT_SEPARATOR_REGEXP);
+        for (int i = 0; i < elements.length; i++) {
+            f.accept(elements[i], i);
+        }
 
-            f.accept(path.substring(start, end), depth);
-
-            depth += 1;
-            start = end + 1;
-            end = path.indexOf(ELEMENT_SEPARATOR, start);
-        } while (start < path.length());
-
-        return depth;
+        return elements.length;
     }
 }
