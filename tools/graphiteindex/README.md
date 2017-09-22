@@ -6,19 +6,60 @@ Cassandra implementation of SSTable-attached secondary indices (SASI) and
 follows the same lifecycle.
 
 
-## Build
+## General ideas
+
+## TODO
+
+We may want/need to add rowKey token value to the Lucene index.
+
+
+### Index management (Memtable + SSTables)
+
+Necessary for querying and truncation.
+
+- org.apache.cassandra.index.sasi.conf.DataTracker
+
+
+### Memtable index
+
+
+### Querying
+
+- org.apache.cassandra.index.sasi.SASIIndex
+  - SASIIndex::searcherFor
+- org.apache.cassandra.index.sasi.SSTableIndex
+  - SSTableIndex.DecoratedKeyFetcher is used as keyFetcher everywhere (and
+    trivially makes use of `sstable.keyAt(offset)`
+- org.apache.cassandra.index.sasi.plan.QueryPlan
+  - QueryPlan.ResultIterator
+- org.apache.cassandra.index.sasi.plan.QueryController
+  - Use index tracking to run query over the whole dataset
+  - QueryController::getPartition
+
+
+### Additional topics
+
+- Index truncation/drop (depends on index management)
+- Misc tasks exported by the Index interface (see SASIIndex too)
+- Contemplate switching to ByteBuffer instead of String all around to reduce
+  garbage and copies
+
+
+## Usage
+
+### Build
 
 `mvn install -DpackageForDeploy` will generate an uber-jar with shaded
 dependencies in the `target/` directory.
 
 
-## Install
+### Install
 
 Linking or copying the jar file to Cassandra's classpath (e.g. the `lib/`
 directory) will make it available after a service restart.
 
 
-## Use
+### Use
 
 Using your favourite way to run CQL queries against Cassandra (e.g. `cqlsh`) you
 can create a custom index on a (non-primary-key, non-clustering-key) column that
