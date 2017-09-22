@@ -12,6 +12,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanClause.Occur;
@@ -36,6 +37,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Lucene-based Graphite metrics index.
+ *
+ * TODO(d.forest): provide support for globstar (**)
+ *
+ * TODO(d.forest): provide support for autocompletion
  *
  * TODO(d.forest): switch from String to ByteBuffer to minimize extra garbage/copies?
  *
@@ -66,11 +71,13 @@ public class MetricsIndex
     public MetricsIndex(String name, Optional<Path> indexPath)
         throws IOException
     {
-        IndexWriterConfig config = new IndexWriterConfig();
+        IndexWriterConfig config = new IndexWriterConfig()
+            .setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
         // XXX(d.forest): do we want a different setRAMBufferSizeMB?
 
         Directory directory;
         if (indexPath.isPresent()) {
+            logger.trace("{} - Opening FS directory '{}'", name, indexPath.get());
             directory = FSDirectory.open(indexPath.get());
 
             // Adds a RAMDirectory cache, which helps with low-frequently updates and
@@ -78,6 +85,7 @@ public class MetricsIndex
             // 8MB max segment size, 64MB max cached bytes.
             directory = new NRTCachingDirectory(directory, 8, 64);
         } else {
+            logger.trace("{} - Creating RAM directory", name);
             directory = new RAMDirectory();
         }
 
@@ -88,7 +96,7 @@ public class MetricsIndex
         this.searcherMgr = new SearcherManager(writer, new SearcherFactory());
 
         // Enforce changes becoming visible to search within 10 to 30 seconds.
-        this.reopener = new ControlledRealTimeReopenThread<>(this.writer, searcherMgr, 30, 10);
+        this.reopener = new ControlledRealTimeReopenThread<>(writer, searcherMgr, 30, 10);
         this.reopener.start();
     }
 
@@ -151,7 +159,7 @@ public class MetricsIndex
 
     public void insert(String path, long offset)
     {
-        logger.trace("{} - Inserting '{}' with offset {}", name, path);
+        logger.trace("{} - Inserting '{}' with offset {}", name, path, offset);
 
         Document doc = MetricPath.toDocument(path, offset);
 
@@ -216,8 +224,7 @@ public class MetricsIndex
         int length = MetricPath.iterateOnElements(
             pattern,
             (element, depth) -> {
-                // Wildcard-only fields do not filter anything
-                // TODO(d.forest): detect several wildcards?
+                // Wildcard-only fields do not filter anything.
                 if (element == "*") {
                     return;
                 }
@@ -252,6 +259,7 @@ public class MetricsIndex
      */
     private String graphiteToRegex(String query)
     {
+        // TODO(d.forest): maybe make this less naive / checked?
         return query
             .replace('{', '(')
             .replace('}', ')')
