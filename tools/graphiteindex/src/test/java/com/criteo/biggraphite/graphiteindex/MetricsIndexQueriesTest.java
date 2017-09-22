@@ -43,14 +43,6 @@ public class MetricsIndexQueriesTest {
             ),
         },
         {
-            "lots.of.wildcards.*****",
-            setOf(
-                "lots.of.wildcards.a",
-                "lots.of.wildcards.b",
-                "lots.of.wildcards.c"
-            ),
-        },
-        {
             "metrics.match{ed_by,ing}.s[ao]me.regexp.?[0-9]",
             setOf(
                 "metrics.matched_by.same.regexp.b2",
@@ -66,9 +58,6 @@ public class MetricsIndexQueriesTest {
 
         "a.few.metrcs.a",
         "a.few.metrocs.z",
-
-        "lots.at.wildcard.a",
-        "lots.of.wildchord.b",
 
         "metrics.matxing.some.regexp.a1",
         "metrics.matchacha.same.regexp.z5"
