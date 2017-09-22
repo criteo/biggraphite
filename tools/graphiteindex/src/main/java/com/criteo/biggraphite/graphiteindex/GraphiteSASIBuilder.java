@@ -99,26 +99,7 @@ public class GraphiteSASIBuilder
                 final long keyPosition = keys.getKeyPosition();
 
                 indexWriter.startPartition(key, keyPosition);
-
-                try {
-                    RowIndexEntry<?> rowIndexEntry =
-                        sstable.getPosition(key, SSTableReader.Operator.EQ);
-
-                    // Seek to row position and skip rowKey.
-                    dataFile.seek(rowIndexEntry.position);
-                    ByteBufferUtil.skipShortLength(dataFile);
-
-                    try (
-                        SSTableIdentityIterator partition =
-                        SSTableIdentityIterator.create(sstable, dataFile, key)
-                    ) {
-                        while (partition.hasNext()) {
-                            indexWriter.nextUnfilteredCluster(partition.next());
-                        }
-                    }
-                } catch (IOException e) {
-                    throw new FSReadError(e, sstable.getFilename());
-                }
+                buildIndexForPartition(sstable, dataFile, key, indexWriter);
 
                 processedBytes += keyPosition - previousKeyPosition;
                 previousKeyPosition = keyPosition;
@@ -128,6 +109,32 @@ public class GraphiteSASIBuilder
         }
         catch(IOException e) {
             logger.error("Could not build GraphiteSASI", e);
+        }
+    }
+
+    protected void buildIndexForPartition(
+        SSTableReader sstable, RandomAccessReader dataFile, DecoratedKey key,
+        PerSSTableIndexWriter indexWriter
+    )
+        throws FSReadError
+    {
+        try {
+            RowIndexEntry<?> rowIndexEntry = sstable.getPosition(key, SSTableReader.Operator.EQ);
+
+            // Seek to row position and skip rowKey.
+            dataFile.seek(rowIndexEntry.position);
+            ByteBufferUtil.skipShortLength(dataFile);
+
+            try (
+                SSTableIdentityIterator partition =
+                SSTableIdentityIterator.create(sstable, dataFile, key)
+            ) {
+                while (partition.hasNext()) {
+                    indexWriter.nextUnfilteredCluster(partition.next());
+                }
+            }
+        } catch (IOException e) {
+            throw new FSReadError(e, sstable.getFilename());
         }
     }
 }
