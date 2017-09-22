@@ -21,10 +21,8 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.PartitionColumns;
-import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.RangeTombstone;
 import org.apache.cassandra.db.ReadCommand;
-import org.apache.cassandra.db.ReadExecutionController;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.lifecycle.Tracker;
@@ -32,15 +30,11 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
-import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Row;
-import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.Index.Indexer;
-import org.apache.cassandra.index.Index.Searcher;
 import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.transactions.IndexTransaction;
@@ -54,14 +48,12 @@ import org.apache.cassandra.notifications.MemtableSwitchedNotification;
 import org.apache.cassandra.notifications.SSTableAddedNotification;
 import org.apache.cassandra.notifications.SSTableListChangedNotification;
 import org.apache.cassandra.schema.IndexMetadata;
-import org.apache.cassandra.utils.AbstractIterator;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.cassandra.config.DatabaseDescriptor;
 
 public class GraphiteSASI
     implements Index, INotificationConsumer
@@ -83,6 +75,8 @@ public class GraphiteSASI
             errors.add(cfm.partitioner.getClass().getSimpleName() + " is not supported");
         }
 
+        // Target is not a custom option, it contains the keyspace/table/column and is always
+        // provided.
         String targetColumn = options.get("target");
         if (targetColumn == null) {
             errors.add("Missing target column");
@@ -123,19 +117,7 @@ public class GraphiteSASI
         // FIXME(d.forest): column type is assumed to be text
         this.column = TargetParser.parse(baseCfs.metadata, config).left;
 
-        Tracker tracker = baseCfs.getTracker();
-        tracker.subscribe(this);
-
-        SortedSet<SSTableReader> toRebuild = new TreeSet<>(
-            (a, b) -> Integer.compare(a.descriptor.generation, b.descriptor.generation)
-        );
-        for (SSTableReader sstable : tracker.getView().liveSSTables()) {
-            toRebuild.add(sstable);
-        }
-
-        CompactionManager.instance.submitIndexBuild(
-            new GraphiteSASIBuilder(baseCfs, column, toRebuild)
-        );
+        baseCfs.getTracker().subscribe(this);
     }
 
     @Override public IndexMetadata getIndexMetadata()
@@ -145,7 +127,20 @@ public class GraphiteSASI
 
     @Override public Callable<?> getInitializationTask()
     {
-        return null;
+        return () -> {
+            SortedSet<SSTableReader> toRebuild = new TreeSet<>(
+                (a, b) -> Integer.compare(a.descriptor.generation, b.descriptor.generation)
+            );
+            for (SSTableReader sstable : baseCfs.getTracker().getView().liveSSTables()) {
+                toRebuild.add(sstable);
+            }
+
+            CompactionManager.instance.submitIndexBuild(
+                new GraphiteSASIBuilder(baseCfs, column, toRebuild)
+            );
+
+            return null;
+        };
     }
 
     @Override public Callable<?> getMetadataReloadTask(IndexMetadata indexMetadata)
@@ -226,23 +221,15 @@ public class GraphiteSASI
         IndexTransaction.Type transactionType
     )
     {
+        // TODO(d.forest): fill in Indexer methods for in-band index updates.
+        // TODO(d.forest): SASI also adjusts Cassandra's memtable on-heap memory usage
+        //                 when inserting new values in their in-memory index here, this
+        //                 seems like a good practice.
         return new Indexer() {
-            @Override public void insertRow(Row row)
-            {
-                // TODO(d.forest)
-            }
-
-            @Override public void updateRow(Row oldRow, Row newRow)
-            {
-                // TODO(d.forest)
-            }
-
-            @Override public void removeRow(Row row)
-            {
-                // TODO(d.forest)
-            }
-
             @Override public void begin() {}
+            @Override public void insertRow(Row row) {}
+            @Override public void updateRow(Row oldRow, Row newRow) {}
+            @Override public void removeRow(Row row) {}
             @Override public void partitionDelete(DeletionTime deletionTime) {}
             @Override public void rangeTombstone(RangeTombstone tombstone) {}
             @Override public void finish() {}
