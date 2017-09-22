@@ -522,8 +522,9 @@ def _parse_opts(args):
     comparison_params = parser.add_argument_group("comparison parameters")
     comparison_params.add_argument("--hosts", metavar="HOST", dest="hosts", action="store",
                                    nargs=2, help="hosts to compare", required=True)
-    comparison_params.add_argument("--prefixes", metavar="PREFIX", dest="prefixes", action="store",
-                                   nargs=2, help="prefix for each host.", required=False, default="")
+    comparison_params.add_argument("--prefixes", metavar="PREFIX", dest="prefixes",
+                                   action="store", nargs=2, help="prefix for each host.",
+                                   required=False, default="")
     comparison_params.add_argument("--input-file", metavar="FILENAME", dest="input_filename",
                                    action="store", help="text file containing one query per line",
                                    required=True)
@@ -582,12 +583,14 @@ def main(args=None):
 
     # host_result_1
     pbar = progressbar.ProgressBar(maxval=len(queries)).start()
-    host_result_1 = fetch_queries(opts.hosts[0], opts.prefixes[0], opts.auth_keys[0], queries, opts.from_param,
+    host_result_1 = fetch_queries(opts.hosts[0], opts.prefixes[0], opts.auth_keys[0],
+                                  queries, opts.from_param,
                                   opts.until_param, opts.timeout_s, opts.threshold, pbar.update)
     pbar.finish()
     # host_result_2
     pbar = progressbar.ProgressBar(maxval=len(queries)).start()
-    host_result_2 = fetch_queries(opts.hosts[1], opts.prefixes[1], opts.auth_keys[1], queries, opts.from_param,
+    host_result_2 = fetch_queries(opts.hosts[1], opts.prefixes[1], opts.auth_keys[1],
+                                  queries, opts.from_param,
                                   opts.until_param, opts.timeout_s, opts.threshold, pbar.update)
     pbar.finish()
 
