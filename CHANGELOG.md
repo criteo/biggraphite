@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.9] - 2017-09-26
+### Fixed
+- Only update metadata timestamps when writing
+
+### New
+- New created_at field in metrics_metadata
+- Some work for the new GraphiteIndex, not ready yet.
+
 ## [0.8.8] - 2017-07-11
 ### Fixed
 - Bug in cleanup code (would remove intermediate directories)
@@ -94,10 +102,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.8...HEAD
-[0.8.7]: https://github.com/criteo/biggraphite/compare/v0.8.7...v0.8.8
-[0.8.6]: https://github.com/criteo/biggraphite/compare/v0.8.6...v0.8.7
-[0.8.5]: https://github.com/criteo/biggraphite/compare/v0.8.5...v0.8.6
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.9...HEAD
+[0.8.9]: https://github.com/criteo/biggraphite/compare/v0.8.8...v0.8.9
+[0.8.8]: https://github.com/criteo/biggraphite/compare/v0.8.7...v0.8.8
+[0.8.7]: https://github.com/criteo/biggraphite/compare/v0.8.6...v0.8.7
+[0.8.6]: https://github.com/criteo/biggraphite/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/criteo/biggraphite/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/criteo/biggraphite/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/criteo/biggraphite/compare/v0.8.2...v0.8.3
