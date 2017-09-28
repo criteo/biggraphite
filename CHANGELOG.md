@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Breaking Change
+- Renamed `created_at` -> `created_on`:
+  Before updating, run:
+	```
+  ALTER TABLE biggraphite_metadata.metrics_metadata ADD created_on timeuuid;
+  CREATE CUSTOM INDEX metrics_metadata_created_on_idx ON biggraphite_metadata.metrics_metadata (created_on) USING 'org.apache.cassandra.index.sasi.SASIIndex' WITH OPTIONS = {'mode': 'SPARSE'};
+  ```
+  After updating, run:
+	```
+  DROP CUSTOM INDEX metrics_metadata_created_at_idx;
+  ALTER TABLE biggraphite_metadata.metrics_metadata DROP created_at;
+  ```
 
 ## [0.8.9] - 2017-09-26
 ### Fixed
