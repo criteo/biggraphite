@@ -316,7 +316,7 @@ _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
 _METADATA_CREATION_CQL_METRICS_METADATA = str(
     "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
     "  name text,"
-    "  created_at  timeuuid,"
+    "  created_on  timeuuid,"
     "  updated_on  timeuuid,"
     "  read_on  timeuuid,"
     "  id uuid,"
@@ -325,8 +325,8 @@ _METADATA_CREATION_CQL_METRICS_METADATA = str(
     ");"
 )
 
-_METADATA_CREATION_CQL_METRICS_METADATA_CREATED_AT_INDEX = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (created_at)"
+_METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX = [
+    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (created_on)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'mode': 'SPARSE'"
@@ -398,7 +398,7 @@ _METADATA_CREATION_CQL = ([
 ] + _METADATA_CREATION_CQL_PATH_INDEXES
                           + _METADATA_CREATION_CQL_PARENT_INDEXES
                           + _METADATA_CREATION_CQL_ID_INDEXES
-                          + _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_AT_INDEX
+                          + _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX
                           + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
                           + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
 )
@@ -953,7 +953,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " WHERE name=?;" % self.keyspace_metadata
         )
         self.__insert_metrics_metadata_statement = __prepare(
-            "INSERT INTO \"%s\".metrics_metadata (name, created_at, updated_on, id, config)"
+            "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
             " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
         )
         self.__update_metric_read_on_metadata_statement = __prepare(
