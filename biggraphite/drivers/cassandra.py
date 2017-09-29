@@ -952,10 +952,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "UPDATE \"%s\".metrics_metadata SET updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
         )
-        self.__insert_metrics_metadata_statement = __prepare(
-            "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
-            " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
-        )
+        try:
+            # TODO: Remove that in the next version, but this will
+            # make the update easier.
+            self.__insert_metrics_metadata_statement = __prepare(
+                "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
+                " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
+            )
+        except cassandra.DriverException as e:
+            logging.debug(e)
+            self.__insert_metrics_metadata_statement = __prepare(
+                "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
+                " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
+            )
         self.__update_metric_read_on_metadata_statement = __prepare(
             "UPDATE \"%s\".metrics_metadata SET read_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
