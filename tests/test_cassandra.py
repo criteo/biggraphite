@@ -388,6 +388,14 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.create_metric(metric)
         self.assertEquals(self.accessor.has_metric(metric.name), True)
 
+    def test_delete_metric(self):
+        metric = self.make_metric("a.b.c.d.e.f")
+
+        self.accessor.create_metric(metric)
+        self.assertEquals(self.accessor.has_metric(metric.name), True)
+        self.accessor.delete_metric(metric.name)
+        self.assertEquals(self.accessor.has_metric(metric.name), False)
+
     def test_repair(self):
         # TODO(c.chary): Add better test for repair()
         self.accessor.repair()

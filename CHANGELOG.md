@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   ALTER TABLE biggraphite_metadata.metrics_metadata DROP created_at;
   ```
 
+## New
+- `bgutil delete` to delete metrics
+
 ## [0.8.9] - 2017-09-26
 ### Fixed
 - Only update metadata timestamps when writing

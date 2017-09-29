@@ -733,6 +733,24 @@ class Accessor(object):
         """
         self._check_connected()
 
+    @abc.abstractmethod
+    def delete_metric(self, name):
+        """Delete a metric.
+
+        Args:
+          name: metric name.
+        """
+        self._check_connected()
+
+    @abc.abstractmethod
+    def delete_directory(self, name):
+        """Delete a directory.
+
+        Args:
+          name: directory name.
+        """
+        self._check_connected()
+
     def _check_connected(self):
         if not self.is_connected:
             raise Error("Accessor's connect() wasn't called")

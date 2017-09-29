@@ -154,6 +154,12 @@ class _MemoryAccessor(bg_accessor.Accessor):
         metric.metadata = updated_metadata
         self._name_to_metric[name] = metric
 
+    def delete_metric(self, name):
+        del self._name_to_metric[name]
+
+    def delete_directory(self, name):
+        self._directory_names.remove(name)
+
     @staticmethod
     def __glob_names(names, glob):
         results = bg_glob.glob(names, glob)
