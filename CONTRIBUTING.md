@@ -56,7 +56,7 @@ pip install -r tests-requirements.txt
 pip install -e .
 
 # Install Cassandra
-export CASSANDRA_VERSION=3.10
+export CASSANDRA_VERSION=3.11.0
 wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
 tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
 export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}

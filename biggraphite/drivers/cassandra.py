@@ -952,13 +952,31 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "UPDATE \"%s\".metrics_metadata SET updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
         )
-        self.__insert_metrics_metadata_statement = __prepare(
-            "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
-            " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
-        )
+        try:
+            # TODO: Remove that in the next version, but this will
+            # make the update easier.
+            self.__insert_metrics_metadata_statement = __prepare(
+                "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
+                " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
+            )
+        except cassandra.DriverException as e:
+            logging.debug(e)
+            self.__insert_metrics_metadata_statement = __prepare(
+                "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
+                " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
+            )
         self.__update_metric_read_on_metadata_statement = __prepare(
             "UPDATE \"%s\".metrics_metadata SET read_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
+        )
+        self.__delete_metric = __prepare(
+            "DELETE FROM \"%s\".metrics WHERE name=?;" % (self.keyspace_metadata)
+        )
+        self.__delete_directory = __prepare(
+            "DELETE FROM \"%s\".directories WHERE name=?;" % (self.keyspace_metadata)
+        )
+        self.__delete_metric_metadata = __prepare(
+            "DELETE FROM \"%s\".metrics_metadata WHERE name=?;" % (self.keyspace_metadata)
         )
 
     def _connect_clusters(self):
@@ -1137,6 +1155,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self._execute_metadata(
             self.__update_metric_metadata_statement,
             [metadata_dict, encoded_metric_name])
+
+    def delete_metric(self, name):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).delete_metric(name)
+        self._execute_metadata(self.__delete_metric, [name])
+        self._execute_metadata(self.__delete_metric_metadata, [name])
+
+    def delete_directory(self, directory):
+        """See bg_accessor.Accessor."""
+        super(_CassandraAccessor, self).delete_directory(directory)
+        self._execute_metadata(self.__delete_directory, [directory])
 
     def _create_parent_dirs_queries(self, components):
         queries = []
