@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright 2016 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,11 +18,12 @@ import time
 import Queue
 import prometheus_client
 
-# Version 0.9.15 (the one from PIP) does not have the "database" module.
-# To make use of the plugin with carbon, you will need a version that has
-# upstream commit 3d260b0f663b5577bc3a0fc3f0741802109a28c4 or apply this
-# patch: https://goo.gl/1gAcz1 .
-# test-requirements.txt as a URL pinned at the correct version.
+try:
+    from graphite.tags import utils as tags_utils
+    HAVE_TAGS = True
+except ImportError:
+    HAVE_TAGS = False
+
 from carbon import database
 from carbon import log
 from twisted.internet import task
@@ -31,6 +31,8 @@ from twisted.internet import task
 from biggraphite import utils
 from biggraphite import graphite_utils
 from biggraphite import accessor
+if HAVE_TAGS:
+    from biggraphite.plugins import tags
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102
@@ -64,8 +66,16 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     _SYNC_EVERY_N_WRITE = 10
 
     def __init__(self, settings):
+        """Create a BigGraphiteDatabase."""
+        try:
+            super(BigGraphiteDatabase, self).__init__(settings)
+        except TypeError:
+            # For backward compatibility with 1.0.
+            super(BigGraphiteDatabase, self).__init__()
+
         self._cache = None
         self._accessor = None
+        self._tagdb = None
         self._settings = settings
         self._metricsToCreate = Queue.Queue()
         self._sync_countdown = 0
@@ -81,6 +91,20 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # We are included first, but we don't want to create the reactor.
         from twisted.internet import reactor
         return reactor
+
+    @property
+    def tagdb(self):
+        if not HAVE_TAGS:
+            return None
+
+        if not self._tagdb:
+            accessor = self.accessor
+            cache = self.cache
+            if accessor and cache:
+                self._tagdb = tags.BigGraphiteTagDB(
+                    accessor=accessor, metadata_cache=cache)
+
+        return self._tagdb
 
     @property
     def accessor(self):
@@ -100,8 +124,16 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         return self._cache
 
+    def encode(self, metric_name):
+        if HAVE_TAGS:
+            return tags_utils.TaggedSeries.encode(metric_name)
+        else:
+            return metric_name
+
     @WRITE_TIME.time()
     def write(self, metric_name, datapoints):
+        metric_name = self.encode(metric_name)
+
         # Get a Metric object from metric name.
         metric = self.cache.get_metric(metric_name=metric_name, touch=True)
         if not metric:
@@ -123,6 +155,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     @CREATE_TIME.time()
     def create(self, metric_name, retentions, xfilesfactor, aggregation_method):
+        orig_metric_name = metric_name
+        metric_name = self.encode(metric_name)
+
         metadata = accessor.MetricMetadata(
             aggregator=accessor.Aggregator.from_carbon_name(aggregation_method),
             retention=accessor.Retention.from_carbon(retentions),
@@ -130,10 +165,18 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         )
         metric = self.cache.make_metric(metric_name, metadata)
         self.cache.cache_set(metric_name, metric)
-        self._createAsync(metric)
+        self._createAsync(metric, orig_metric_name)
+
+    def tag(self, metric):
+        # FIXME: We probably don't want this to be synchronous.
+        if not HAVE_TAGS:
+            return
+        self.tagdb.tag_series(metric)
 
     def getMetadata(self, metric_name, key):
+        metric_name = self.encode(metric_name)
         metadata = self.cache.get_metric(metric_name=metric_name, touch=True)
+
         if not metadata:
             raise ValueError("%s: No such metric" % metric_name)
 
@@ -148,6 +191,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             raise ValueError(msg)
 
     def setMetadata(self, metric_name, key, value):
+        metric_name = self.encode(metric_name)
         old_value = self.getMetadata(metric_name, key)
         if old_value != value:
             metadata = self.cache.get_metric(metric_name=metric_name, touch=True)
@@ -191,8 +235,14 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         if self._accessor:
             self.accessor.background()
 
-    def _createAsync(self, metric):
-        self._metricsToCreate.put(metric)
+    def _createAsync(self, metric, metric_name):
+        """Add metric to the queue of metrics to create.
+
+        Args:
+          metric: a Metric object
+          metric_name: the original, un-encoded metric name
+        """
+        self._metricsToCreate.put((metric, metric_name))
 
     def _createMetrics(self):
         # We create metrics in a separate thread because this is potentially
@@ -216,7 +266,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def _createOneMetric(self):
         try:
-            metric = self._metricsToCreate.get(True, 1)
+            metric, metric_name = self._metricsToCreate.get(True, 1)
         except Queue.Empty:
             return
 
@@ -234,6 +284,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             log.creates("creating database metric %s" % metric.name)
 
         self.cache.create_metric(metric)
+        self.tag(metric_name)
         CREATES.inc()
 
 
@@ -246,7 +297,13 @@ class MultiDatabase(database.TimeSeriesDatabase):
     This class allows using multiple existing database plugins at the same time.
     """
 
-    def __init__(self, dbs):
+    def __init__(self, settings, dbs):
+        """Create a MultiDatabase."""
+        try:
+            super(MultiDatabase, self).__init__(settings)
+        except TypeError:
+            super(MultiDatabase, self).__init__()
+
         assert len(dbs) > 1
         self._dbs = dbs
         # Support the intersection of both.
@@ -300,9 +357,10 @@ if hasattr(database, 'WhisperDatabase'):
         aggregationMethods = BigGraphiteDatabase.aggregationMethods
 
         def __init__(self, settings):
+            """Create a WhisperAndBigGraphiteDatabase."""
             self._biggraphite = BigGraphiteDatabase(settings)
             self._whisper = database.WhisperDatabase(settings)
-            MultiDatabase.__init__(self, [self._whisper, self._biggraphite])
+            MultiDatabase.__init__(self, settings, [self._whisper, self._biggraphite])
 
     class BigGraphiteAndWhisperDatabase(MultiDatabase):
         """BigGraphite then Whisper."""
@@ -311,6 +369,7 @@ if hasattr(database, 'WhisperDatabase'):
         aggregationMethods = BigGraphiteDatabase.aggregationMethods
 
         def __init__(self, settings):
+            """Create a BigGraphiteDatabaseAndWhisper."""
             self._biggraphite = BigGraphiteDatabase(settings)
             self._whisper = database.WhisperDatabase(settings)
-            MultiDatabase.__init__(self, [self._biggraphite, self._whisper])
+            MultiDatabase.__init__(self, settings, [self._biggraphite, self._whisper])
