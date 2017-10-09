@@ -133,7 +133,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._createAsync(metric)
 
     def getMetadata(self, metric_name, key):
-        metadata = self.cache.get_metric(metric_name=metric_name)
+        metadata = self.cache.get_metric(metric_name=metric_name, touch=True)
         if not metadata:
             raise ValueError("%s: No such metric" % metric_name)
 
@@ -150,7 +150,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def setMetadata(self, metric_name, key, value):
         old_value = self.getMetadata(metric_name, key)
         if old_value != value:
-            metadata = self.cache.get_metric(metric_name=metric_name)
+            metadata = self.cache.get_metric(metric_name=metric_name, touch=True)
             if not metadata:
                 raise ValueError("%s: No such metric" % metric_name)
 
@@ -220,7 +220,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         except Queue.Empty:
             return
 
-        existing_metric = self.accessor.get_metric(metric.name)
+        existing_metric = self.accessor.get_metric(metric.name, touch=True)
 
         if metric == existing_metric:
             return
