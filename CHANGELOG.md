@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.8.10] - 2017-10-12
 ### Breaking Change
 - Renamed `created_at` -> `created_on`:
   Before updating, run:
@@ -18,7 +20,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   ALTER TABLE biggraphite_metadata.metrics_metadata DROP created_at;
   ```
 
-## New
+### Fixed
+- Carbon: make sure we touch metrics on all code path
+
+### New
 - `bgutil delete` to delete metrics
 
 ## [0.8.9] - 2017-09-26
@@ -117,7 +122,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.9...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.10...HEAD
+[0.8.10]: https://github.com/criteo/biggraphite/compare/v0.8.9...v0.8.10
 [0.8.9]: https://github.com/criteo/biggraphite/compare/v0.8.8...v0.8.9
 [0.8.8]: https://github.com/criteo/biggraphite/compare/v0.8.7...v0.8.8
 [0.8.7]: https://github.com/criteo/biggraphite/compare/v0.8.6...v0.8.7
