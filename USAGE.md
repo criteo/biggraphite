@@ -10,7 +10,9 @@ Configure Cassandra (you will probably want to tweak the keyspace).
 ```bash
 $ ${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
 # Can be slow on HDD. Restart-it if it timeouts.
-$ bgutil --cassandra_contact_points=localhost syncdb
+$ bgutil --cassandra_contact_points=localhost syncdb --storage-schemas storage-schemas.conf
+# To create arbitrary retentions and see the schema:
+$ bgutil --cassandra_contact_points=localhost syncdb --dry_run --retention "86400*1s:10080*60s" 
 ```
 
 ## Carbon plugin

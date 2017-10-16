@@ -507,6 +507,11 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.assertEquals(self.accessor.has_metric(metric2.name), True)
         self.addCleanup(self.accessor.drop_all_metrics)
 
+    def test_syncdb(self):
+        retentions = [bg_accessor.Retention.from_string("60*1s:60*60s")]
+        self.accessor.syncdb(retentions=retentions, dry_run=True)
+        self.accessor.syncdb(retentions=retentions, dry_run=False)
+
 
 if __name__ == "__main__":
     unittest.main()

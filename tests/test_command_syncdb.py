@@ -30,7 +30,9 @@ class TestCommandSyncdb(bg_test_utils.TestCaseWithFakeAccessor):
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args([])
+        opts = parser.parse_args(['--retention', '86400*1s:10080*60s'])
+        cmd.run(self.accessor, opts)
+        opts = parser.parse_args(['--dry_run'])
         cmd.run(self.accessor, opts)
 
 
