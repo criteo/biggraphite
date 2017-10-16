@@ -40,7 +40,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         settings["STORAGE_DIR"] = self.tempdir
         self._plugin = bg_carbon.BigGraphiteDatabase(settings)
 
-        def _create(metric):
+        def _create(metric, metric_name):
             self._plugin.cache.create_metric(metric)
 
         # Make sure we don't create metrics asynchronously
@@ -103,7 +103,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         metric_name = "a.b.c"
         metric = self.make_metric(metric_name)
 
-        self._plugin._createAsyncOrig(metric)
+        self._plugin._createAsyncOrig(metric, metric_name)
         self.assertFalse(self._plugin.exists(metric_name))
         self._plugin._createOneMetric()
         self.assertTrue(self._plugin.exists(metric_name))
@@ -111,7 +111,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         # See if we can update.
         metric = self.make_metric(metric_name)
         metric.metadata.retention = bg_accessor.Retention([bg_accessor.Stage(1, 1)])
-        self._plugin._createAsyncOrig(metric)
+        self._plugin._createAsyncOrig(metric, metric_name)
         self._plugin._createOneMetric()
         retention = self._plugin.getMetadata(metric_name, "retention")
         self.assertEquals(retention, metric.metadata.retention)

@@ -157,6 +157,7 @@ DEBUG = True
 LOG_DIR = '/tmp'
 STORAGE_DIR = '/tmp'
 STORAGE_FINDERS = ['biggraphite.plugins.graphite.Finder']
+TAGDB = 'biggraphite.plugins.tags.BigGraphiteTagDB'
 BG_CASSANDRA_KEYSPACE = 'biggraphite'
 BG_CASSANDRA_CONTACT_POINTS = '127.0.0.1'
 BG_DRIVER = 'cassandra'

@@ -117,6 +117,7 @@ class FakeFindQuery(object):
     """
 
     def __init__(self, pattern):
+        """Create a fake find query."""
         self.pattern = pattern
 
 
