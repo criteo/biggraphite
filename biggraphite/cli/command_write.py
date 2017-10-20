@@ -55,10 +55,11 @@ class CommandWrite(command.BaseCommand):
             required=False,
         )
         # TODO(d.forest): support for writing directly a chosen stage
+        aggregators = ', '.join([str(v.value) for v in bg_accessor.Aggregator])
         parser.add_argument(
             "--aggregator",
-            help="Aggregator function for the metric.",
-            default="avg",
+            help="Aggregator function for the metric (%s)." % aggregators,
+            default="average",
             required=False,
         )
         parser.add_argument(
@@ -79,10 +80,8 @@ class CommandWrite(command.BaseCommand):
         accessor.connect()
 
         metric = accessor.get_metric(opts.metric)
-        if metric:
-            print("Metric '%s' was found to exist")
-        else:
-            print("Metric '%s' was not found and will be created")
+        if not metric:
+            print("Metric '%s' was not found and will be created" % opts.metric)
             metadata = bg_accessor.MetricMetadata(
                 aggregator=bg_accessor.Aggregator.from_config_name(opts.aggregator),
                 retention=bg_accessor.Retention.from_string(opts.retention),
@@ -91,6 +90,6 @@ class CommandWrite(command.BaseCommand):
             metric = accessor.make_metric(opts.metric, metadata)
             accessor.create_metric(metric)
 
-        timestamp = time.mktime(opts.timestamp.timetuple())
-        points = [(timestamp, opts.value)] * opts.count
+        timestamp = int(time.mktime(opts.timestamp.timetuple()))
+        points = [(timestamp, float(opts.value))] * opts.count
         accessor.insert_points_async(metric, points)
