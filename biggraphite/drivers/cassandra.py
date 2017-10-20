@@ -1723,7 +1723,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         self.is_connected = False
 
-    def syncdb(self, dry_run=False):
+    def syncdb(self, retentions=None, dry_run=False):
+        """See bg_accessor.Accessor."""
         schema = ""
 
         self._connect_clusters()
@@ -1744,6 +1745,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if not dry_run:
                 self._execute_metadata(query)
 
+        schema += " -- Already Existing Tables (updated schemas)\n"
         tables = self.__cluster_data.metadata.keyspaces[self.keyspace].tables
         for table in tables:
             comment = tables[table].options.get('comment')
@@ -1760,6 +1762,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     continue
                 query = self.__lazy_statements._create_datapoints_table_stmt(stage)
                 schema += query + "\n\n"
+
+        if retentions:
+            schema += " -- New Tables\n"
+            stages = set([s for retention in retentions for s in retention.stages])
+            for stage in stages:
+                query = self.__lazy_statements._create_datapoints_table_stmt(stage)
+                schema += query + "\n\n"
+                if not dry_run:
+                    self._execute_metadata(query)
 
         self.shutdown()
         return schema

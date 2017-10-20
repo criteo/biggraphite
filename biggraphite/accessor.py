@@ -701,10 +701,11 @@ class Accessor(object):
         """
         pass
 
-    def syncdb(self, dry_run=False):
+    def syncdb(self, retentions=None, dry_run=False):
         """Create the database schema.
 
         Args:
+          retentions, iterable or None, list of retentions to create.
           dry_run: bool, if True nothing will be applied to the database.
         """
         pass
