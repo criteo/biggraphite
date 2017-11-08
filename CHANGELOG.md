@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.11] - 2017-11-08
+### Fixed
+- `bgutil stats`: Skip corrupt metrics
+- `bgutil write`: fix command and add unit test
+- tools: Fix columnspec for time_start_ms.
+
+### New
+- `bgutil syncdb`: add a way to create datapoint tables
+
 ## [0.8.10] - 2017-10-12
 ### Breaking Change
 - Renamed `created_at` -> `created_on`:
