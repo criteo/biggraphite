@@ -1822,8 +1822,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 config = result[3]
 
                 metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-                metric = bg_accessor.Metric(metric_name, id, metadata)
-                callback(metric, done + 1, total)
+                try:
+                    metric = bg_accessor.Metric(metric_name, id, metadata)
+                    callback(metric, done + 1, total)
+                # Avoid failing if either name, id, or metadata is missing.
+                except AssertionError as e:
+                    log.debug("Skipping corrupted metric: %s raising %s" % (result, str(e)))
+                    continue
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
                callback_on_progress=None):
