@@ -27,7 +27,7 @@ table_definition: |
 columnspec:
   - name: metric
     population: uniform(1..100000)  # The number of different metrics
-  - name: time_start
+  - name: time_start_ms
     population: seq(1..5)
   - name: offset
     cluster: fixed(10)

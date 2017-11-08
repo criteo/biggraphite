@@ -1,0 +1,69 @@
+keyspace: biggraphite_stress
+
+keyspace_definition: |
+  CREATE KEYSPACE biggraphite_stress
+    WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
+    AND durable_writes = false
+    ;
+
+table: metrics_metadata
+table_definition: |
+  CREATE TABLE metrics_metadata (
+      name text PRIMARY KEY,
+      component_0 text,
+      component_1 text,
+      component_10 text,
+      component_11 text,
+      component_2 text,
+      component_3 text,
+      component_4 text,
+      component_5 text,
+      component_6 text,
+      component_7 text,
+      component_8 text,
+      component_9 text,
+      parent text
+  ) WITH bloom_filter_fp_chance = 0.01
+      AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
+      AND comment = ''
+      AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
+      AND compression = {'chunk_length_in_kb': '64', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+      AND crc_check_chance = 1.0
+      AND dclocal_read_repair_chance = 0.1
+      AND default_time_to_live = 0
+      AND gc_grace_seconds = 864000
+      AND max_index_interval = 2048
+      AND memtable_flush_period_in_ms = 0
+      AND min_index_interval = 128
+      AND read_repair_chance = 0.0
+      AND speculative_retry = '99PERCENTILE'
+      ;
+
+extra_definitions:
+      - "CREATE CUSTOM INDEX metrics_parent_idx ON metrics_metadata (parent) USING 'org.apache.cassandra.index.sasi.SASIIndex' WITH OPTIONS = {'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer', 'case_sensitive': 'true'};"
+      - "CREATE CUSTOM INDEX metrics_component_0_idx ON metrics_metadata (component_0) USING 'org.apache.cassandra.index.sasi.SASIIndex' WITH OPTIONS = {'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer', 'case_sensitive': 'true'};"
+      - "CREATE CUSTOM INDEX metrics_component_1_idx ON metrics_metadata (component_1) USING 'org.apache.cassandra.index.sasi.SASIIndex' WITH OPTIONS = {'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer', 'case_sensitive': 'true'};"
+
+columnspec:
+  - name: name
+    size: gaussian(1..100) 
+    population: gaussian(1..10M) 
+  - name: parent
+    size: gaussian(1..100) 
+    population: gaussian(1..100) 
+  - name: component_0
+    size: exp(0..10)
+  - name: component_1
+    size: exp(0..15)
+
+
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/1
+  batchtype: UNLOGGED             # type of batch to use
+
+queries:
+  simple1:
+    cql: SELECT name FROM metrics_metadata WHERE parent = ?  LIMIT 5001
+    # fields: samerow
+
