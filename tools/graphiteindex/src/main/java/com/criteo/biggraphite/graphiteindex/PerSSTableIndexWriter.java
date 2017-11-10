@@ -90,7 +90,10 @@ public class PerSSTableIndexWriter implements SSTableFlushObserver
         }
 
         String path = UTF8Type.instance.compose(value);
+        logger.info(String.format("Indexing: currPosition:%s token:%s",
+                currentPosition, Long.valueOf(currentKey.getToken().toString())));
         luceneIndex.insert(path, currentPosition);
+        //luceneIndex.insert(path, Long.valueOf(currentKey.getToken().toString()));
     }
 
     @Override public void complete()

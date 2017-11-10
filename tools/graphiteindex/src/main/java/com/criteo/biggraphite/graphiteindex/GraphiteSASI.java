@@ -2,6 +2,7 @@ package com.criteo.biggraphite.graphiteindex;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.config.Schema;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.statements.IndexTarget;
 import org.apache.cassandra.db.*;
@@ -29,9 +30,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -89,44 +88,55 @@ public class GraphiteSASI
     }
 
     private final ColumnFamilyStore baseCfs;
-    private final IndexMetadata config;
+    private final IndexMetadata metadata;
     private final ColumnDefinition column;
 
-    public GraphiteSASI(ColumnFamilyStore baseCfs, IndexMetadata config)
+    public GraphiteSASI(ColumnFamilyStore baseCfs, IndexMetadata metadata)
     {
         this.baseCfs = baseCfs;
-        this.config = config;
+        this.metadata = metadata;
 
         // FIXME(d.forest): column type is assumed to be text
-        this.column = TargetParser.parse(baseCfs.metadata, config).left;
+        this.column = TargetParser.parse(baseCfs.metadata, metadata).left;
 
         baseCfs.getTracker().subscribe(this);
     }
 
     @Override public IndexMetadata getIndexMetadata()
     {
-        return config;
+        return metadata;
     }
 
     @Override public Callable<?> getInitializationTask()
     {
+        // if we're just linking in the index on an already-built index post-restart or if the base
+        // table is empty we've nothing to do. Otherwise, submit for building via SecondaryIndexBuilder
+        return isBuilt() || baseCfs.isEmpty() ? null : getBuildIndexTask();
+    }
+
+    private boolean isBuilt()
+    {
+        return SystemKeyspace.isIndexBuilt(baseCfs.keyspace.getName(), metadata.name);
+    }
+
+    private Callable<?> getBuildIndexTask()
+    {
         return () -> {
             SortedSet<SSTableReader> toRebuild = new TreeSet<>(
-                (a, b) -> Integer.compare(a.descriptor.generation, b.descriptor.generation)
+                    (a, b) -> Integer.compare(a.descriptor.generation, b.descriptor.generation)
             );
             for (SSTableReader sstable : baseCfs.getTracker().getView().liveSSTables()) {
                 toRebuild.add(sstable);
             }
 
             Future<?> future = CompactionManager.instance.submitIndexBuild(
-                new GraphiteSASIBuilder(baseCfs, column, toRebuild)
+                    new GraphiteSASIBuilder(baseCfs, column, toRebuild)
             );
             FBUtilities.waitOnFuture(future);
-            baseCfs.indexManager.markIndexBuilt(config.name);
+            baseCfs.indexManager.markIndexBuilt(metadata.name);
             return null;
         };
     }
-
     @Override public Callable<?> getMetadataReloadTask(IndexMetadata indexMetadata)
     {
         return null;
@@ -227,7 +237,7 @@ public class GraphiteSASI
     }
 
     @Override public Searcher searcherFor(ReadCommand command)
-        throws InvalidRequestException
+            throws InvalidRequestException
     {
         try {
             Optional<String> maybePattern = extractGraphitePattern(command.rowFilter());
@@ -235,11 +245,9 @@ public class GraphiteSASI
                 throw new InvalidRequestException("Query does not relate to this index");
             }
 
-            String indexName = GraphiteSASI.makeIndexName(column, 0 /*FIXME(p.boddu)*/);
-            Path indexPath = new File("./ssTableDirectory" /*FIXME(p.boddu)*/, indexName).toPath();
-
-            // TODO(d.forest): implement searcher and result iterator
-            return new LuceneIndexSearcher(indexPath, command);
+            CFMetaData config = command.metadata();
+            ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(config.cfId);
+            return new LuceneIndexSearcher(cfs, column, command);
         }
         catch(IOException e) {
             logger.error("Could not build searcherFor:" + command.toString(), e);
