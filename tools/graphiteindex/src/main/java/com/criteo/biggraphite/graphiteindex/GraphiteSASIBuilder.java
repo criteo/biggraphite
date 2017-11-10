@@ -23,7 +23,6 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.UUIDGen;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.cassandra.io.util.FileHandle;
 
 public class GraphiteSASIBuilder
     extends SecondaryIndexBuilder
@@ -82,7 +81,7 @@ public class GraphiteSASIBuilder
             logger.debug("Building index {}", indexName);
 
             Path indexPath = new File(sstable.descriptor.directory, indexName).toPath();
-            MetricsIndex index = new MetricsIndex(indexName, Optional.of(indexPath));
+            LuceneIndex index = new LuceneIndex(indexName, Optional.of(indexPath));
 
             PerSSTableIndexWriter indexWriter = new PerSSTableIndexWriter(
                 sstable.descriptor, OperationType.COMPACTION, column, index
