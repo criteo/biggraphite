@@ -1,31 +1,12 @@
 package com.criteo.biggraphite.graphiteindex;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.concurrent.Callable;
-import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.statements.IndexTarget;
-import org.apache.cassandra.db.ColumnFamilyStore;
-import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.DeletionTime;
-import org.apache.cassandra.db.PartitionColumns;
-import org.apache.cassandra.db.RangeTombstone;
-import org.apache.cassandra.db.ReadCommand;
+import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.filter.RowFilter;
-import org.apache.cassandra.db.lifecycle.Tracker;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.partitions.PartitionIterator;
@@ -38,15 +19,8 @@ import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.transactions.IndexTransaction;
-import org.apache.cassandra.index.transactions.IndexTransaction.Type;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.notifications.INotification;
-import org.apache.cassandra.notifications.INotificationConsumer;
-import org.apache.cassandra.notifications.MemtableDiscardedNotification;
-import org.apache.cassandra.notifications.MemtableRenewedNotification;
-import org.apache.cassandra.notifications.MemtableSwitchedNotification;
-import org.apache.cassandra.notifications.SSTableAddedNotification;
-import org.apache.cassandra.notifications.SSTableListChangedNotification;
+import org.apache.cassandra.notifications.*;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
@@ -54,6 +28,15 @@ import org.apache.cassandra.utils.concurrent.OpOrder;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 public class GraphiteSASI
     implements Index, INotificationConsumer
@@ -135,10 +118,11 @@ public class GraphiteSASI
                 toRebuild.add(sstable);
             }
 
-            CompactionManager.instance.submitIndexBuild(
+            Future<?> future = CompactionManager.instance.submitIndexBuild(
                 new GraphiteSASIBuilder(baseCfs, column, toRebuild)
             );
-
+            FBUtilities.waitOnFuture(future);
+            baseCfs.indexManager.markIndexBuilt(config.name);
             return null;
         };
     }
@@ -245,13 +229,22 @@ public class GraphiteSASI
     @Override public Searcher searcherFor(ReadCommand command)
         throws InvalidRequestException
     {
-        Optional<String> maybePattern = extractGraphitePattern(command.rowFilter());
-        if (!maybePattern.isPresent()) {
-            throw new InvalidRequestException("Query does not relate to this index");
-        }
+        try {
+            Optional<String> maybePattern = extractGraphitePattern(command.rowFilter());
+            if (!maybePattern.isPresent()) {
+                throw new InvalidRequestException("Query does not relate to this index");
+            }
 
-        // TODO(d.forest): implement searcher and result iterator
-        return (controller) -> null;
+            String indexName = GraphiteSASI.makeIndexName(column, 0 /*FIXME(p.boddu)*/);
+            Path indexPath = new File("./ssTableDirectory" /*FIXME(p.boddu)*/, indexName).toPath();
+
+            // TODO(d.forest): implement searcher and result iterator
+            return new LuceneIndexSearcher(indexPath, command);
+        }
+        catch(IOException e) {
+            logger.error("Could not build searcherFor:" + command.toString(), e);
+        }
+        return null;
     }
 
     @Override public void handleNotification(INotification notification, Object sender)
