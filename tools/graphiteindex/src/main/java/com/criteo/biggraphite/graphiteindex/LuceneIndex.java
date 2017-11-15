@@ -76,7 +76,7 @@ public class LuceneIndex
 
         Directory directory;
         if (indexPath.isPresent()) {
-            logger.info("{} - Opening FS directory '{}'", name, indexPath.get());
+            logger.trace("{} - Opening FS directory '{}'", name, indexPath.get());
             directory = FSDirectory.open(indexPath.get());
 
             // Adds a RAMDirectory cache, which helps with low-frequently updates and
@@ -84,7 +84,7 @@ public class LuceneIndex
             // 8MB max segment size, 64MB max cached bytes.
             directory = new NRTCachingDirectory(directory, 8, 64);
         } else {
-            logger.info("{} - Creating RAM directory", name);
+            logger.trace("{} - Creating RAM directory", name);
             directory = new RAMDirectory();
         }
 
@@ -115,7 +115,7 @@ public class LuceneIndex
 
     public synchronized void forceCommit()
     {
-        logger.info("{} - Forcing commit and refreshing searchers", name);
+        logger.debug("{} - Forcing commit and refreshing searchers", name);
 
         try {
             writer.commit();
@@ -133,7 +133,7 @@ public class LuceneIndex
      */
     public synchronized void forceMerge()
     {
-        logger.info("{} - Forcing merge of index segments", name);
+        logger.debug("{} - Forcing merge of index segments", name);
 
         try {
             writer.forceMerge(1);
@@ -145,7 +145,7 @@ public class LuceneIndex
 
     public void insert(String path)
     {
-        logger.info("{} - Inserting '{}'", name, path);
+        logger.trace("{} - Inserting '{}'", name, path);
 
         Document doc = LuceneUtils.toDocument(path);
 
@@ -158,7 +158,7 @@ public class LuceneIndex
 
     public void insert(String path, long offset)
     {
-        logger.info("{} - Inserting '{}' with offset {}", name, path, offset);
+        logger.trace("{} - Inserting '{}' with offset {}", name, path, offset);
 
         Document doc = LuceneUtils.toDocument(path, offset);
 
@@ -188,7 +188,7 @@ public class LuceneIndex
     private <T> List<T> search(String pattern, Function<Document, T> handler)
     {
         BooleanQuery query = patternToQuery(pattern);
-        logger.info("{} - Searching for '{}', generated query: {}", name, pattern, query);
+        logger.trace("{} - Searching for '{}', generated query: {}", name, pattern, query);
 
         ArrayList<T> results = new ArrayList<>();
         Collector collector = new MetricsIndexCollector(
