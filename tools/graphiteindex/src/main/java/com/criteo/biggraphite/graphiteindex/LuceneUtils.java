@@ -1,15 +1,11 @@
 package com.criteo.biggraphite.graphiteindex;
 
+import org.apache.lucene.document.*;
+
 import java.util.function.BiConsumer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.IntPoint;
-import org.apache.lucene.document.LongPoint;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.StoredField;
 import java.util.regex.Pattern;
 
-public class MetricPath
+public class LuceneUtils
 {
     public static final String ELEMENT_SEPARATOR = ".";
     public static final String ELEMENT_SEPARATOR_REGEXP = Pattern.quote(ELEMENT_SEPARATOR);

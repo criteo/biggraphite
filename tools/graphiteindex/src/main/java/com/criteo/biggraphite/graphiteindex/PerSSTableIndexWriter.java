@@ -47,7 +47,7 @@ public class PerSSTableIndexWriter implements SSTableFlushObserver
     private final Descriptor descriptor;
     private final OperationType operation;
     private final ColumnDefinition column;
-    private final MetricsIndex index;
+    private final LuceneIndex luceneIndex;
 
     private final int nowInSec;
 
@@ -56,13 +56,13 @@ public class PerSSTableIndexWriter implements SSTableFlushObserver
 
     public PerSSTableIndexWriter(
         Descriptor descriptor, OperationType operation, ColumnDefinition column,
-        MetricsIndex index
+        LuceneIndex luceneIndex
     )
     {
         this.descriptor = descriptor;
         this.operation = operation;
         this.column = column;
-        this.index = index;
+        this.luceneIndex = luceneIndex;
 
         this.nowInSec = FBUtilities.nowInSeconds();
     }
@@ -90,14 +90,14 @@ public class PerSSTableIndexWriter implements SSTableFlushObserver
         }
 
         String path = UTF8Type.instance.compose(value);
-        index.insert(path, currentPosition);
+        luceneIndex.insert(path, currentPosition);
     }
 
     @Override public void complete()
     {
         INDEX_FLUSHER.submit(
             () -> {
-                index.forceMerge();
+                luceneIndex.forceMerge();
             }
         );
     }

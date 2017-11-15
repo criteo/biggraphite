@@ -63,12 +63,12 @@ public class MetricsIndexQueriesTest {
         "metrics.matchacha.same.regexp.z5"
     };
 
-    public static MetricsIndex index;
+    public static LuceneIndex index;
 
     @BeforeClass
     @SuppressWarnings("unchecked")
     public static void buildTestIndex() throws IOException {
-        index = new MetricsIndex("test-index");
+        index = new LuceneIndex("test-index");
 
         for (Object[] testQuery : testQueries) {
             Set<String> metricNames = (Set<String>)testQuery[1];
