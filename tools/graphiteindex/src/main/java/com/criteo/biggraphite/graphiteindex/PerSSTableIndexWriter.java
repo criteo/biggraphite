@@ -52,7 +52,7 @@ public class PerSSTableIndexWriter implements SSTableFlushObserver
     private final int nowInSec;
 
     private DecoratedKey currentKey;
-    private long currentPosition;
+    private long currentIndexPosition;
 
     public PerSSTableIndexWriter(
         Descriptor descriptor, OperationType operation, ColumnDefinition column,
@@ -71,10 +71,10 @@ public class PerSSTableIndexWriter implements SSTableFlushObserver
     {
     }
 
-    @Override public void startPartition(DecoratedKey key, long position)
+    @Override public void startPartition(DecoratedKey key, long indexPosition)
     {
         this.currentKey = key;
-        this.currentPosition = position;
+        this.currentIndexPosition = indexPosition;
     }
 
     @Override public void nextUnfilteredCluster(Unfiltered unfiltered)
@@ -90,7 +90,7 @@ public class PerSSTableIndexWriter implements SSTableFlushObserver
         }
 
         String path = UTF8Type.instance.compose(value);
-        luceneIndex.insert(path, currentPosition);
+        luceneIndex.insert(path, currentIndexPosition);
     }
 
     @Override public void complete()

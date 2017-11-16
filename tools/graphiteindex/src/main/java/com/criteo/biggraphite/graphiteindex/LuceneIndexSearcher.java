@@ -46,9 +46,6 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
     private final ColumnDefinition column;
     private final QueryController queryController;
 
-    /**
-     * TODO(p.boddu): Add support to read from in-memory LuceneIndex. Including ControlledRealTimeReopenThread
-     */
     public LuceneIndexSearcher(ColumnFamilyStore baseCfs, ColumnDefinition column, ReadCommand readCommand)
         throws IOException
     {
@@ -76,12 +73,18 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
         logger.debug("Searching Lucene index for column:{} with value:{} luceneQuery:{}",
                 column.name.toString(), indexValue, query);
 
+        /**
+         * For each Live SSTable
+         *  - Generates lucene index file path and opens for searching.
+         *  - Searches index and stores results(List of indexPositions) in a map against the SSTable key.
+         * TODO(p.boddu): Add support to read from memtable LuceneIndex. Incorporate ControlledRealTimeReopenThread
+         */
         Map<SSTableReader, List<Long>> searchResultsBySSTable =
                 baseCfs.getLiveSSTables().stream()
                         .map(ssTable -> {
                             String indexName = GraphiteSASI.makeIndexName(column, ssTable.descriptor.generation);
                             Path indexPath = new File(ssTable.descriptor.directory, indexName).toPath();
-                            logger.debug("Searching index:{} with indexPath:{}", ssTable.getFilename(), indexPath);
+                            logger.debug("Searching ssTable:{} with indexPath:{}", ssTable.getFilename(), indexPath);
                             List<Long> offsets = searchOffsets(query, indexPath);
                             return Pair.of(ssTable, offsets);})
                         .collect(Collectors.toMap(t -> t.getLeft(), t -> t.getRight()));
@@ -105,6 +108,14 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
         private final List<Pair<SSTableReader, Long>> searchResults;
         private final Iterator<Pair<SSTableReader, Long>> searchResultsIterator;
 
+        /**
+         *
+         * @param searchResults list of pair of SSTableReader and search result indexPosition in the SSTable.
+         * @param readCommand associated read command.
+         * @param queryController an utility method is used for fetching the Partition from the column family (table).
+         *                        TODO(p.boddu): Look into fetching the partition directly from SSTableReader.
+         * @param executionController
+         */
         public LuceneResultsIterator(List<Pair<SSTableReader, Long>> searchResults,
                                      ReadCommand readCommand,
                                      QueryController queryController,
@@ -123,9 +134,9 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
             try {
                 Pair<SSTableReader, Long> searchResult = searchResultsIterator.next();
                 SSTableReader ssTableReader = searchResult.getLeft();
-                long offset = searchResult.getRight();
-                DecoratedKey decoratedKey = ssTableReader.keyAt(offset);
-                logger.debug("Fetching partition at offset:{} from SSTable:{}", offset, ssTableReader.getFilename());
+                long indexPosition = searchResult.getRight();
+                DecoratedKey decoratedKey = ssTableReader.keyAt(indexPosition);
+                logger.debug("Fetching partition at indexPosition:{} from SSTable:{}", indexPosition, ssTableReader.getFilename());
                 UnfilteredRowIterator uri = queryController.getPartition(decoratedKey, executionController);
                 return uri;
             } catch(IOException e) {
@@ -247,3 +258,4 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
             .replace("*", ".*?");
     }
 }
+
