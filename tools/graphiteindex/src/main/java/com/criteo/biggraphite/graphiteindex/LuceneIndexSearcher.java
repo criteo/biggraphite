@@ -2,17 +2,17 @@ package com.criteo.biggraphite.graphiteindex;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.ReadCommand;
+import org.apache.cassandra.db.ReadExecutionController;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.db.rows.UnfilteredRowIteratorWithLowerBound;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.sasi.plan.QueryController;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.format.SSTableReadsListener;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.index.Term;
@@ -28,9 +28,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lucene-based Graphite metrics index.
@@ -55,13 +57,6 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
         this.column = column;
     }
 
-    /**
-     * TODO(p.boddu): We are searching and then creating the iterator. Incorporate searching in the iterator. This will
-     * save time from unneeded results (for e.g. limit 10)
-     *
-     * @param executionController
-     * @return
-     */
     @Override
     public UnfilteredPartitionIterator search(ReadExecutionController executionController) {
         // TODO(p.boddu): Handle multiple expressions.
@@ -71,77 +66,108 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
         logger.debug("Searching Lucene index for column:{} with value:{} luceneQuery:{}",
                 column.name.toString(), indexValue, query);
 
-        /**
-         * For each Live SSTable
-         *  - Generates lucene index file path and opens for searching.
-         *  - Searches index and stores results(List of indexPositions) in a map against the SSTable key.
-         * TODO(p.boddu): Add support to read from memtable LuceneIndex. Incorporate ControlledRealTimeReopenThread
-         */
-        Map<SSTableReader, List<Long>> searchResultsBySSTable =
-                baseCfs.getLiveSSTables().stream()
-                        .map(ssTable -> {
-                            String indexName = GraphiteSASI.makeIndexName(column, ssTable.descriptor.generation);
-                            Path indexPath = new File(ssTable.descriptor.directory, indexName).toPath();
-                            logger.debug("Searching ssTable:{} with indexPath:{}", ssTable.getFilename(), indexPath);
-                            List<Long> offsets = searchOffsets(query, indexPath);
-                            return Pair.of(ssTable, offsets);})
-                        .collect(Collectors.toMap(t -> t.getLeft(), t -> t.getRight()));
-
-        // TODO(p.boddu): Remove this unnecessary tranformation.
-        List<Pair<SSTableReader, Long>> searchResults =
-                searchResultsBySSTable.entrySet()
-                        .stream()
-                        .flatMap(es -> es.getValue().stream()
-                                .map(offset -> Pair.of(es.getKey(), offset))
-                        ).collect(Collectors.toList());
-
-        return new LuceneResultsIterator(searchResults, readCommand);
+        // TODO(p.boddu): Add support to read from memtable LuceneIndex. Incorporate ControlledRealTimeReopenThread
+        return new LuceneResultsIterator(baseCfs.getLiveSSTables(), readCommand, query, column);
     }
 
 
     private static class LuceneResultsIterator implements UnfilteredPartitionIterator {
+        private final Iterator<SSTableReader> ssTables;
         private final ReadCommand readCommand;
-        private final List<Pair<SSTableReader, Long>> searchResults;
-        private final Iterator<Pair<SSTableReader, Long>> searchResultsIterator;
+        private final BooleanQuery query;
+        private final ColumnDefinition column;
+        private SSTableReader currentSSTable;
+        private Iterator<Long> currentResults;
 
-        /**
-         *
-         * @param searchResults list of pair of SSTableReader and search result indexPosition in the SSTable.
-         * @param readCommand associated read command.
-         */
-        public LuceneResultsIterator(List<Pair<SSTableReader, Long>> searchResults,
-                                     ReadCommand readCommand) {
-            this.searchResults = searchResults;
-            this.searchResultsIterator = searchResults.iterator();
+        public LuceneResultsIterator(Set<SSTableReader> ssTables,
+                                     ReadCommand readCommand,
+                                     BooleanQuery luceneQuery,
+                                     ColumnDefinition column) {
+            this.ssTables = ssTables.iterator();
             this.readCommand = readCommand;
+            this.query = luceneQuery;
+            this.column = column;
         }
 
         public boolean hasNext() {
-            return searchResultsIterator.hasNext();
+            if(currentResults != null && currentResults.hasNext()) {
+                return true;
+            } else {
+                // Initialize new search results
+                while(ssTables.hasNext()) {
+                    currentSSTable = ssTables.next();
+                    String indexName = GraphiteSASI.makeIndexName(column, currentSSTable.descriptor.generation);
+                    Path indexPath = new File(currentSSTable.descriptor.directory, indexName).toPath();
+                    logger.debug("Searching ssTable:{} with indexPath:{}", currentSSTable.getFilename(), indexPath);
+                    List<Long> offsets = searchOffsets(query, indexPath);
+                    currentResults = offsets.iterator();
+                    if(currentResults.hasNext()) {
+                        return true;
+                    }
+                }
+                return false;
+            }
         }
+
         public UnfilteredRowIterator next() {
             try {
-                Pair<SSTableReader, Long> searchResult = searchResultsIterator.next();
-                SSTableReader ssTableReader = searchResult.getLeft();
-                long indexPosition = searchResult.getRight();
-                DecoratedKey decoratedKey = ssTableReader.keyAt(indexPosition);
-                logger.debug("Fetching partition at indexPosition:{} from SSTable:{}", indexPosition, ssTableReader.getFilename());
-                //UnfilteredRowIterator uri = queryController.getPartition(decoratedKey, executionController);
+                long indexPosition = currentResults.next();
+                DecoratedKey decoratedKey = currentSSTable.keyAt(indexPosition);
+                logger.debug("Fetching partition at indexPosition:{} from SSTable:{}",
+                        indexPosition, currentSSTable.getFilename());
 
                 UnfilteredRowIterator uri = new UnfilteredRowIteratorWithLowerBound(decoratedKey,
-                        ssTableReader,
+                        currentSSTable,
                         readCommand.clusteringIndexFilter(decoratedKey),
                         readCommand.columnFilter(),
                         readCommand.isForThrift(),
                         readCommand.nowInSec(),
                         false,
                         SSTableReadsListener.NOOP_LISTENER);
-                ssTableReader.incrementReadCount();
+                currentSSTable.incrementReadCount();
                 return uri;
             } catch(IOException e) {
                 logger.error("Exception while fetching partition", e);
             }
             return null;
+        }
+
+        public List<Long> searchOffsets(BooleanQuery query, Path indexPath)
+        {
+            return search(query, indexPath, LuceneUtils::getOffsetFromDocument);
+        }
+
+        /**
+         * TODO(p.boddu): Lot of heavy lifting here for each query. Optimize!
+         */
+        private <T> List<T> search(BooleanQuery query, Path indexPath, Function<Document, T> handler)
+        {
+            logger.info("{} - Searching for generated query: {}", indexPath, query);
+
+            ArrayList<T> results = new ArrayList<>();
+            Collector collector = new MetricsIndexCollector(
+                    doc -> results.add(handler.apply(doc))
+            );
+
+            try {
+                Directory directory = FSDirectory.open(indexPath);
+                SearcherManager searcherMgr = new SearcherManager(directory, new SearcherFactory());
+                IndexSearcher searcher = searcherMgr.acquire();
+                try {
+                    // TODO(d.forest): we should probably use TimeLimitingCollector
+                    searcher.search(query, collector);
+                } catch(IOException e) {
+                    logger.error("{} - Cannot finish search query: {}", indexPath, query, e);
+                } finally {
+                    searcherMgr.release(searcher);
+                    searcherMgr.close();
+                    directory.close();
+                }
+            } catch(IOException e) {
+                logger.error("{} - Cannot acquire index searcher", indexPath, e);
+            }
+
+            return results;
         }
 
         public void close() {}
@@ -157,50 +183,6 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
 
     @Override
     public void close() throws IOException {}
-
-    public List<Long> searchOffsets(BooleanQuery query, Path indexPath)
-    {
-        return search(query, indexPath, LuceneUtils::getOffsetFromDocument);
-    }
-
-    /**
-     * TODO(p.boddu): Lot of heavy lifting here for each query. Optimize!
-     *
-     * @param query
-     * @param indexPath
-     * @param handler
-     * @param <T>
-     * @return
-     */
-    private <T> List<T> search(BooleanQuery query, Path indexPath, Function<Document, T> handler)
-    {
-        logger.info("{} - Searching for generated query: {}", indexPath, query);
-
-        ArrayList<T> results = new ArrayList<>();
-        Collector collector = new MetricsIndexCollector(
-            doc -> results.add(handler.apply(doc))
-        );
-
-        try {
-            Directory directory = FSDirectory.open(indexPath);
-            SearcherManager searcherMgr = new SearcherManager(directory, new SearcherFactory());
-            IndexSearcher searcher = searcherMgr.acquire();
-            try {
-                // TODO(d.forest): we should probably use TimeLimitingCollector
-                searcher.search(query, collector);
-            } catch(IOException e) {
-                logger.error("{} - Cannot finish search query: {}", indexPath, query, e);
-            } finally {
-                searcherMgr.release(searcher);
-                searcherMgr.close();
-                directory.close();
-            }
-        } catch(IOException e) {
-            logger.error("{} - Cannot acquire index searcher", indexPath, e);
-        }
-
-        return results;
-    }
 
     /**
      * Generates a Lucene query which matches the same metrics the given Graphite
