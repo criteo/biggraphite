@@ -43,6 +43,7 @@ from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
+from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
 
 import prometheus_client as pm
 
@@ -88,6 +89,14 @@ DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 DEFAULT_READ_ON_SAMPLING_RATE = 0.1
+
+# Exceptions that are not considered fatal during batch jobs.
+# The affected range will simply be ignored.
+BATCH_IGNORED_EXCEPTIONS = (
+    cassandra.cluster.NoHostAvailable,
+    cassandra.ReadTimeout
+)
+BATCH_MAX_IGNORED_ERRORS = 100
 
 DIRECTORY_SEPARATOR = '.'
 
@@ -1805,11 +1814,25 @@ class _CassandraAccessor(bg_accessor.Accessor):
             % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
         select.request_timeout = None
 
+        ignored_errors = 0
         token = start_token
         while token < stop_token:
-            rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
-            if len(rows.current_rows) == 0:
-                break
+            try:
+                rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+
+                # Empty results means that we've reached the end.
+                if len(rows.current_rows) == 0:
+                    break
+            except BATCH_IGNORED_EXCEPTIONS:
+                # Ignore timeouts and process as much as we can.
+                logging.exception("Skipping query (token=%s)." % token)
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                token += DEFAULT_MAX_BATCH_UTIL
+                ignored_errors += 1
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+                continue
 
             token = rows[-1][1]
 
@@ -2001,8 +2024,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
         select.consistency_level = self._meta_background_consistency
-        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy()
         select.request_timeout = DEFAULT_TIMEOUT_QUERY_UTIL
+
+        return select
+
+    def _prepare_background_request_on_index(self, query_str):
+        select = self.__session_metadata.prepare(query_str)
+        select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
+        # We query an index, it's not a good idea to ask for more than ONE
+        # because it queries multiple nodes anyway.
+        select.consistency_level = cassandra.ConsistencyLevel.ONE
+        select.request_timeout = None
 
         return select
 
@@ -2020,11 +2053,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         log.info("Cleaning with cutoff time %d", cutoff)
 
         # statements
-        select = self._prepare_background_request(
+        select = self._prepare_background_request_on_index(
             "SELECT name, token(name) FROM \"%s\".metrics_metadata"
             " WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d ;"
             % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL))
-        select.request_timeout = None
 
         delete = self._prepare_background_request(
             "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
@@ -2040,11 +2072,25 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 yield (delete, (name,))
                 yield (delete_metadata, (name,))
 
+        ignored_errors = 0
         token = start_token
         while token < stop_token:
-            rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
-            if len(rows.current_rows) == 0:
-                break
+            try:
+                rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+
+                # Empty results means that we've reached the end.
+                if len(rows.current_rows) == 0:
+                    break
+            except BATCH_IGNORED_EXCEPTIONS:
+                # Ignore timeouts and process as much as we can.
+                logging.exception("Skipping query (token=%s)." % token)
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                token += DEFAULT_MAX_BATCH_UTIL
+                ignored_errors += 1
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+                continue
 
             token = rows[-1][1]
             rets = self._execute_concurrent_metadata(
