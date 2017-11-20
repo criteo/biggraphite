@@ -970,7 +970,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
             )
         except cassandra.DriverException as e:
-            logging.debug(e)
+            log.debug(e)
             self.__insert_metrics_metadata_statement = __prepare(
                 "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
                 " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
@@ -1862,7 +1862,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     break
             except BATCH_IGNORED_EXCEPTIONS:
                 # Ignore timeouts and process as much as we can.
-                logging.exception("Skipping query (token=%s)." % token)
+                log.exception("Skipping query (token=%s)." % token)
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
                 token += DEFAULT_MAX_BATCH_UTIL
@@ -2041,9 +2041,28 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
 
-        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
-        self._clean_expired_metrics(max_age, start_key, end_key, shard, nshards,
-                                    callback_on_progress)
+        first_exception = None
+        try:
+            self._clean_empty_dir(
+                start_key, end_key, shard, nshards,
+                callback_on_progress
+            )
+        except Exception as e:
+            first_exception = e
+            log.exception('Failed to clean directories.')
+
+        try:
+            self._clean_expired_metrics(
+                max_age, start_key, end_key, shard, nshards,
+                callback_on_progress
+            )
+        except Exception as e:
+            first_exception = e
+            log.exception('Failed to clean metrics.')
+
+        if first_exception != None:
+            raise first_exception
+
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
@@ -2109,7 +2128,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     break
             except BATCH_IGNORED_EXCEPTIONS:
                 # Ignore timeouts and process as much as we can.
-                logging.exception("Skipping query (token=%s)." % token)
+                log.exception("Skipping query (token=%s)." % token)
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
                 token += DEFAULT_MAX_BATCH_UTIL
