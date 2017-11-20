@@ -1826,12 +1826,36 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " WHERE token(name) > ? LIMIT %d ;"
             % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
         select.request_timeout = None
+        select.fetch_size = DEFAULT_MAX_BATCH_UTIL
 
         ignored_errors = 0
         token = start_token
+        rows = []
         while token < stop_token:
+            # Schedule read first.
+            future = self._execute_async_metadata(
+                select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+            )
+
+            # Then execute callback for the *previous* result while C* is
+            # doing its work.
+            for i, result in enumerate(rows):
+                metric_name = result[0]
+                id = result[2]
+                config = result[3]
+
+                metadata = bg_accessor.MetricMetadata.from_string_dict(config)
+                try:
+                    metric = bg_accessor.Metric(metric_name, id, metadata)
+                    callback(metric, done + 1, total)
+                # Avoid failing if either name, id, or metadata is missing.
+                except AssertionError as e:
+                    log.debug("Skipping corrupted metric: %s raising %s" % (result, str(e)))
+                    continue
+
+            # Then, read new data.
             try:
-                rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+                rows = future.result()
 
                 # Empty results means that we've reached the end.
                 if len(rows.current_rows) == 0:
@@ -1852,19 +1876,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             done = token - start_token
             total = stop_token - start_token
 
-            for i, result in enumerate(rows):
-                metric_name = result[0]
-                id = result[2]
-                config = result[3]
-
-                metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-                try:
-                    metric = bg_accessor.Metric(metric_name, id, metadata)
-                    callback(metric, done + 1, total)
-                # Avoid failing if either name, id, or metadata is missing.
-                except AssertionError as e:
-                    log.debug("Skipping corrupted metric: %s raising %s" % (result, str(e)))
-                    continue
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
                callback_on_progress=None):

@@ -83,6 +83,7 @@ def main(args=None, accessor=None):
     accessor = accessor or bg_utils.accessor_from_settings(settings)
     opts.func(accessor, opts)
     accessor.flush()
+    accessor.shutdown()
 
 
 if __name__ == "__main__":
