@@ -1296,7 +1296,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__select_metric_metadata_statement, (encoded_metric_name, )))
         if not result:
             return None
-        return result[0]
+
+        # Check that id and config are non-null.
+        result = result[0]
+        if result[0] is None or result[1] is None:
+            return None
+
+        return result
 
     def has_metric(self, metric_name):
         """See bg_accessor.Accessor."""
