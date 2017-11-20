@@ -30,13 +30,14 @@ from os import path as os_path
 from distutils import version
 
 import cassandra
-from cassandra import murmur3
+from cassandra import auth
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
-from cassandra import query as c_query
 from cassandra import marshal as c_marshal
-from cassandra import auth
+from cassandra import murmur3
+from cassandra import policies as c_policies
+from cassandra import query as c_query
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -1006,11 +1007,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, 'data')
 
     def _connect(self, contact_points, port):
+        lb_policy = c_policies.TokenAwarePolicy(
+            c_policies.DCAwareRoundRobinPolicy()
+        )
+
         cluster = c_cluster.Cluster(
             contact_points, port,
             compression=self.__compression,
             auth_provider=self.auth_provider,
+            # Metrics are disabled because too expensive to compute.
             metrics_enabled=False,
+            load_balancing_policy=lb_policy,
         )
 
         # Limits in flight requests
