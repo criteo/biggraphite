@@ -217,27 +217,27 @@ def add_argparse_arguments(parser):
         help="Cassandra replica",
         default=None)
     parser.add_argument(
-        "--meta_write_consistency", metavar="META_WRITE_CONS",
+        "--cassandra_meta_write_consistency", metavar="META_WRITE_CONS",
         help="Metadata write consistency",
         default=DEFAULT_META_WRITE_CONSISTENCY)
     parser.add_argument(
-        "--meta_read_consistency", metavar="META_READ_CONS",
+        "--cassandra_meta_read_consistency", metavar="META_READ_CONS",
         help="Metadata read consistency",
         default=DEFAULT_META_READ_CONSISTENCY)
     parser.add_argument(
-        "--meta_serial_consistency", metavar="META_SERIAL_CONS",
+        "--cassandra_meta_serial_consistency", metavar="META_SERIAL_CONS",
         help="Metadata serial consistency",
         default=DEFAULT_META_SERIAL_CONSISTENCY)
     parser.add_argument(
-        "--meta_background_consistency", metavar="META_BACKGROUND_CONS",
+        "--cassandra_meta_background_consistency", metavar="META_BACKGROUND_CONS",
         help="Metadata background consistency",
         default=DEFAULT_META_BACKGROUND_CONSISTENCY)
     parser.add_argument(
-        "--data_write_consistency", metavar="DATA_WRITE_CONS",
+        "--cassandra_data_write_consistency", metavar="DATA_WRITE_CONS",
         help="Data write consistency",
         default=DEFAULT_DATA_WRITE_CONSISTENCY)
     parser.add_argument(
-        "--data_read_consistency", metavar="DATA_READ_CONS",
+        "--cassandra_data_read_consistency", metavar="DATA_READ_CONS",
         help="Data read consistency",
         default=DEFAULT_DATA_READ_CONSISTENCY)
     parser.add_argument(
@@ -2048,7 +2048,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
         select.consistency_level = self._meta_background_consistency
-        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy()
+        # Always retry background requests a few times, we don't really care
+        # about latency.
+        select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
         select.request_timeout = DEFAULT_TIMEOUT_QUERY_UTIL
 
         return select
