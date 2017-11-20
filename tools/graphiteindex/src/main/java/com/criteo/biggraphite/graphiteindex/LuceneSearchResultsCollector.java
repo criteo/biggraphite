@@ -9,13 +9,13 @@ import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.Scorer;
 
-public class MetricsIndexCollector
+public class LuceneSearchResultsCollector
     implements Collector, LeafCollector
 {
     private final Consumer<Document> consumer;
     private LeafReader reader;
 
-    public MetricsIndexCollector(Consumer<Document> consumer)
+    public LuceneSearchResultsCollector(Consumer<Document> consumer)
     {
         this.consumer = consumer;
         this.reader = null;

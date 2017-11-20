@@ -191,7 +191,7 @@ public class LuceneIndex
         logger.trace("{} - Searching for '{}', generated query: {}", name, pattern, query);
 
         ArrayList<T> results = new ArrayList<>();
-        Collector collector = new MetricsIndexCollector(
+        Collector collector = new LuceneSearchResultsCollector(
             doc -> results.add(handler.apply(doc))
         );
 

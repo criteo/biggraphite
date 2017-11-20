@@ -59,7 +59,11 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
 
     @Override
     public UnfilteredPartitionIterator search(ReadExecutionController executionController) {
-        // TODO(p.boddu): Handle multiple expressions.
+        /*
+         TODO(p.boddu): Handle multiple expressions like "secondaryIndexColumn1='pattern1' AND secondaryIndexColumn2='pattern2'"
+            It doesn't apply to Biggraphite's problem at the moment.
+            It applies to general SASI index search use-case.
+          */
         ByteBuffer indexValueBb = readCommand.rowFilter().getExpressions().get(0).getIndexValue();
         String indexValue = UTF8Type.instance.compose(indexValueBb);
         BooleanQuery query = patternToQuery(indexValue);
@@ -138,14 +142,15 @@ public class LuceneIndexSearcher implements Index.Searcher, Closeable
         }
 
         /**
-         * TODO(p.boddu): Lot of heavy lifting here for each query. Optimize!
+         * SearcherManager facilitates safely sharing IndexSearcher instances across multiple thread.
+         * TODO(p.boddu): Confirm that calling FSDirectory.open() on every search call doesn't hog system resources.
          */
         private <T> List<T> search(BooleanQuery query, Path indexPath, Function<Document, T> handler)
         {
             logger.info("{} - Searching for generated query: {}", indexPath, query);
 
             ArrayList<T> results = new ArrayList<>();
-            Collector collector = new MetricsIndexCollector(
+            Collector collector = new LuceneSearchResultsCollector(
                     doc -> results.add(handler.apply(doc))
             );
 
