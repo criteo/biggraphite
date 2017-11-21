@@ -512,6 +512,20 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.syncdb(retentions=retentions, dry_run=True)
         self.accessor.syncdb(retentions=retentions, dry_run=False)
 
+    def test_map(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+
+        metric2 = self.make_metric("g.h.i.j.k.l")
+        self.accessor.create_metric(metric2)
+        self.accessor.flush()
+
+        def _callback(metric, done, total):
+            self.assertIsNotNone(metric)
+            self.assertTrue(done <= total)
+
+        self.accessor.map(_callback)
+
 
 if __name__ == "__main__":
     unittest.main()

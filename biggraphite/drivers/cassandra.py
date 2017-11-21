@@ -1831,6 +1831,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         ignored_errors = 0
         token = start_token
         rows = []
+        done = 0
+        total = stop_token - start_token
+
         while token < stop_token:
             # Schedule read first.
             future = self._execute_async_metadata(
@@ -1843,6 +1846,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 metric_name = result[0]
                 id = result[2]
                 config = result[3]
+                done = token - start_token
 
                 metadata = bg_accessor.MetricMetadata.from_string_dict(config)
                 try:
@@ -1872,10 +1876,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 continue
 
             token = rows[-1][1]
-
-            done = token - start_token
-            total = stop_token - start_token
-
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
                callback_on_progress=None):
@@ -2060,9 +2060,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             first_exception = e
             log.exception('Failed to clean metrics.')
 
-        if first_exception != None:
+        if first_exception is not None:
             raise first_exception
-
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
@@ -2148,7 +2147,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     log.warn(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token, stop_token - start_token)
+                done = token - start_token
+                total = stop_token - start_token
+                callback_on_progress(done, total)
 
 
 def build(*args, **kwargs):
