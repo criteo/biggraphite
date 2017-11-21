@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2017-11-21
+### Breaking changes
+- The previously non working `--(meta|data)_consistency*` flags have been prefixed by `cassandra`.
+
+### Fixed
+- Cassandra background operations (clean, repair) are now more resilient to timeouts
+- Fixed Cassandra consistency flags.
+
 ## [0.8.11] - 2017-11-08
 ### Fixed
 - `bgutil stats`: Skip corrupt metrics
@@ -131,7 +139,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.8.10...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/criteo/biggraphite/compare/v0.8.11...v0.9.0
+[0.8.11]: https://github.com/criteo/biggraphite/compare/v0.8.10...v0.8.11
 [0.8.10]: https://github.com/criteo/biggraphite/compare/v0.8.9...v0.8.10
 [0.8.9]: https://github.com/criteo/biggraphite/compare/v0.8.8...v0.8.9
 [0.8.8]: https://github.com/criteo/biggraphite/compare/v0.8.7...v0.8.8
