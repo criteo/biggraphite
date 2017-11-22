@@ -12,12 +12,9 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.BooleanQuery.Builder;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.ControlledRealTimeReopenThread;
 import org.apache.lucene.search.IndexSearcher;
@@ -38,6 +35,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Lucene-based Graphite metrics index.
  *
+ * TODO(p.boddu): Remove search related code from this class.
+ *
  * TODO(d.forest): provide support for globstar (**)
  *
  * TODO(d.forest): provide support for autocompletion
@@ -49,10 +48,10 @@ import org.slf4j.LoggerFactory;
  * - FS-RW: for read-write on-disk index, during sstable write/merge (with NRT)
  * - FS-RO: for read-only on-disk index consultation (without NRT, without writer)
  */
-public class MetricsIndex
+public class LuceneIndex
     implements Closeable
 {
-    private static final Logger logger = LoggerFactory.getLogger(MetricsIndex.class);
+    private static final Logger logger = LoggerFactory.getLogger(LuceneIndex.class);
 
     public final String name;
     public final Optional<Path> indexPath;
@@ -62,13 +61,13 @@ public class MetricsIndex
     private SearcherManager searcherMgr;
     private ControlledRealTimeReopenThread<IndexSearcher> reopener;
 
-    public MetricsIndex(String name)
+    public LuceneIndex(String name)
         throws IOException
     {
         this(name, Optional.empty());
     }
 
-    public MetricsIndex(String name, Optional<Path> indexPath)
+    public LuceneIndex(String name, Optional<Path> indexPath)
         throws IOException
     {
         IndexWriterConfig config = new IndexWriterConfig()
@@ -148,7 +147,7 @@ public class MetricsIndex
     {
         logger.trace("{} - Inserting '{}'", name, path);
 
-        Document doc = MetricPath.toDocument(path);
+        Document doc = LuceneUtils.toDocument(path);
 
         try {
             writer.addDocument(doc);
@@ -161,7 +160,7 @@ public class MetricsIndex
     {
         logger.trace("{} - Inserting '{}' with offset {}", name, path, offset);
 
-        Document doc = MetricPath.toDocument(path, offset);
+        Document doc = LuceneUtils.toDocument(path, offset);
 
         try {
             writer.addDocument(doc);
@@ -172,7 +171,7 @@ public class MetricsIndex
 
     public List<Long> searchOffsets(String pattern)
     {
-        return search(pattern, MetricPath::getOffsetFromDocument);
+        return search(pattern, LuceneUtils::getOffsetFromDocument);
     }
 
     public List<Pair<String, Long>> searchPaths(String pattern)
@@ -180,8 +179,8 @@ public class MetricsIndex
         return search(
             pattern,
             doc -> Pair.of(
-                MetricPath.getPathFromDocument(doc),
-                MetricPath.getOffsetFromDocument(doc)
+                LuceneUtils.getPathFromDocument(doc),
+                LuceneUtils.getOffsetFromDocument(doc)
             )
         );
     }
@@ -192,7 +191,7 @@ public class MetricsIndex
         logger.trace("{} - Searching for '{}', generated query: {}", name, pattern, query);
 
         ArrayList<T> results = new ArrayList<>();
-        Collector collector = new MetricsIndexCollector(
+        Collector collector = new LuceneSearchResultsCollector(
             doc -> results.add(handler.apply(doc))
         );
 
@@ -221,7 +220,7 @@ public class MetricsIndex
     {
         BooleanQuery.Builder queryBuilder = new BooleanQuery.Builder();
 
-        int length = MetricPath.iterateOnElements(
+        int length = LuceneUtils.iterateOnElements(
             pattern,
             (element, depth) -> {
                 // Wildcard-only fields do not filter anything.
@@ -229,7 +228,7 @@ public class MetricsIndex
                     return;
                 }
 
-                String termName = MetricPath.FIELD_PART_PREFIX + depth;
+                String termName = LuceneUtils.FIELD_PART_PREFIX + depth;
                 Query query;
                 if (element.indexOf('{') != -1 || element.indexOf('[') != -1) {
                     query = new RegexpQuery(
@@ -247,7 +246,7 @@ public class MetricsIndex
         );
 
         queryBuilder.add(
-            IntPoint.newExactQuery(MetricPath.FIELD_LENGTH, length),
+            IntPoint.newExactQuery(LuceneUtils.FIELD_LENGTH, length),
             BooleanClause.Occur.MUST
         );
 
