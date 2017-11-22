@@ -30,19 +30,21 @@ from os import path as os_path
 from distutils import version
 
 import cassandra
-from cassandra import murmur3
+from cassandra import auth
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
 from cassandra import encoder as c_encoder
-from cassandra import query as c_query
 from cassandra import marshal as c_marshal
-from cassandra import auth
+from cassandra import murmur3
+from cassandra import policies as c_policies
+from cassandra import query as c_query
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
+from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
 
 import prometheus_client as pm
 
@@ -88,6 +90,14 @@ DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 DEFAULT_READ_ON_SAMPLING_RATE = 0.1
+
+# Exceptions that are not considered fatal during batch jobs.
+# The affected range will simply be ignored.
+BATCH_IGNORED_EXCEPTIONS = (
+    cassandra.cluster.NoHostAvailable,
+    cassandra.ReadTimeout
+)
+BATCH_MAX_IGNORED_ERRORS = 100
 
 DIRECTORY_SEPARATOR = '.'
 
@@ -207,27 +217,27 @@ def add_argparse_arguments(parser):
         help="Cassandra replica",
         default=None)
     parser.add_argument(
-        "--meta_write_consistency", metavar="META_WRITE_CONS",
+        "--cassandra_meta_write_consistency", metavar="META_WRITE_CONS",
         help="Metadata write consistency",
         default=DEFAULT_META_WRITE_CONSISTENCY)
     parser.add_argument(
-        "--meta_read_consistency", metavar="META_READ_CONS",
+        "--cassandra_meta_read_consistency", metavar="META_READ_CONS",
         help="Metadata read consistency",
         default=DEFAULT_META_READ_CONSISTENCY)
     parser.add_argument(
-        "--meta_serial_consistency", metavar="META_SERIAL_CONS",
+        "--cassandra_meta_serial_consistency", metavar="META_SERIAL_CONS",
         help="Metadata serial consistency",
         default=DEFAULT_META_SERIAL_CONSISTENCY)
     parser.add_argument(
-        "--meta_background_consistency", metavar="META_BACKGROUND_CONS",
+        "--cassandra_meta_background_consistency", metavar="META_BACKGROUND_CONS",
         help="Metadata background consistency",
         default=DEFAULT_META_BACKGROUND_CONSISTENCY)
     parser.add_argument(
-        "--data_write_consistency", metavar="DATA_WRITE_CONS",
+        "--cassandra_data_write_consistency", metavar="DATA_WRITE_CONS",
         help="Data write consistency",
         default=DEFAULT_DATA_WRITE_CONSISTENCY)
     parser.add_argument(
-        "--data_read_consistency", metavar="DATA_READ_CONS",
+        "--cassandra_data_read_consistency", metavar="DATA_READ_CONS",
         help="Data read consistency",
         default=DEFAULT_DATA_READ_CONSISTENCY)
     parser.add_argument(
@@ -960,7 +970,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
             )
         except cassandra.DriverException as e:
-            logging.debug(e)
+            log.debug(e)
             self.__insert_metrics_metadata_statement = __prepare(
                 "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
                 " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
@@ -997,11 +1007,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, 'data')
 
     def _connect(self, contact_points, port):
+        lb_policy = c_policies.TokenAwarePolicy(
+            c_policies.DCAwareRoundRobinPolicy()
+        )
+
         cluster = c_cluster.Cluster(
             contact_points, port,
             compression=self.__compression,
             auth_provider=self.auth_provider,
+            # Metrics are disabled because too expensive to compute.
             metrics_enabled=False,
+            load_balancing_policy=lb_policy,
         )
 
         # Limits in flight requests
@@ -1287,7 +1303,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__select_metric_metadata_statement, (encoded_metric_name, )))
         if not result:
             return None
-        return result[0]
+
+        # Check that id and config are non-null.
+        result = result[0]
+        if result[0] is None or result[1] is None:
+            return None
+
+        return result
 
     def has_metric(self, metric_name):
         """See bg_accessor.Accessor."""
@@ -1804,26 +1826,56 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " WHERE token(name) > ? LIMIT %d ;"
             % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
         select.request_timeout = None
+        select.fetch_size = DEFAULT_MAX_BATCH_UTIL
 
+        ignored_errors = 0
         token = start_token
+        rows = []
+        done = 0
+        total = stop_token - start_token
+
         while token < stop_token:
-            rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
-            if len(rows.current_rows) == 0:
-                break
+            # Schedule read first.
+            future = self._execute_async_metadata(
+                select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+            )
 
-            token = rows[-1][1]
-
-            done = token - start_token
-            total = stop_token - start_token
-
+            # Then execute callback for the *previous* result while C* is
+            # doing its work.
             for i, result in enumerate(rows):
                 metric_name = result[0]
                 id = result[2]
                 config = result[3]
+                done = token - start_token
 
                 metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-                metric = bg_accessor.Metric(metric_name, id, metadata)
-                callback(metric, done + 1, total)
+                try:
+                    metric = bg_accessor.Metric(metric_name, id, metadata)
+                    callback(metric, done + 1, total)
+                # Avoid failing if either name, id, or metadata is missing.
+                except AssertionError as e:
+                    log.debug("Skipping corrupted metric: %s raising %s" % (result, str(e)))
+                    continue
+
+            # Then, read new data.
+            try:
+                rows = future.result()
+
+                # Empty results means that we've reached the end.
+                if len(rows.current_rows) == 0:
+                    break
+            except BATCH_IGNORED_EXCEPTIONS:
+                # Ignore timeouts and process as much as we can.
+                log.exception("Skipping query (token=%s)." % token)
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                token += DEFAULT_MAX_BATCH_UTIL
+                ignored_errors += 1
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+                continue
+
+            token = rows[-1][1]
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
                callback_on_progress=None):
@@ -1989,15 +2041,45 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
 
-        self._clean_empty_dir(start_key, end_key, shard, nshards, callback_on_progress)
-        self._clean_expired_metrics(max_age, start_key, end_key, shard, nshards,
-                                    callback_on_progress)
+        first_exception = None
+        try:
+            self._clean_empty_dir(
+                start_key, end_key, shard, nshards,
+                callback_on_progress
+            )
+        except Exception as e:
+            first_exception = e
+            log.exception('Failed to clean directories.')
+
+        try:
+            self._clean_expired_metrics(
+                max_age, start_key, end_key, shard, nshards,
+                callback_on_progress
+            )
+        except Exception as e:
+            first_exception = e
+            log.exception('Failed to clean metrics.')
+
+        if first_exception is not None:
+            raise first_exception
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
         select.consistency_level = self._meta_background_consistency
-        select.retry_policy = cassandra.policies.DowngradingConsistencyRetryPolicy
+        # Always retry background requests a few times, we don't really care
+        # about latency.
+        select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
         select.request_timeout = DEFAULT_TIMEOUT_QUERY_UTIL
+
+        return select
+
+    def _prepare_background_request_on_index(self, query_str):
+        select = self.__session_metadata.prepare(query_str)
+        select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
+        # We query an index, it's not a good idea to ask for more than ONE
+        # because it queries multiple nodes anyway.
+        select.consistency_level = cassandra.ConsistencyLevel.ONE
+        select.request_timeout = None
 
         return select
 
@@ -2015,11 +2097,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         log.info("Cleaning with cutoff time %d", cutoff)
 
         # statements
-        select = self._prepare_background_request(
+        select = self._prepare_background_request_on_index(
             "SELECT name, token(name) FROM \"%s\".metrics_metadata"
             " WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d ;"
             % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL))
-        select.request_timeout = None
 
         delete = self._prepare_background_request(
             "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
@@ -2035,11 +2116,25 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 yield (delete, (name,))
                 yield (delete_metadata, (name,))
 
+        ignored_errors = 0
         token = start_token
         while token < stop_token:
-            rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
-            if len(rows.current_rows) == 0:
-                break
+            try:
+                rows = self._execute_metadata(select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+
+                # Empty results means that we've reached the end.
+                if len(rows.current_rows) == 0:
+                    break
+            except BATCH_IGNORED_EXCEPTIONS:
+                # Ignore timeouts and process as much as we can.
+                log.exception("Skipping query (token=%s)." % token)
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                token += DEFAULT_MAX_BATCH_UTIL
+                ignored_errors += 1
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+                continue
 
             token = rows[-1][1]
             rets = self._execute_concurrent_metadata(
@@ -2052,7 +2147,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     log.warn(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token, stop_token - start_token)
+                done = token - start_token
+                total = stop_token - start_token
+                callback_on_progress(done, total)
 
 
 def build(*args, **kwargs):
