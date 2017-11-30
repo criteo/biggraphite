@@ -1,0 +1,4 @@
+# ElasticSearch driver
+elasticsearch<6.0.0
+
+ratelimiter
