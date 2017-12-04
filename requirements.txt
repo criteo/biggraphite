@@ -26,3 +26,6 @@ lmdb
 whisper
 carbon
 graphite-web
+
+# We do not support Python 3 and django-2.0 doesn't support Python 2.7.
+Django<2.0
