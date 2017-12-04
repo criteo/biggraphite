@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2017-12-04
+
+### Fixed
+- Version in setup.py
+
+### New
+- Experiments with Lucence and ES
+
 ## [0.9.0] - 2017-11-21
 ### Breaking changes
 - The previously non working `--(meta|data)_consistency*` flags have been prefixed by `cassandra`.
@@ -139,7 +147,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/criteo/biggraphite/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/criteo/biggraphite/compare/v0.8.11...v0.9.0
 [0.8.11]: https://github.com/criteo/biggraphite/compare/v0.8.10...v0.8.11
 [0.8.10]: https://github.com/criteo/biggraphite/compare/v0.8.9...v0.8.10
