@@ -57,11 +57,13 @@ class BigGraphiteTagDB(base.BaseTagDB):
         return []
 
     def find_series_cachekey(self, tags, requestContext=None):
+        """Returns the cache key for tags."""
         return 'TagDB.find_series:' + ':'.join(sorted(tags))
 
     def _find_series(self, tags, requestContext=None):
-        """
-        Internal function called by find_series, follows the same semantics allowing base class to implement caching
+        """Internal function called by find_series.
+
+        Follows the same semantics allowing base class to implement caching
         """
         return []
 
@@ -154,8 +156,7 @@ class BigGraphiteTagDB(base.BaseTagDB):
         pass
 
     def tag_multi_series(self, seriesList, requestContext=None):
-        """
-        Enter series into database.
+        """Enter series into database.
 
         Accepts a list of series strings, upserts into the TagDB and returns a
         list of canonicalized series names.
@@ -170,8 +171,7 @@ class BigGraphiteTagDB(base.BaseTagDB):
         return []
 
     def del_multi_series(self, seriesList, requestContext=None):
-        """
-        Remove series from database.
+        """Remove series from database.
 
         Accepts a list of series strings, removes
         them from the TagDB and returns True

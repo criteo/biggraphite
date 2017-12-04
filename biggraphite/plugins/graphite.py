@@ -44,7 +44,9 @@ except AttributeError:
 try:
     FetchInProgress = readers.FetchInProgress
 except AttributeError:
-    FetchInProgress = lambda g: g()
+    def FetchInProgress(g):
+        """Compat wrapper."""
+        return g()
 
 
 class Error(Exception):
