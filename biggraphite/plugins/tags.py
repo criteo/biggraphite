@@ -16,20 +16,21 @@
 from __future__ import absolute_import  # Otherwise graphite is this module.
 
 
-from graphite.tags import utils
+from graphite.tags import base
 
 
-class BigGraphiteTagDB(utils.BaseTagDB):
+class BigGraphiteTagDB(base.BaseTagDB):
     """TagDB using BigGraphite."""
 
-    def __init__(self, accessor=None, metadata_cache=None):
+    def __init__(self, settings, cache=None, log=None,
+                 accessor=None, metadata_cache=None):
         """Creates a BigGraphiteTagDB."""
-        super(BigGraphiteTagDB, self).__init__()
+        super(BigGraphiteTagDB, self).__init__(settings, cache=cache, log=log)
 
         self._accessor = accessor
         self._cache = metadata_cache
 
-    def find_series(self, tags):
+    def find_series(self, tags, requestContext=None):
         """Find series by tag.
 
         Accepts a list of tag specifiers and returns a list of matching paths.
@@ -55,7 +56,16 @@ class BigGraphiteTagDB(utils.BaseTagDB):
         """
         return []
 
-    def get_series(self, path):
+    def find_series_cachekey(self, tags, requestContext=None):
+        return 'TagDB.find_series:' + ':'.join(sorted(tags))
+
+    def _find_series(self, tags, requestContext=None):
+        """
+        Internal function called by find_series, follows the same semantics allowing base class to implement caching
+        """
+        return []
+
+    def get_series(self, path, requestContext=None):
         """Get series by path.
 
         Accepts a path string and returns a TaggedSeries object describing the
@@ -65,7 +75,7 @@ class BigGraphiteTagDB(utils.BaseTagDB):
         """
         return []
 
-    def list_tags(self, tagFilter=None):
+    def list_tags(self, tagFilter=None, limit=None, requestContext=None):
         """List defined tags.
 
         Returns a list of dictionaries describing the tags stored in the TagDB.
@@ -86,7 +96,7 @@ class BigGraphiteTagDB(utils.BaseTagDB):
         """
         return []
 
-    def get_tag(self, tag, valueFilter=None):
+    def get_tag(self, tag, valueFilter=None, limit=None, requestContext=None):
         """Get details of a particular tag.
 
         Accepts a tag name and returns a dict describing the tag.
@@ -112,7 +122,7 @@ class BigGraphiteTagDB(utils.BaseTagDB):
         """
         return []
 
-    def list_values(self, tag, valueFilter=None):
+    def list_values(self, tag, valueFilter=None, limit=None, requestContext=None):
         """List values for a particular tag.
 
         Returns a list of dictionaries describing the values stored in the TagDB.
@@ -135,7 +145,7 @@ class BigGraphiteTagDB(utils.BaseTagDB):
         """
         return []
 
-    def tag_series(self, series):
+    def tag_series(self, series, requestContext=None):
         """Enter series into database.
 
         Accepts a series string, upserts into the TagDB and returns the
@@ -143,9 +153,27 @@ class BigGraphiteTagDB(utils.BaseTagDB):
         """
         pass
 
-    def del_series(self, series):
+    def tag_multi_series(self, seriesList, requestContext=None):
+        """
+        Enter series into database.
+
+        Accepts a list of series strings, upserts into the TagDB and returns a
+        list of canonicalized series names.
+        """
+        return []
+
+    def del_series(self, series, requestContext=None):
         """Remove series from database.
 
         Accepts a series string and returns True.
+        """
+        return []
+
+    def del_multi_series(self, seriesList, requestContext=None):
+        """
+        Remove series from database.
+
+        Accepts a list of series strings, removes
+        them from the TagDB and returns True
         """
         return []

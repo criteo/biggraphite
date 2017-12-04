@@ -41,6 +41,10 @@ try:
     BaseFinder = finders.utils.BaseFinder
 except AttributeError:
     BaseFinder = object
+try:
+    FetchInProgress = readers.FetchInProgress
+except AttributeError:
+    FetchInProgress = lambda g: g()
 
 
 class Error(Exception):
@@ -163,7 +167,7 @@ class Reader(BaseReader):
 
         log.rendering('fetch(%s, %d, %d) - started' % (
             self._metric_name, start_time, end_time))
-        return readers.FetchInProgress(read_points)
+        return FetchInProgress(read_points)
 
     def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.

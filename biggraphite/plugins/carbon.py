@@ -20,7 +20,9 @@ import prometheus_client
 
 try:
     from graphite.tags import utils as tags_utils
-    HAVE_TAGS = True
+    from biggraphite.plugins import tags
+    # TODO: change this once the code actually works.
+    HAVE_TAGS = False
 except ImportError:
     HAVE_TAGS = False
 
@@ -31,8 +33,7 @@ from twisted.internet import task
 from biggraphite import utils
 from biggraphite import graphite_utils
 from biggraphite import accessor
-if HAVE_TAGS:
-    from biggraphite.plugins import tags
+
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
 # pylama:ignore=D102
