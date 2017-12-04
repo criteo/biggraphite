@@ -50,7 +50,7 @@ setuptools.setup(
     long_description=_read("README.md"),
     install_requires=_INSTALL_REQUIRES,
     dependency_links=_DEPENDENCY_LINKS,
-    test_requires=_read_reqs("tests-requirements.txt"),
+    tests_require=_read_reqs("tests-requirements.txt"),
     test_suite="tests",
     entry_points={
         "console_scripts": [
