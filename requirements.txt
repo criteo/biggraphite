@@ -28,4 +28,6 @@ carbon
 graphite-web
 
 # We do not support Python 3 and django-2.0 doesn't support Python 2.7.
-Django<2.0
+# We could use Django<2.0 but we match what graphire requires instead.
+Django>=1.8,<1.11.99
+
