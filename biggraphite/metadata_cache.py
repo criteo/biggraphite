@@ -60,6 +60,7 @@ class MetadataCache(object):
         assert accessor
         self.hit_count = 0
         self.miss_count = 0
+        self._lock = threading.Lock()
         self._accessor_lock = threading.Lock()
         self._accessor = accessor
         # _json_cache associates unparsed json to metadata instances.
@@ -213,11 +214,17 @@ class MemoryCache(MetadataCache):
 
     def _cache_has(self, metric_name):
         """Check if metric is cached."""
-        return metric_name in self.__cache
+        with self._lock:
+            return metric_name in self.__cache
 
     def _cache_get(self, metric_name):
         """Get metric from cache."""
-        metric = self.__cache.get(metric_name, False)
+        try:
+            with self._lock:
+                metric = self.__cache.get(metric_name, False)
+        except KeyError:
+            # When metrics expire, we still get a KeyError.
+            metric = False
         if metric is False:
             return None, False
         else:
@@ -226,14 +233,20 @@ class MemoryCache(MetadataCache):
     def _cache_set(self, metric_name, metric):
         """Put metric in the cache."""
         if metric:
-            self.__cache[metric_name] = metric
+            with self._lock:
+                self.__cache[metric_name] = metric
 
     def clean(self):
         """Automatically cleaned by cachetools."""
-        self.__cache.expire()
+        with self._lock:
+            self.__cache.expire()
 
     def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
         """Remove spurious entries from the cache."""
+        with self._lock:
+            self._repair(start_key, end_key, shard, nshards, callback_on_progress)
+
+    def _repair(self, start_key, end_key, shard, nshards, callback_on_progress):
         i = 0
         for key in self.__cache:
             if start_key is not None and key < start_key:
