@@ -191,7 +191,8 @@ class TestMetricMetadata(unittest.TestCase):
     def test_setattr(self):
         m = bg_test_utils.make_metric("test")
         self.assertTrue(hasattr(m, "carbon_xfilesfactor"))
-        self.assertRaises(AttributeError, setattr, m, "carbon_xfilesfactor", 0.5)
+        self.assertRaises(AttributeError, setattr, m,
+                          "carbon_xfilesfactor", 0.5)
 
 
 class TestMetric(unittest.TestCase):
@@ -235,7 +236,7 @@ class TestPointGrouper(unittest.TestCase):
         data = [(True, [(0, 0, 1), (0, 1, 2)]), (True, [(0, 2, 3)])]
         results = bg_accessor.PointGrouper(_METRIC, 0, 3600, stage, data)
         expected_results = [(0.0, 1), (1.0, 2), (2.0, 3)]
-        self.assertEquals(list(results), expected_results)
+        self.assertEqual(list(results), expected_results)
 
     def test_aggregating(self):
         """Test that we can aggregate a stage."""
@@ -245,7 +246,7 @@ class TestPointGrouper(unittest.TestCase):
         results = bg_accessor.PointGrouper(
             _METRIC, 0, 3600, stage1, data, source_stage=stage0)
         expected_results = [(0.0, 2.0)]
-        self.assertEquals(list(results), expected_results)
+        self.assertEqual(list(results), expected_results)
 
     def test_without_aggregating(self):
         """Test that we can merge instead of aggregate a stage."""
@@ -255,7 +256,7 @@ class TestPointGrouper(unittest.TestCase):
         results = bg_accessor.PointGrouper(
             _METRIC, 0, 3600, stage1, data, source_stage=stage0, aggregated=False)
         expected_results = [(0.0, 6.0, 3.0)]
-        self.assertEquals(list(results), expected_results)
+        self.assertEqual(list(results), expected_results)
 
     def test_aggregated(self):
         """Test that we can read aggregated stages."""
@@ -267,22 +268,22 @@ class TestPointGrouper(unittest.TestCase):
         ]
         results = bg_accessor.PointGrouper(_METRIC, 0, 86000, stage1, data)
         expected_results = [(0.0, 1.0), (60.0, 0.5)]
-        self.assertEquals(list(results), expected_results)
+        self.assertEqual(list(results), expected_results)
 
 
 class TestReplicasAndShard(unittest.TestCase):
 
     def test_pack_shard(self):
-        self.assertEquals(bg_accessor.pack_shard(0, 0), 0)
-        self.assertEquals(bg_accessor.pack_shard(0, 1), 1)
-        self.assertEquals(bg_accessor.pack_shard(1, 0), 0x4000)
-        self.assertEquals(bg_accessor.pack_shard(1, 1), 0x4001)
+        self.assertEqual(bg_accessor.pack_shard(0, 0), 0)
+        self.assertEqual(bg_accessor.pack_shard(0, 1), 1)
+        self.assertEqual(bg_accessor.pack_shard(1, 0), 0x4000)
+        self.assertEqual(bg_accessor.pack_shard(1, 1), 0x4001)
 
     def test_unpack_shard(self):
-        self.assertEquals(bg_accessor.unpack_shard(0), (0, 0))
-        self.assertEquals(bg_accessor.unpack_shard(1), (0, 1))
-        self.assertEquals(bg_accessor.unpack_shard(0x4000), (1, 0))
-        self.assertEquals(bg_accessor.unpack_shard(0x4001), (1, 1))
+        self.assertEqual(bg_accessor.unpack_shard(0), (0, 0))
+        self.assertEqual(bg_accessor.unpack_shard(1), (0, 1))
+        self.assertEqual(bg_accessor.unpack_shard(0x4000), (1, 0))
+        self.assertEqual(bg_accessor.unpack_shard(0x4001), (1, 1))
 
 
 if __name__ == "__main__":

@@ -64,9 +64,11 @@ def _parse_opts(args):
     bg_utils.add_argparse_arguments(parser)
     subparsers = parser.add_subparsers(help="commands")
     for command in COMMANDS:
-        subparser = subparsers.add_parser(command.NAME, add_help=False)  # accept -h for du
+        subparser = subparsers.add_parser(
+            command.NAME, add_help=False)  # accept -h for du
         # but we still want --help
-        subparser.add_argument('--help', action='help', help='show this help message and exit')
+        subparser.add_argument('--help', action='help',
+                               help='show this help message and exit')
         command.add_arguments(subparser)
         subparser.set_defaults(func=command.run)
     return parser.parse_args(args)

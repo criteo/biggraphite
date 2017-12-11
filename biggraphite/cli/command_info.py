@@ -40,7 +40,7 @@ class CommandInfo(command.BaseCommand):
         accessor.connect()
         metric = accessor.get_metric(opts.metric)
         if metric is None:
-            print ("Metric '%s' doesn't exist" % opts.metric)
+            print("Metric '%s' doesn't exist" % opts.metric)
             return
 
         print("Name: ", metric.name)

@@ -27,7 +27,7 @@ class TestGraphiteUtils(unittest.TestCase):
         settings = types.ModuleType("settings")
         settings.BG_DRIVER = "memory"
         accessor = bg_graphite_utils.accessor_from_settings(settings)
-        self.assertNotEquals(accessor, None)
+        self.assertNotEqual(accessor, None)
 
     def test_cache_from_settings(self):
         import types
@@ -37,7 +37,7 @@ class TestGraphiteUtils(unittest.TestCase):
         settings.BG_CACHE_TTL = 60
         settings.BG_CACHE_SYNC = False
         cache = bg_graphite_utils.cache_from_settings('fake', settings)
-        self.assertNotEquals(cache, None)
+        self.assertNotEqual(cache, None)
 
 
 if __name__ == "__main__":

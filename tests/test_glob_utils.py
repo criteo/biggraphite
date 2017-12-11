@@ -69,7 +69,7 @@ class TestGlobUtilsInternals(unittest.TestCase):
         def filter_metrics(metrics, glob):
             print(glob + "   ===>   " + bg_glob._glob_to_regex(glob))
             glob_re = re.compile(bg_glob._glob_to_regex(glob))
-            return filter(glob_re.match, metrics)
+            return list(filter(glob_re.match, metrics))
 
         scenarii = [
             (['a', 'a.b', 'a.cc'], 'a.*', ['a.b', 'a.cc']),

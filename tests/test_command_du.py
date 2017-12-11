@@ -17,7 +17,7 @@ from __future__ import print_function
 import unittest
 import argparse
 from mock import patch
-from StringIO import StringIO
+from six import StringIO
 
 from biggraphite.cli import command_du
 from biggraphite import utils as bg_utils
@@ -34,7 +34,8 @@ class TestCommandDu(bg_test_utils.TestCaseWithFakeAccessor):
     def get_output(self, args, mock_stdout):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
-            self.accessor.create_metric(self.make_metric(metric, self.metadata))
+            self.accessor.create_metric(
+                self.make_metric(metric, self.metadata))
 
         cmd = command_du.CommandDu()
 
@@ -64,8 +65,10 @@ class TestCommandDu(bg_test_utils.TestCaseWithFakeAccessor):
     def test_human_size(self):
         du = command_du.CommandDu()
         self.assertEqual(du._human_size_of_points(1), '24B')
-        self.assertEqual(du._human_size_of_points(1023 / command_du._BYTES_PER_POINT), '1008B')
-        self.assertEqual(du._human_size_of_points(1024 / (command_du._BYTES_PER_POINT-1)), '1.0K')
+        self.assertEqual(du._human_size_of_points(
+            1023 // command_du._BYTES_PER_POINT), '1008B')
+        self.assertEqual(du._human_size_of_points(
+            1024 // (command_du._BYTES_PER_POINT - 1)), '1.0K')
 
 
 if __name__ == "__main__":

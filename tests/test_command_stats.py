@@ -17,7 +17,7 @@ from __future__ import print_function
 import unittest
 import argparse
 from mock import patch
-from StringIO import StringIO
+from six import StringIO
 
 from biggraphite.cli import command_stats
 from biggraphite import utils as bg_utils
@@ -34,7 +34,8 @@ class TestCommandStats(bg_test_utils.TestCaseWithFakeAccessor):
     def get_output(self, args, mock_stdout):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
-            self.accessor.create_metric(self.make_metric(metric, self.metadata))
+            self.accessor.create_metric(
+                self.make_metric(metric, self.metadata))
 
         cmd = command_stats.CommandStats()
 

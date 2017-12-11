@@ -43,12 +43,14 @@ class TestDownsampler(unittest.TestCase):
         uid = uuid.uuid4()
         metric_metadata = bg_accessor.MetricMetadata(
             aggregator=bg_accessor.Aggregator.total, retention=retention)
-        self.metric_sum = bg_accessor.Metric(self.METRIC_NAME_SUM, uid, metric_metadata)
+        self.metric_sum = bg_accessor.Metric(
+            self.METRIC_NAME_SUM, uid, metric_metadata)
 
         uid = uuid.uuid4()
         metric_metadata = bg_accessor.MetricMetadata(
             aggregator=bg_accessor.Aggregator.average, retention=retention)
-        self.metric_avg = bg_accessor.Metric(self.METRIC_NAME_AVG, uid, metric_metadata)
+        self.metric_avg = bg_accessor.Metric(
+            self.METRIC_NAME_AVG, uid, metric_metadata)
         self.ds = bg_ds.Downsampler(self.CAPACITY)
 
     def test_feed_simple_sum(self):
@@ -132,14 +134,14 @@ class TestDownsampler(unittest.TestCase):
 
     def test_feed_multiple(self):
         """Test feed with one point per minute for 30 minutes."""
-        for i in xrange(30):
+        for i in range(30):
             result = self.ds.feed(self.metric_sum, [(1, i)])
             # We should generate only one metric per retention.
-            self.assertEquals(len(result), 2)
+            self.assertEqual(len(result), 2)
 
-        for i in xrange(30):
+        for i in range(30):
             result = self.ds.feed(self.metric_sum, [(0, i)])
-            self.assertEquals(len(result), 2)
+            self.assertEqual(len(result), 2)
 
     def test_feed_extended(self):
         """Test feed with several points."""
@@ -149,10 +151,13 @@ class TestDownsampler(unittest.TestCase):
             (0, 1),  # Point at index 0.
             (1, 2),  # Overrides previous point at index 0.
             (self.PRECISION, 15),  # Point at index 1.
-            (self.PRECISION * self.CAPACITY, 25),  # Evicts the point at index 0.
-            (self.PRECISION * self.CAPACITY * 2, 150),  # Evicts all previous points.
+            # Evicts the point at index 0.
+            (self.PRECISION * self.CAPACITY, 25),
+            # Evicts all previous points.
+            (self.PRECISION * self.CAPACITY * 2, 150),
             (self.PRECISION ** 2 * self.CAPACITY, 1500),  # Bump stage 1 epoch.
-            (self.PRECISION ** 2 * self.CAPACITY, 1501)  # Replace previous point.
+            # Replace previous point.
+            (self.PRECISION ** 2 * self.CAPACITY, 1501)
         ]
         expected_stage_0 = [
             (0, 2, 1, self.stage_0),  # Point at index 0.
@@ -162,7 +167,8 @@ class TestDownsampler(unittest.TestCase):
             (self.CAPACITY * self.PRECISION ** 2, 1501, 1, self.stage_0),
         ]
         expected_stage_1 = [
-            (0, 192, 4, self.stage_1),  # 192 = 2 + 15 + 25 + 150, sum of stage_0 values
+            # 192 = 2 + 15 + 25 + 150, sum of stage_0 values
+            (0, 192, 4, self.stage_1),
             (self.CAPACITY * self.PRECISION ** 2, 1501, 1, self.stage_1)
         ]
         expected = expected_stage_0 + expected_stage_1
@@ -202,11 +208,11 @@ class TestDownsampler(unittest.TestCase):
 
         # Should no remove anything.
         self.ds.purge(now=1)
-        self.assertEquals(len(self.ds._names_to_aggregates), 1)
+        self.assertEqual(len(self.ds._names_to_aggregates), 1)
 
         # Should remove everything.
         self.ds.purge(now=(self.PRECISION ** 2) * 3)
-        self.assertEquals(len(self.ds._names_to_aggregates), 0)
+        self.assertEqual(len(self.ds._names_to_aggregates), 0)
 
 
 if __name__ == "__main__":

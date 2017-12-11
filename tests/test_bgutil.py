@@ -16,7 +16,7 @@ from __future__ import print_function
 
 import unittest
 from mock import patch
-from StringIO import StringIO
+from six import StringIO
 
 from biggraphite.cli import bgutil
 from biggraphite import test_utils as bg_test_utils

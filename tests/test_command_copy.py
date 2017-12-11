@@ -26,7 +26,8 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3 * 3600
     _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s:48*3600s")
-    _RETENTION_BIS = bg_accessor.Retention.from_string("20*10s:14400*60s:500*3600s")
+    _RETENTION_BIS = bg_accessor.Retention.from_string(
+        "20*10s:14400*60s:500*3600s")
     _POINTS = bg_test_utils._make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
     )
@@ -35,7 +36,8 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
     _METRIC_2_NAME = "test.origin.metric_2.tata"
     _METRIC_2 = bg_test_utils.make_metric(_METRIC_2_NAME, retention=_RETENTION)
     _METRIC_3_NAME = "test.origin.metric_3.tata"
-    _METRIC_3 = bg_test_utils.make_metric(_METRIC_3_NAME, retention=_RETENTION_BIS)
+    _METRIC_3 = bg_test_utils.make_metric(
+        _METRIC_3_NAME, retention=_RETENTION_BIS)
 
     def setUp(self):
         """Set up a subdirectory of metrics to copy."""
@@ -147,7 +149,8 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
             src_retention="18*42s", dst_retention="50*300s",
             recursive=False, dry_run=False
         )
-        retention_str = [m.metadata.retention.as_string for m in list(metric_tuples)[0]]
+        retention_str = [m.metadata.retention.as_string for m in list(metric_tuples)[
+            0]]
         self.assertEqual(len(retention_str), 2)
         self.assertIn("18*42s", retention_str)
         self.assertIn("50*300s", retention_str)

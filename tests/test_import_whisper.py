@@ -39,7 +39,8 @@ class TestUtils(unittest.TestCase):
             ("/", "/a/b/c.wsp", "p.a.b.c"),
         ]
         for root, wsp, name in examples:
-            self.assertEqual(name, import_whisper.metric_name_from_wsp(root, "p.", wsp))
+            self.assertEqual(
+                name, import_whisper.metric_name_from_wsp(root, "p.", wsp))
 
 
 class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
@@ -60,10 +61,12 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
         low_precision_duration = retentions[1][0] * retentions[1][1]
         now = int(time.time())
         time_from, time_to = now - low_precision_duration, now
-        points = [(float(t), float(now-t)) for t in xrange(time_from, time_to)]
+        points = [(float(t), float(now - t))
+                  for t in range(time_from, time_to)]
         metric = "test_metric"
         metric_path = os_path.join(self.tempdir, metric + ".wsp")
-        whisper.create(metric_path, retentions, xfilesfactor, aggregation_method)
+        whisper.create(metric_path, retentions,
+                       xfilesfactor, aggregation_method)
         whisper.update_many(metric_path, points)
 
         self._call_main()
@@ -95,9 +98,11 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
 
         paths = list(import_whisper._Walker(root, '.*\.wsp').paths())
         self.assertEqual(len(paths), 4)
-        paths = list(import_whisper._Walker(root, '.*/toto/lulu/.*\.wsp').paths())
+        paths = list(import_whisper._Walker(
+            root, '.*/toto/lulu/.*\.wsp').paths())
         self.assertEqual(len(paths), 2)
-        paths = list(import_whisper._Walker(root, '.*(hello|world)\.wsp').paths())
+        paths = list(import_whisper._Walker(
+            root, '.*(hello|world)\.wsp').paths())
         self.assertEqual(len(paths), 2)
         paths = list(import_whisper._Walker(root, '.*/d/.*\.wsp').paths())
         self.assertEqual(len(paths), 1)

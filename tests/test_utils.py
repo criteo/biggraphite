@@ -26,12 +26,12 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
     def _check_settings(self, settings):
         # A non existing value.
         value, found = bg_utils.get_setting(settings, "BAR")
-        self.assertEquals(value, None)
+        self.assertEqual(value, None)
         self.assertFalse(found)
 
         # An existing value.
         value, found = bg_utils.get_setting(settings, "FOO")
-        self.assertEquals(value, "BAR")
+        self.assertEqual(value, "BAR")
         self.assertTrue(found)
 
     def test_carbon_settings(self):
@@ -54,25 +54,26 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
 
         settings = bg_utils.settings_from_confattr(settings)
         accessor = bg_utils.accessor_from_settings(settings)
-        self.assertNotEquals(accessor, None)
+        self.assertNotEqual(accessor, None)
 
         settings["BG_CASSANDRA_COMPRESSION"] = False
         settings = bg_utils.settings_from_confattr(settings)
         accessor = bg_utils.accessor_from_settings(settings)
-        self.assertNotEquals(accessor, None)
+        self.assertNotEqual(accessor, None)
 
     def test_memory_accessor(self):
         settings = {"BG_DRIVER": "memory"}
         settings = bg_utils.settings_from_confattr(settings)
         accessor = bg_utils.accessor_from_settings(settings)
-        self.assertNotEquals(accessor, None)
+        self.assertNotEqual(accessor, None)
 
     def test_set_log_level(self):
         bg_utils.set_log_level({"log_level": "INFO"})
 
     def test_manipulate_paths_like_upstream(self):
         sys_path = []
-        bg_utils.manipulate_paths_like_upstream("/a/b/c/bin/bg-carbon-aggregator-cache", sys_path)
+        bg_utils.manipulate_paths_like_upstream(
+            "/a/b/c/bin/bg-carbon-aggregator-cache", sys_path)
         self.assertEqual(1, len(sys_path))
         self.assertEqual("/a/b/c/lib", sys_path[0])
 

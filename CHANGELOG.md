@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### New
+- Support for Graphite 1.1.0
+- Support for Python 3
+
+### TODO
+- pin versions in requirements.txt
+
 ## [0.9.2] - 2017-12-04
 
 ### Fixed

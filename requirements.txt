@@ -1,6 +1,5 @@
 # Commande line
 humanize
-ipython<6
 parsedatetime
 progressbar2
 scandir
@@ -15,6 +14,7 @@ cassandra-driver==3.11.0
 scales
 
 # Core
+six
 enum34
 cachetools
 prometheus_client
@@ -23,11 +23,16 @@ prometheus_client
 lmdb
 
 # Graphite
-whisper
-carbon
-graphite-web
+# Pin versions before next release
+git+git://github.com/graphite-project/whisper.git#egg=whisper
+git+git://github.com/graphite-project/graphite-web.git#egg=graphite-web
+git+git://github.com/graphite-project/carbon.git#egg=carbon
+# whisper>=1.1.0
+# carbon>=1.1.0
+# graphite-web>=1.1.0
 
-# We do not support Python 3 and django-2.0 doesn't support Python 2.7.
 # We could use Django<2.0 but we match what graphire requires instead.
 Django>=1.8,<1.11.99
 
+# Optional:
+# ipython

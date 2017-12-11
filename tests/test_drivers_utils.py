@@ -41,7 +41,7 @@ class CountDownTest(unittest.TestCase):
 
     def test_on_result(self):
         result = "whatever this is not used"
-        for _ in xrange(self._COUNT - 1):
+        for _ in range(self._COUNT - 1):
             self.count_down.on_result(result)
             self.on_zero.assert_not_called()
         self.count_down.on_result(result)

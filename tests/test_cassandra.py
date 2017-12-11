@@ -33,7 +33,7 @@ _QUERY_END = _QUERY_START + _QUERY_RANGE
 _EXTRA_POINTS = 1000
 _POINTS_START = _QUERY_START - _EXTRA_POINTS
 _POINTS_END = _QUERY_END + _EXTRA_POINTS
-_POINTS = [(t, v) for v, t in enumerate(xrange(_POINTS_START, _POINTS_END))]
+_POINTS = [(t, v) for v, t in enumerate(range(_POINTS_START, _POINTS_END))]
 _USEFUL_POINTS = _POINTS[_EXTRA_POINTS:-_EXTRA_POINTS]
 assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
@@ -138,21 +138,23 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s_0']
         options = datapoints_86400p_1s.options
-        self.assertEquals(
+        self.assertEqual(
             options['compaction']['class'],
             'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy')
-        self.assertEquals(options['compaction']['base_time_seconds'], '901')
-        self.assertEquals(options['compaction']['max_window_size_seconds'], '2000')
-        self.assertEquals(options['default_time_to_live'], 87300)
+        self.assertEqual(options['compaction']['base_time_seconds'], '901')
+        self.assertEqual(options['compaction']
+                         ['max_window_size_seconds'], '2000')
+        self.assertEqual(options['default_time_to_live'], 87300)
 
         datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s_aggr']
         options = datapoints_10080_60s.options
-        self.assertEquals(
+        self.assertEqual(
             options['compaction']['class'],
             'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy')
-        self.assertEquals(options['compaction']['base_time_seconds'], '960')
-        self.assertEquals(options['compaction']['max_window_size_seconds'], '120000')
-        self.assertEquals(options['default_time_to_live'], 605700)
+        self.assertEqual(options['compaction']['base_time_seconds'], '960')
+        self.assertEqual(options['compaction']
+                         ['max_window_size_seconds'], '120000')
+        self.assertEqual(options['default_time_to_live'], 605700)
 
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
@@ -182,21 +184,23 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s_0']
         options = datapoints_86400p_1s.options
-        self.assertEquals(
+        self.assertEqual(
             options['compaction']['class'],
             'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
-        self.assertEquals(options['compaction']['compaction_window_unit'], 'HOURS')
-        self.assertEquals(options['compaction']['compaction_window_size'], '1')
-        self.assertEquals(options['default_time_to_live'], 87300)
+        self.assertEqual(options['compaction']
+                         ['compaction_window_unit'], 'HOURS')
+        self.assertEqual(options['compaction']['compaction_window_size'], '1')
+        self.assertEqual(options['default_time_to_live'], 87300)
 
         datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s_aggr']
         options = datapoints_10080_60s.options
-        self.assertEquals(
+        self.assertEqual(
             options['compaction']['class'],
             'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
-        self.assertEquals(options['compaction']['compaction_window_unit'], 'HOURS')
-        self.assertEquals(options['compaction']['compaction_window_size'], '3')
-        self.assertEquals(options['default_time_to_live'], 605700)
+        self.assertEqual(options['compaction']
+                         ['compaction_window_unit'], 'HOURS')
+        self.assertEqual(options['compaction']['compaction_window_size'], '3')
+        self.assertEqual(options['default_time_to_live'], 605700)
 
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
@@ -309,7 +313,8 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
-            self.assertEqual(expected_matches, list(self.accessor.glob_directory_names(glob)))
+            self.assertEqual(expected_matches, list(
+                self.accessor.glob_directory_names(glob)))
 
         assert_find("x.y", ["x.y"])  # Test exact match
         assert_find("A", [])  # Test case mismatch
@@ -341,12 +346,12 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         }
         metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
 
-        self.assertEquals(self.accessor.has_metric(metric.name), False)
+        self.assertEqual(self.accessor.has_metric(metric.name), False)
         self.accessor.create_metric(metric)
-        self.assertEquals(self.accessor.has_metric(metric.name), True)
+        self.assertEqual(self.accessor.has_metric(metric.name), True)
         metric_again = self.accessor.get_metric(metric.name)
         self.assertEqual(metric.name, metric_again.name)
-        for k, v in meta_dict.iteritems():
+        for k, v in meta_dict.items():
             self.assertEqual(v, getattr(metric_again.metadata, k))
 
     def test_update_metrics(self):
@@ -361,7 +366,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.create_metric(
             self.accessor.make_metric(metric_name, metadata))
         metric = self.accessor.get_metric(metric_name)
-        for k, v in meta_dict.iteritems():
+        for k, v in meta_dict.items():
             self.assertEqual(v, getattr(metric.metadata, k))
 
         # test
@@ -374,7 +379,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         # Setting a known metric name should work
         self.accessor.update_metric(metric_name, updated_metadata)
         updated_metric = self.accessor.get_metric(metric_name)
-        for k, v in updated_meta_dict.iteritems():
+        for k, v in updated_meta_dict.items():
             self.assertEqual(v, getattr(updated_metric.metadata, k))
         # Setting an unknown metric name should fail
         self.assertRaises(
@@ -384,17 +389,17 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
     def test_has_metric(self):
         metric = self.make_metric("a.b.c.d.e.f")
 
-        self.assertEquals(self.accessor.has_metric(metric.name), False)
+        self.assertEqual(self.accessor.has_metric(metric.name), False)
         self.accessor.create_metric(metric)
-        self.assertEquals(self.accessor.has_metric(metric.name), True)
+        self.assertEqual(self.accessor.has_metric(metric.name), True)
 
     def test_delete_metric(self):
         metric = self.make_metric("a.b.c.d.e.f")
 
         self.accessor.create_metric(metric)
-        self.assertEquals(self.accessor.has_metric(metric.name), True)
+        self.assertEqual(self.accessor.has_metric(metric.name), True)
         self.accessor.delete_metric(metric.name)
-        self.assertEquals(self.accessor.has_metric(metric.name), False)
+        self.assertEqual(self.accessor.has_metric(metric.name), False)
 
     def test_repair(self):
         # TODO(c.chary): Add better test for repair()
@@ -414,9 +419,11 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         self.accessor.insert_points(metric, points)
         self.accessor.flush()
-        actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
+        actual_points = self.accessor.fetch_points(
+            metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
-        actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
+        actual_points = self.accessor.fetch_points(
+            metric_1, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 
     def test_metrics_ttl_correctly_refreshed(self):
@@ -437,7 +444,7 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         time.sleep(3)
         self.accessor.get_metric(metric1.name, touch=True)
-        self.assertEquals(isUpdated[0], True)
+        self.assertEqual(isUpdated[0], True)
 
         self.accessor.touch_metric = old_touch_fn
         self.addCleanup(self.accessor.drop_all_metrics)
@@ -457,10 +464,10 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
 
         time.sleep(3)
         self.accessor.get_metric(metric1.name)
-        self.assertEquals(isUpdated[0], False)
+        self.assertEqual(isUpdated[0], False)
 
         self.accessor.get_metric(metric1.name, touch=True)
-        self.assertEquals(isUpdated[0], False)
+        self.assertEqual(isUpdated[0], False)
 
         self.accessor.touch_metric = old_touch_fn
         self.addCleanup(self.accessor.drop_all_metrics)
@@ -474,16 +481,16 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.flush()
 
         # Check that the metrics exist before the cleanup
-        self.assertEquals(self.accessor.has_metric(metric1.name), True)
-        self.assertEquals(self.accessor.has_metric(metric2.name), True)
+        self.assertEqual(self.accessor.has_metric(metric1.name), True)
+        self.assertEqual(self.accessor.has_metric(metric2.name), True)
 
         # set cutoff time in the future to delete all created metrics
         cutoff = -3600
         self.accessor.clean(cutoff)
 
         # Check that the metrics are correctly deleted
-        self.assertEquals(self.accessor.has_metric(metric1.name), False)
-        self.assertEquals(self.accessor.has_metric(metric2.name), False)
+        self.assertEqual(self.accessor.has_metric(metric1.name), False)
+        self.assertEqual(self.accessor.has_metric(metric2.name), False)
         self.addCleanup(self.accessor.drop_all_metrics)
 
     def test_clean_not_expired(self):
@@ -495,16 +502,16 @@ class TestAccessorWithCassandra(bg_test_utils.TestCaseWithAccessor):
         self.accessor.flush()
 
         # Check that the metrics exist before the cleanup
-        self.assertEquals(self.accessor.has_metric(metric1.name), True)
-        self.assertEquals(self.accessor.has_metric(metric2.name), True)
+        self.assertEqual(self.accessor.has_metric(metric1.name), True)
+        self.assertEqual(self.accessor.has_metric(metric2.name), True)
 
         # set cutoff time in the past to delete nothing
         cutoff = 3600
         self.accessor.clean(cutoff)
 
         # Check that the metrics still exist after the cleanup
-        self.assertEquals(self.accessor.has_metric(metric1.name), True)
-        self.assertEquals(self.accessor.has_metric(metric2.name), True)
+        self.assertEqual(self.accessor.has_metric(metric1.name), True)
+        self.assertEqual(self.accessor.has_metric(metric2.name), True)
         self.addCleanup(self.accessor.drop_all_metrics)
 
     def test_syncdb(self):
