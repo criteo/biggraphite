@@ -64,6 +64,11 @@ class CommandRead(command.BaseCommand):
             help="Do reads asynchronously.",
             action="store_true"
         )
+        parser.add_argument(
+            "--output-csv",
+            help="Output points in CSV format: metric;timestamp;value.",
+            action="store_true"
+        )
 
     def run(self, accessor, opts):
         """Read points.
@@ -77,6 +82,7 @@ class CommandRead(command.BaseCommand):
         forced_stage = bg_accessor.Stage.from_string(opts.stage) if opts.stage else None
         time_start = opts.time_start
         time_end = opts.time_end
+        output_csv = opts.output_csv
 
         async_results = []
         if opts.async:
@@ -93,7 +99,7 @@ class CommandRead(command.BaseCommand):
                 results = self._fetch_points(
                     accessor, metric, time_start, time_end, forced_stage)
 
-            self._display_metric(metric, results)
+            self._display_metric(metric, results, output_csv)
 
     @staticmethod
     def _fetch_points(accessor, metric, time_start, time_end, stage):
@@ -111,8 +117,15 @@ class CommandRead(command.BaseCommand):
         return (points, time_start, time_end, stage)
 
     @staticmethod
-    def _display_metric(metric, results):
+    def _display_metric(metric, results, output_csv):
         """Print metric's information."""
+        if output_csv:
+            CommandRead._display_csv(metric, results)
+        else:
+            CommandRead._display_human_readable(metric, results)
+
+    @staticmethod
+    def _display_human_readable(metric, results):
         (points, time_start, time_end, stage) = results
 
         print("Name: ", metric.name)
@@ -123,3 +136,10 @@ class CommandRead(command.BaseCommand):
         for point in points:
             print('%s: %f' % (point[0], point[1]))
         print()
+
+    @staticmethod
+    def _display_csv(metric, results):
+        (points, time_start, time_end, stage) = results
+
+        for point in points:
+            print("%s,%s,%f" % (metric.name, point[0], point[1]))
