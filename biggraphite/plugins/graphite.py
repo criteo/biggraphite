@@ -265,15 +265,19 @@ class Finder(BaseFinder):
                 self._cache_timeout = django_settings.FIND_CACHE_DURATION
         return self._django_cache
 
+    def _hash(self, obj):
+        # Make sure we use all the member of the objects to
+        # build a unique key.
+        return hashing.compactHash(str(sorted(vars(obj).items())))
+
     def find_nodes(self, query):
         """Find nodes matching a query."""
         # TODO: we should probably consider query.startTime and query.endTime
         #  to filter out metrics that had no points in this interval.
-
         leaves_only = hasattr(query, 'leaves_only') and query.leaves_only
-        cache_key = "find_nodes:%s" % (hashing.compactHash(query.pattern))
+        cache_key = "find_nodes:%s" % self._hash(query)
         cached = self.django_cache().get(cache_key)
-        if cached:
+        if cached is not None:
             cache_hit = True
             success, results = cached
         else:

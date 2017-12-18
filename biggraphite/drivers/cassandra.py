@@ -1430,6 +1430,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             try:
                 for success, results in query_results:
                     query = results.response_future.query.query_string
+                    # Make sure we also cache empty results.
+                    fetched_results[query] = []
                     for result in results:
                         n_metrics += 1
                         name = result[0]
@@ -1440,7 +1442,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             except cassandra.DriverException as e:
                 raise CassandraError('Failed to glob: %s on %s' % (table, glob), e)
 
-            if self.cache:
+            if self.cache and fetched_results:
                 self.cache.set_many(fetched_results, timeout=self.cache_metadata_ttl)
 
         return _extract_results(query_results)

@@ -116,9 +116,10 @@ class FakeFindQuery(object):
     We don't use the Graphite Query because it imports too many things from Django.
     """
 
-    def __init__(self, pattern):
+    def __init__(self, pattern, leaves_only=None):
         """Create a fake find query."""
         self.pattern = pattern
+        self.leaves_only = leaves_only or False
 
 
 class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
@@ -133,17 +134,21 @@ class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
             metadata_cache=self.metadata_cache,
         )
 
-    def find_nodes(self, pattern):
-        return self.finder.find_nodes(FakeFindQuery(pattern))
+    def find_nodes(self, pattern, leaves_only=None):
+        query = FakeFindQuery(pattern, leaves_only=leaves_only)
+        return self.finder.find_nodes(query)
 
     def assertMatch(self, glob, branches, leaves):
-        found = list(self.find_nodes(glob))
-        found_branches = [node.path for node in found if not node.is_leaf]
-        found_leaves = [node.path for node in found if node.is_leaf]
-        for path in found_branches + found_leaves:
-            self.assertIsInstance(path, str)
-        self.assertItemsEqual(found_branches, branches)
-        self.assertItemsEqual(found_leaves, leaves)
+        for lo in (False, True):
+            found = list(self.find_nodes(glob, leaves_only=lo))
+            if lo:
+                branches = []
+            found_branches = [node.path for node in found if not node.is_leaf]
+            found_leaves = [node.path for node in found if node.is_leaf]
+            for path in found_branches + found_leaves:
+                self.assertIsInstance(path, str)
+            self.assertItemsEqual(found_branches, branches)
+            self.assertItemsEqual(found_leaves, leaves)
 
     def test_find_nodes(self):
         self.assertMatch("a", ["a"], ["a"])
