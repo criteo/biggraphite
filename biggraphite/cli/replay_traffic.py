@@ -68,7 +68,7 @@ def handle_packet(timestamp, packet):
 
 def get_requests(filename):
     """Get all Http requests from a pcap file."""
-    f = file(filename, "rb")
+    f = open(filename, "rb")
     pcap = dpkt.pcap.Reader(f)
 
     requests = []
@@ -158,7 +158,8 @@ def main():
     pool_factory = multiprocessing.Pool
     if opts.process == 1:
         pool_factory = multiprocessing_dummy.Pool
-    pool = pool_factory(opts.process, initializer=_setup_process, initargs=(opts,))
+    pool = pool_factory(
+        opts.process, initializer=_setup_process, initargs=(opts,))
 
     with progressbar.ProgressBar(max_value=len(requests)) as pbar:
         for i, _ in enumerate(pool.imap_unordered(_do_request, requests)):

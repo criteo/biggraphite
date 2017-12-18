@@ -83,7 +83,8 @@ class CommandWrite(command.BaseCommand):
         if not metric:
             print("Metric '%s' was not found and will be created" % opts.metric)
             metadata = bg_accessor.MetricMetadata(
-                aggregator=bg_accessor.Aggregator.from_config_name(opts.aggregator),
+                aggregator=bg_accessor.Aggregator.from_config_name(
+                    opts.aggregator),
                 retention=bg_accessor.Retention.from_string(opts.retention),
                 carbon_xfilesfactor=opts.x_files_factor,
             )

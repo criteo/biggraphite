@@ -62,14 +62,16 @@ class CommandRepair(command.BaseCommand):
                              start_key=opts.start_key,
                              end_key=opts.end_key)
         else:
-            logging.warning('Skipping disk cache repair because storage_dir is empty')
+            logging.warning(
+                'Skipping disk cache repair because storage_dir is empty')
 
         out_fd = sys.stderr
         if opts.quiet:
             out_fd = _DEV_NULL
 
         if self.pbar is None:
-            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=False)
+            self.pbar = progressbar.ProgressBar(
+                fd=out_fd, redirect_stderr=False)
         self.pbar.start()
 
         if on_progress is None:

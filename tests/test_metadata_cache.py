@@ -53,12 +53,13 @@ class CacheBaseTest(object):
     def test_instance_cache(self):
         """Check that we do cache JSON instances."""
         name = _TEST_METRIC.name
-        self.assertEquals(self.metadata_cache.has_metric(name), False)
-        self.assertEquals(self.metadata_cache.get_metric(name), None)
-        self.assertEquals(self.metadata_cache.has_metric(name), False)
+        self.assertEqual(self.metadata_cache.has_metric(name), False)
+        self.assertEqual(self.metadata_cache.get_metric(name), None)
+        self.assertEqual(self.metadata_cache.cache_has(name), True)
+        self.assertEqual(self.metadata_cache.has_metric(name), True)
 
         self.metadata_cache.create_metric(_TEST_METRIC)
-        self.assertEquals(self.metadata_cache.has_metric(name), True)
+        self.assertEqual(self.metadata_cache.has_metric(name), True)
 
         first = self.metadata_cache.get_metric(name)
         second = self.metadata_cache.get_metric(name)
@@ -79,8 +80,8 @@ class CacheBaseTest(object):
         self.metadata_cache.repair()
         self.metadata_cache.get_metric(metric_name)
         # Should be only one entry, and it was a hit.
-        self.assertEquals(self.metadata_cache.hit_count, 1)
-        self.assertEquals(self.metadata_cache.miss_count, 0)
+        self.assertEqual(self.metadata_cache.hit_count, 1)
+        self.assertEqual(self.metadata_cache.miss_count, 0)
 
         # Add a spurious metric.
         metric_name = "a.b.fake"
@@ -90,8 +91,8 @@ class CacheBaseTest(object):
         self.metadata_cache.repair()
         self.metadata_cache.get_metric(metric_name)
         # repair() will remove it, and the get will produce a miss.
-        self.assertEquals(self.metadata_cache.hit_count, 1)
-        self.assertEquals(self.metadata_cache.miss_count, 1)
+        self.assertEqual(self.metadata_cache.hit_count, 1)
+        self.assertEqual(self.metadata_cache.miss_count, 1)
 
     def test_repair_shard(self):
         # Add a normal metric.
@@ -103,8 +104,8 @@ class CacheBaseTest(object):
         self.metadata_cache.repair(shard=1, nshards=2)
         self.metadata_cache.get_metric(metric_name)
         # Should be only one entry, and it was a hit.
-        self.assertEquals(self.metadata_cache.hit_count, 1)
-        self.assertEquals(self.metadata_cache.miss_count, 0)
+        self.assertEqual(self.metadata_cache.hit_count, 1)
+        self.assertEqual(self.metadata_cache.miss_count, 0)
 
         # Add a spurious metric.
         metric_name = "a.b.fake"
@@ -115,15 +116,15 @@ class CacheBaseTest(object):
         # Will not fix.
         self.metadata_cache.repair(start_key="b")
         self.metadata_cache.get_metric(metric_name)
-        self.assertEquals(self.metadata_cache.hit_count, 2)
+        self.assertEqual(self.metadata_cache.hit_count, 2)
 
         # Will fix.
         self.metadata_cache.repair(start_key="a", shard=0, nshards=2)
         self.metadata_cache.repair(start_key="a", shard=1, nshards=2)
         self.metadata_cache.get_metric(metric_name)
         # repair() will remove it, and the get will produce a miss.
-        self.assertEquals(self.metadata_cache.hit_count, 2)
-        self.assertEquals(self.metadata_cache.miss_count, 1)
+        self.assertEqual(self.metadata_cache.hit_count, 2)
+        self.assertEqual(self.metadata_cache.miss_count, 1)
 
 
 class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
@@ -135,7 +136,7 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
         with self.metadata_cache._DiskCache__env.begin(
             self.metadata_cache._DiskCache__metric_to_metadata_db, write=False
         ) as txn:
-            payload = txn.get(_TEST_METRIC.name)
+            payload = txn.get(_TEST_METRIC.name.encode()).decode()
         return self.metadata_cache._DiskCache__split_payload(payload)[-1]
 
     def test_timestamp_update(self):
@@ -153,11 +154,13 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
             self.metadata_cache.get_metric(_TEST_METRIC.name)
 
         timestamp_get_within_half_ttl = self._get_metric_timestamp()
-        self.assertEquals(timestamp_creation, timestamp_get_within_half_ttl)
+        self.assertEqual(timestamp_creation, timestamp_get_within_half_ttl)
 
         with freeze_time("2014-01-02 04:00:00"):
-            self.assertIsNot(self.metadata_cache.get_metric(_TEST_METRIC.name), None)
-            self.assertIs(self.metadata_cache.cache_has(_TEST_METRIC.name), False)
+            self.assertIsNot(self.metadata_cache.get_metric(
+                _TEST_METRIC.name), None)
+            self.assertIs(self.metadata_cache.cache_has(
+                _TEST_METRIC.name), False)
 
     def test_cache_clean(self):
         """Check that the cache is cleared out of metrics older than the TTL."""
@@ -170,8 +173,9 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
         with freeze_time("2015-01-01 20:00:00"):
             self.metadata_cache.clean()
 
-        self.assertEquals(self.metadata_cache._cache_has(new_metric.name), True)
-        self.assertEquals(self.metadata_cache._cache_has(old_metric.name), False)
+        self.assertEqual(self.metadata_cache._cache_has(new_metric.name), True)
+        self.assertEqual(self.metadata_cache._cache_has(
+            old_metric.name), False)
 
 
 class TestMemoryCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):

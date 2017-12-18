@@ -62,7 +62,8 @@ class CommandDu(command.BaseCommand):
         for metric in list_metrics(accessor, opts.metrics):
             points = metric.metadata.retention.points
             total += points
-            self._display_metric_size(metric.name, metric.metadata.retention.points, opts.unit)
+            self._display_metric_size(
+                metric.name, metric.metadata.retention.points, opts.unit)
 
         if opts.total:
             self._display_metric_size('TOTAL', total, opts.unit)

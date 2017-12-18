@@ -31,7 +31,8 @@ class TestMain(unittest.TestCase):
         sys_path = []
         with mock.patch.object(carbon_util, "run_twistd_plugin",
                                return_value=None) as run_twisted:
-            bg_carbon_aggregator_cache.main("/a/b/c/bin/bg-carbon-aggregator-cache", sys_path)
+            bg_carbon_aggregator_cache.main(
+                "/a/b/c/bin/bg-carbon-aggregator-cache", sys_path)
         run_twisted.assert_called_once()
         self.assertEqual(1, len(sys_path))
         self.assertEqual("/a/b/c/lib", sys_path[0])

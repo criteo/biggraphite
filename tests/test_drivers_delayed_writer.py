@@ -30,7 +30,7 @@ class TestDelayedWriter(test_utils.TestCaseWithFakeAccessor):
     METRIC_NAME = "test.metric.sum"
     PRECISION = 1
     DURATION = 10
-    WRITER_PERIOD = 4*1000
+    WRITER_PERIOD = 4 * 1000
 
     def setUp(self):
         """Set up a delayed wrier."""
@@ -80,12 +80,12 @@ class TestDelayedWriter(test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(result, expected)
 
         # We should have low res point queued.
-        self.assertEquals(self.dw.size(), 1)
+        self.assertEqual(self.dw.size(), 1)
 
         # And none of them written to the accessor.
         points = self.accessor.fetch_points(
             self.metric, 0, 1000, stage=self.metric.retention[1])
-        self.assertEquals(len(list(points)), 0)
+        self.assertEqual(len(list(points)), 0)
 
         # See if we can write the points.
         def _now():
@@ -95,10 +95,10 @@ class TestDelayedWriter(test_utils.TestCaseWithFakeAccessor):
         # Now we should have points written.
         points = self.accessor.fetch_points(
             self.metric, 0, 1000, stage=self.metric.retention[1])
-        self.assertEquals(len(list(points)), 2)
+        self.assertEqual(len(list(points)), 2)
 
         # And none queued.
-        self.assertEquals(self.dw.size(), 0)
+        self.assertEqual(self.dw.size(), 0)
 
 
 if __name__ == "__main__":

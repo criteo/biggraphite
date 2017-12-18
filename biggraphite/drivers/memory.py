@@ -64,7 +64,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
     @staticmethod
     def _components_from_name(metric_name):
         res = metric_name.split(".")
-        return filter(None, res)
+        return list(filter(None, res))
 
     @property
     def _metric_names(self):
@@ -244,7 +244,8 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
     def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0):
         """See bg_accessor.Accessor."""
-        super(_MemoryAccessor, self).map(callback, start_key, end_key, shard, nshards)
+        super(_MemoryAccessor, self).map(
+            callback, start_key, end_key, shard, nshards)
 
         metrics = self._name_to_metric
         total = len(metrics)

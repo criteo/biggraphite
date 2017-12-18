@@ -58,47 +58,66 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
     def fetch(self, *args, **kwargs):
         result = self.reader.fetch(*args, **kwargs)
         # Readers can return a list or an object.
-        if isinstance(result, readers.FetchInProgress):
-            result = result.waitForResults()
+        if bg_graphite.FetchInProgress:
+            if isinstance(result, bg_graphite.FetchInProgress):
+                result = result.waitForResults()
+
         return result
 
     def test_fetch_non_existing(self):
         self.reader._metric_name = 'broken.name'
         (start, end, step), points = self.fetch(
-            start_time=self._POINTS_START+3,
-            end_time=self._POINTS_END-3,
-            now=self._POINTS_END+10,
+            start_time=self._POINTS_START + 3,
+            end_time=self._POINTS_END - 3,
+            now=self._POINTS_END + 10,
         )
         # Check that this returns at least one None.
         self.assertEqual(points[0], None)
 
     def test_fresh_read(self):
         (start, end, step), points = self.fetch(
-            start_time=self._POINTS_START+3,
-            end_time=self._POINTS_END-3,
-            now=self._POINTS_END+10,
+            start_time=self._POINTS_START + 3,
+            end_time=self._POINTS_END - 3,
+            now=self._POINTS_END + 10,
         )
         self.assertEqual(self._RETENTION[1].precision, step)
         # We expect these to have been rounded to match precision.
         self.assertEqual(self._POINTS_START, start)
         self.assertEqual(self._POINTS_END, end)
 
-        expected_points = range((end-start)//step)
+        expected_points = list(range((end - start) // step))
         self.assertEqual(expected_points, points)
 
     def test_carbon_protocol_read(self):
-        self.reader._metric_name = 'fake.name'
-        with mock.patch('graphite.carbonlink.CarbonLink.query') as carbonlink_query_mock:
+        _METRIC_NAME = 'fake.name'
+        _METRIC = bg_test_utils.make_metric(_METRIC_NAME)
+        # Custom aggregator to make sure all goes right.
+        _METRIC.metadata.aggregator = bg_accessor.Aggregator.minimum
+        self.accessor.create_metric(_METRIC)
+        self.accessor.flush()
+        self.reader = bg_graphite.Reader(
+            self.accessor, self.metadata_cache, self.carbonlink, _METRIC_NAME
+        )
+
+        with mock.patch('graphite.carbonlink.CarbonLinkPool.query') as carbonlink_query_mock:
             carbonlink_query_mock.return_value = [
-                (864005.0, 100.0), (864065.0, 101.0), (864125.0, 102.0)]
+                (864005.0, 100.0), (864065.0, 101.0), (864125.0, 102.0)
+            ]
 
             (start, end, step), points = self.fetch(
-                start_time=self._POINTS_START+3,
-                end_time=self._POINTS_END-3,
-                now=self._POINTS_END+10,
+                start_time=self._POINTS_START + 3,
+                end_time=self._POINTS_END - 3,
+                now=self._POINTS_END + 10,
             )
-        # Check that this returns at least one value different from None.
-        self.assertNotEqual(points[0], None)
+
+            # Check that we really have a 1sec resolution
+            self.assertEqual(start, self._POINTS_START + 3)
+            self.assertEqual(end, self._POINTS_END - 3)
+            self.assertEqual(step, 1)
+            # Check that this returns at least one value different from None.
+            self.assertEqual(len(points), end - start)
+            # Check that at least one point is at the correct place.
+            self.assertEqual(points[864005 - start], 100.0)
 
     def test_get_intervals(self):
         # start and end are the expected results, aligned on the precision
@@ -147,8 +166,8 @@ class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
             found_leaves = [node.path for node in found if node.is_leaf]
             for path in found_branches + found_leaves:
                 self.assertIsInstance(path, str)
-            self.assertItemsEqual(found_branches, branches)
-            self.assertItemsEqual(found_leaves, leaves)
+            self.assertEqual(found_branches, branches)
+            self.assertEqual(found_leaves, leaves)
 
     def test_find_nodes(self):
         self.assertMatch("a", ["a"], ["a"])

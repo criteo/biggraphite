@@ -43,7 +43,8 @@ class TestCommandTest(bg_test_utils.TestCaseWithFakeAccessor):
                                   "--cassandra_contact_points_metadata=127.0.0.1,192.168.1.1"])
         settings = bg_utils.settings_from_args(opts)
         self.assertIsInstance(settings['cassandra_contact_points'], list)
-        self.assertIsInstance(settings['cassandra_contact_points_metadata'], list)
+        self.assertIsInstance(
+            settings['cassandra_contact_points_metadata'], list)
 
         cmd.run(self.accessor, opts)
 

@@ -110,11 +110,12 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
         # See if we can update.
         metric = self.make_metric(metric_name)
-        metric.metadata.retention = bg_accessor.Retention([bg_accessor.Stage(1, 1)])
+        metric.metadata.retention = bg_accessor.Retention(
+            [bg_accessor.Stage(1, 1)])
         self._plugin._createAsyncOrig(metric, metric_name)
         self._plugin._createOneMetric()
         retention = self._plugin.getMetadata(metric_name, "retention")
-        self.assertEquals(retention, metric.metadata.retention)
+        self.assertEqual(retention, metric.metadata.retention)
 
     def test_nosuchmetric(self):
         other_metric = _TEST_METRIC + "-nosuchmetric"
@@ -126,23 +127,27 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
             self._plugin.getMetadata, other_metric, "aggregationMethod")
 
     def test_getMetadata(self):
-        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "carbon_xfilesfactor"), 0.5)
+        self.assertEqual(self._plugin.getMetadata(
+            _TEST_METRIC, "carbon_xfilesfactor"), 0.5)
         self.assertRaises(
             ValueError,
             self._plugin.getMetadata, _TEST_METRIC, "unsupportedMetadata")
         # Specific behavior for aggregationMethod metadata
-        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
+        self.assertEqual(self._plugin.getMetadata(
+            _TEST_METRIC, "aggregationMethod"), "sum")
 
     def test_setMetadata(self):
         # Setting the same value should work
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
-        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
+        self.assertEqual(self._plugin.getMetadata(
+            _TEST_METRIC, "aggregationMethod"), "sum")
         self.assertEqual(
             self._plugin.accessor.get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "sum")
 
         # Setting a different value should work
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "avg")
-        self.assertEqual(self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "avg")
+        self.assertEqual(self._plugin.getMetadata(
+            _TEST_METRIC, "aggregationMethod"), "avg")
         self.assertEqual(
             self._plugin.accessor.get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "avg")
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
@@ -159,7 +164,8 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self._plugin.write(_TEST_METRIC, points)
         self.accessor.flush()
         metric = self.accessor.get_metric(_TEST_METRIC)
-        actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
+        actual_points = self.accessor.fetch_points(
+            metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 
     def test_write_doubledots(self):
@@ -173,9 +179,11 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(True, self.accessor.has_metric("a.b..c"))
         self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))
 
-        actual_points = self.accessor.fetch_points(metric, 1, 2, stage=metric.retention[0])
+        actual_points = self.accessor.fetch_points(
+            metric, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
-        actual_points = self.accessor.fetch_points(metric_1, 1, 2, stage=metric.retention[0])
+        actual_points = self.accessor.fetch_points(
+            metric_1, 1, 2, stage=metric.retention[0])
         self.assertEqual(points, list(actual_points))
 
 
@@ -202,7 +210,7 @@ class TestMultiDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         )
         self.assertTrue(plugin.exists(_TEST_METRIC))
         plugin.write(_TEST_METRIC, [(1, 1), (2, 2)])
-        self.assertEquals(
+        self.assertEqual(
             plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
 
     def test_whisper_and_biggraphite(self):

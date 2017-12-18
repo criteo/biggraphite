@@ -17,10 +17,11 @@
 from __future__ import print_function
 
 import time
-import ConfigParser
 import collections
 import re
 import tabulate
+
+from six.moves.configparser import ConfigParser
 
 from biggraphite.cli import command
 
@@ -59,7 +60,7 @@ class Namespaces(object):
 
     def __init__(self, filename=None):
         """Initializer."""
-        self.config = ConfigParser.ConfigParser({}, collections.OrderedDict)
+        self.config = ConfigParser({}, collections.OrderedDict)
         self.patterns = collections.OrderedDict()
 
         if not filename:

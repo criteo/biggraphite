@@ -17,15 +17,17 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+from builtins import zip
+
 import abc
 import array
 import codecs
 import enum
-import itertools
 import json
 import math
 import re
 import threading
+import six
 
 
 class Error(Exception):
@@ -98,13 +100,23 @@ def encode_metric_name(name):
     """Encode name as utf-8, raise UnicodeError if it can't.
 
     Args:
-      name: The metric to encode, must be an instance of basestring.
+      name: The metric to encode.
+
+    This function make sure that we only have simple strings.
+
+    For Python 2: must be an instance of basestring.
         If it is an instance of string, it will be assumed to already have been
         encoded for performance reasons.
+
+    For Python 3: breaks bytes are given. We could probably decode them instead.
 
     Raises:
       UnicodeError: Couldn't encode.
     """
+    if six.PY3:
+        assert(name) is not bytes, "%s should not be of type 'bytes'" % name
+        return name
+
     if isinstance(name, str):
         return name
     # Next line may raise UnicodeError
@@ -240,6 +252,10 @@ class Aggregator(enum.Enum):
         except ValueError:
             raise InvalidArgumentError("Unknown carbon aggregation: %s" % name)
 
+    def carbon_name(self):
+        """Returns the carbon name of this aggregator."""
+        return self.value
+
     @classmethod
     def from_config_name(cls, name):
         """Make an instance from a BigGraphite name."""
@@ -254,7 +270,7 @@ class Aggregator(enum.Enum):
     def __sum_and_count(values, counts):
         total = 0.0
         count = 0
-        for v, c in itertools.izip(values, counts):
+        for v, c in zip(values, counts):
             if math.isnan(v):
                 continue
             total += v
@@ -296,7 +312,8 @@ class Stage(object):
     __slots__ = ("duration", "points", "precision", "stage0", )
 
     # Parses the values of as_string into points and precision group
-    _STR_RE = re.compile(r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s(?P<type>(_0|_aggr))?$")
+    _STR_RE = re.compile(
+        r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s(?P<type>(_0|_aggr))?$")
 
     def __init__(self, points, precision, stage0=False):
         """Set attributes."""
@@ -429,9 +446,11 @@ class Retention(object):
             raise InvalidArgumentError("there must be at least one stage")
         for s in stages:
             if prev and s.precision % prev.precision:
-                raise InvalidArgumentError("precision of %s must be a multiple of %s" % (s, prev))
+                raise InvalidArgumentError(
+                    "precision of %s must be a multiple of %s" % (s, prev))
             if prev and prev.duration >= s.duration:
-                raise InvalidArgumentError("duration of %s must be lesser than %s" % (s, prev))
+                raise InvalidArgumentError(
+                    "duration of %s must be lesser than %s" % (s, prev))
             prev = s
         self.stages = tuple(stages)
         self.stages[0].stage0 = True
@@ -639,6 +658,9 @@ class Metric(object):
         res.sort()
         return res
 
+    def __hash__(self):
+        return hash(self.name)
+
     def __eq__(self, other):
         if not isinstance(other, Metric):
             return False
@@ -844,7 +866,8 @@ class Accessor(object):
           datapoints: An iterable of (timestamp in seconds, values as double)
         """
         self._check_connected()
-        _wait_async_call(self.insert_points_async, metric=metric, datapoints=datapoints)
+        _wait_async_call(self.insert_points_async,
+                         metric=metric, datapoints=datapoints)
 
     @abc.abstractmethod
     def insert_points_async(self, metric, datapoints, on_done=None):
@@ -1017,9 +1040,9 @@ class PointGrouper(object):
             if self.aggregated:
                 count = None
                 value = self.metric.metadata.aggregator.aggregate(
-                        values=self.current_values[r],
-                        counts=self.current_counts[r],
-                        newest_first=True,
+                    values=self.current_values[r],
+                    counts=self.current_counts[r],
+                    newest_first=True,
                 )
             else:
                 value, count = self.metric.metadata.aggregator.merge(
@@ -1063,7 +1086,8 @@ class PointGrouper(object):
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms
                 if not same_stage:
-                    timestamp_ms = round_down(timestamp_ms, self.stage.precision_ms)
+                    timestamp_ms = round_down(
+                        timestamp_ms, self.stage.precision_ms)
 
                 if self.current_timestamp_ms != timestamp_ms:
                     # This needs to be optimized because in the common case

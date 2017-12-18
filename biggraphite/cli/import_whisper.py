@@ -19,6 +19,7 @@ from __future__ import print_function
 from multiprocessing import dummy as multiprocessing_dummy
 import argparse
 import datetime
+import io
 import logging
 import multiprocessing
 import os
@@ -82,7 +83,8 @@ class _Worker(object):
             return None
 
         retentions = bg_accessor.Retention([
-            bg_accessor.Stage(precision=a["secondsPerPoint"], points=a["points"])
+            bg_accessor.Stage(
+                precision=a["secondsPerPoint"], points=a["points"])
             for a in info["archives"]
         ])
         aggregator = bg_accessor.Aggregator.from_carbon_name(
@@ -101,7 +103,7 @@ class _Worker(object):
             return []
 
         archives = info["archives"]
-        with open(path) as f:
+        with io.open(path, "rb") as f:
             buf = f.read()
 
         stage0 = True
@@ -238,7 +240,8 @@ def main(args=None):
     pool_factory = multiprocessing.Pool
     if opts.process == 1:
         pool_factory = multiprocessing_dummy.Pool
-    pool = pool_factory(opts.process, initializer=_setup_process, initargs=(opts,))
+    pool = pool_factory(
+        opts.process, initializer=_setup_process, initargs=(opts,))
 
     out_fd = sys.stderr
     if opts.quiet:
@@ -263,7 +266,8 @@ def main(args=None):
     pool.close()
     pool.join()
 
-    print("Uploaded", walker.count, "metrics containing", total_points, "points", file=out_fd)
+    print("Uploaded", walker.count, "metrics containing",
+          total_points, "points", file=out_fd)
 
 
 if __name__ == "__main__":

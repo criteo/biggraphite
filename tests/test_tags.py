@@ -36,7 +36,10 @@ class TestTags(bg_test_utils.TestCaseWithFakeAccessor):
     def setUp(self):
         super(TestTags, self).setUp()
         self.accessor.connect()
+
+        from django.conf import settings as django_settings
         self.tagdb = bg_tags.BigGraphiteTagDB(
+            settings=django_settings,
             accessor=self.accessor,
             metadata_cache=self.metadata_cache,
         )

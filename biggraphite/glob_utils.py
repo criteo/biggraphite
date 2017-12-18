@@ -17,9 +17,16 @@
 from enum import Enum
 import itertools
 import re
+import six
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
 _GRAPHITE_GLOB_RE = re.compile(r"^[^*?{}\[\]]+$")
+
+
+def is_fixed_sequence(part):
+    """Return True if this part is a fixed sequence."""
+    # TODO: Add SequenceExact?
+    return isinstance(part, six.string_types)
 
 
 def _is_graphite_glob(metric_component):
@@ -91,7 +98,7 @@ def tokenize(glob):
     tmp = ""
     token = None
     i = -1
-    while i+1 < len(glob):
+    while i + 1 < len(glob):
         i += 1
         c = glob[i]
 
@@ -121,7 +128,7 @@ def tokenize(glob):
             yield TokenType.WILD_CHAR, ""
         elif c == '*':
             # Look-ahead for wild path (globstar)
-            if i+1 < len(glob) and glob[i+1] == '*':
+            if i + 1 < len(glob) and glob[i + 1] == '*':
                 i += 1
                 yield TokenType.WILD_PATH, ""
             else:
@@ -129,7 +136,7 @@ def tokenize(glob):
         elif c == '[':
             is_char_select = True
             # Look-ahead for negated selector (not in)
-            if i+1 < len(glob) and glob[i+1] == '!':
+            if i + 1 < len(glob) and glob[i + 1] == '!':
                 i += 1
                 yield TokenType.CHAR_SELECT_NEGATED_BEGIN, ""
             else:
@@ -198,7 +205,8 @@ def _glob_to_regex(glob):
         elif token == TokenType.EXPR_SELECT_END:
             ans += ")"
         else:
-            raise Exception("Unexpected token type '%s' with data '%s'" % (token, data))
+            raise Exception(
+                "Unexpected token type '%s' with data '%s'" % (token, data))
     return '^' + ans + '$'
 
 
@@ -243,7 +251,7 @@ def glob(metric_names, glob_pattern):
 
         return True
 
-    return filter(maybe_matched_prefilter, metric_names)
+    return list(filter(maybe_matched_prefilter, metric_names))
 
 
 def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
@@ -268,13 +276,13 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
 
     if metrics:
         metrics = accessor.glob_metric_names(graphite_glob)
-        metrics = filter(glob_re.match, metrics)
+        metrics = list(filter(glob_re.match, metrics))
     else:
         metrics = []
 
     if directories:
         directories = accessor.glob_directory_names(graphite_glob)
-        directories = filter(glob_re.match, directories)
+        directories = list(filter(glob_re.match, directories))
     else:
         directories = []
 

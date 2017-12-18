@@ -44,13 +44,14 @@ except AttributeError:
 try:
     FetchInProgress = readers.FetchInProgress
 except AttributeError:
-    def FetchInProgress(g):
-        """Compat wrapper."""
-        return g()
+    FetchInProgress = None
 
 
 class Error(Exception):
     """Base class for all exceptions from this module."""
+
+
+_DISABLED = 'DISABLED'
 
 
 class Reader(BaseReader):
@@ -74,20 +75,26 @@ class Reader(BaseReader):
     def __get_cached_datapoints(self, stage):
         cached_datapoints = []
         try:
+            # TODO: maybe this works with non stage0 now, need to check.
             if stage.stage0 and self._carbonlink:
                 cached_datapoints = self._carbonlink.query(self._metric_name)
         except Exception:
             log.exception("Failed CarbonLink query '%s'" % self._metric_name)
         return cached_datapoints
 
+    def __get_metadata(self):
+        self.__refresh_metric()
+        if self._metric is not None:
+            return self._metric.metadata
+        else:
+            return bg_accessor.MetricMetadata()
+
     def __get_time_info(self, start_time, end_time, now, shift=False):
         """Constrain the provided range in an aligned interval within retention."""
-        self.__refresh_metric()
-        if self._metric and self._metric.retention:
-            retention = self._metric.retention
-        else:
-            retention = bg_accessor.Retention.from_string("60*60s")
-
+        retention = (
+            self.__get_metadata().retention or
+            bg_accessor.MetricMetadata._DEFAULT_RETENTION
+        )
         return retention.align_time_window(
             start_time, end_time, now, shift=shift)
 
@@ -96,20 +103,16 @@ class Reader(BaseReader):
         if self._metric is None:
             self._metric = self._metadata_cache.get_metric(self._metric_name)
 
-    def _merge_cached_points(self, stage, start_step, points, cached_points):
+    def _merge_cached_points(self, stage, start, step, aggregation_method,
+                             points, cached_datapoints, raw_step=None):
         """Merge points from carbonlink with points from database."""
-        if not cached_points:
-            return points
+        if isinstance(cached_datapoints, dict):
+            cached_datapoints = list(cached_datapoints.items())
 
-        for (timestamp, value) in cached_points:
-            step = int(timestamp - (timestamp % stage.precision)) / stage.precision
-
-            index = step - start_step
-            if index < 0 or index > len(points):
-                continue
-            points[index] = value
-
-        return points
+        return readers.utils.merge_with_cache(
+            cached_datapoints, start, step, points,
+            func=aggregation_method, raw_step=raw_step
+        )
 
     def fetch(self, start_time, end_time, now=None):
         """Fetch point for a given interval as per the Graphite API.
@@ -123,8 +126,6 @@ class Reader(BaseReader):
           A tuple made of (rounded start time, rounded end time, stage precision), points
           Points is a list for which missing points are set to None.
         """
-        self.__refresh_metric()
-
         fetch_start = time.time()
         log.rendering('fetch(%s, %d, %d) - start' % (
             self._metric_name, start_time, end_time))
@@ -133,9 +134,14 @@ class Reader(BaseReader):
         if now is None:
             now = time.time()
 
-        start_time, end_time, stage = self.__get_time_info(start_time, end_time, now)
+        metadata = self.__get_metadata()
+        start_time, end_time, stage = self.__get_time_info(
+            start_time, end_time, now)
         start_step = stage.step(start_time)
         points_num = stage.step(end_time) - start_step
+        step = stage.precision
+        aggregation_method = metadata.aggregator.carbon_name
+        raw_step = metadata.retention.stage0.precision
 
         if not self._metric:
             # The metric doesn't exist, let's fail gracefully.
@@ -145,10 +151,11 @@ class Reader(BaseReader):
             ts_and_points = self._accessor.fetch_points(
                 self._metric, start_time, end_time, stage)
 
-        cached_datapoints = self.__get_cached_datapoints(stage)
-
         def read_points():
             read_start = time.time()
+
+            cached_datapoints = self.__get_cached_datapoints(stage)
+
             # TODO: Consider wrapping an array (using NaN for None) for
             # speed&memory efficiency
             points = [None] * points_num
@@ -158,7 +165,9 @@ class Reader(BaseReader):
 
             if cached_datapoints:
                 points = self._merge_cached_points(
-                    stage, start_step, points, cached_datapoints)
+                    stage, start_step, step, aggregation_method,
+                    points, cached_datapoints, raw_step=raw_step
+                )
 
             now = time.time()
             log.rendering(
@@ -169,7 +178,11 @@ class Reader(BaseReader):
 
         log.rendering('fetch(%s, %d, %d) - started' % (
             self._metric_name, start_time, end_time))
-        return FetchInProgress(read_points)
+
+        if FetchInProgress:
+            return FetchInProgress(read_points)
+        else:
+            return read_points()
 
     def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.
@@ -185,7 +198,8 @@ class Reader(BaseReader):
 
         # Call __get_time_info with the widest conceivable range will make it be
         # shortened to the widest range available according to retention policy.
-        start, end, unused_stage = self.__get_time_info(0, now, now, shift=True)
+        start, end, unused_stage = self.__get_time_info(
+            0, now, now, shift=True)
         return intervals.IntervalSet([intervals.Interval(start, end)])
 
 
@@ -216,7 +230,8 @@ class Finder(BaseFinder):
         with self._lock:
             if not self._accessor:
                 from django.conf import settings as django_settings
-                accessor = graphite_utils.accessor_from_settings(django_settings)
+                accessor = graphite_utils.accessor_from_settings(
+                    django_settings)
                 # If connect() fail it will raise an exception that will be caught
                 # by the caller. If the plugin is called again, self._accessor will
                 # still be None and a new accessor will be created.
@@ -238,10 +253,15 @@ class Finder(BaseFinder):
         """Return a carbonlink."""
         with self._lock:
             if not self._carbonlink:
-                if callable(carbonlink.CarbonLink):
+                from django.conf import settings as django_settings
+                if not django_settings.CARBONLINK_HOSTS:
+                    self._carbonlink = _DISABLED
+                elif callable(carbonlink.CarbonLink):
                     self._carbonlink = carbonlink.CarbonLink()
                 else:
                     self._carbonlink = carbonlink.CarbonLink
+        if self._carbonlink == _DISABLED:
+            return None
         return self._carbonlink
 
     def cache(self):
@@ -250,7 +270,8 @@ class Finder(BaseFinder):
             if not self._cache:
                 # TODO: Allow to use Django's cache.
                 from django.conf import settings as django_settings
-                cache = graphite_utils.cache_from_settings(self.accessor(), django_settings)
+                cache = graphite_utils.cache_from_settings(
+                    self.accessor(), django_settings)
                 cache.open()
                 self._cache = cache
         return self._cache

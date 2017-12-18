@@ -18,6 +18,7 @@
 import ctypes
 import ctypes.util
 import threading
+import six
 
 
 def set_thread_names():
@@ -41,7 +42,7 @@ def set_thread_names():
                     if name == 'Thread':
                         name = self.name
                 if name:
-                    if isinstance(name, unicode):
+                    if isinstance(name, six.text_type):
                         name = name.encode('ascii', 'replace')
                     ident = getattr(self, "ident", None)
                     if ident is not None:

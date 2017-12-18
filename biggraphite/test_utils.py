@@ -42,7 +42,7 @@ HAS_CASSANDRA_HOME = bool(os.getenv("CASSANDRA_HOME"))
 # Only try to import cassandra if we are going to use it. This is better
 # than using try/except because the failure case is easier to handle.
 if HAS_CASSANDRA_HOME:
-    from testing import cassandra as testing_cassandra
+    from testing import cassandra3 as testing_cassandra
 
     class _SlowerTestingCassandra(testing_cassandra.Cassandra):
         """Just like testing_cassandra.Cassandra but waits 5 minutes for start."""
@@ -121,7 +121,7 @@ def make_metric(name, metadata=None, accessor=None, **kwargs):
     """Create a bg_accessor.Metric with specified metadata."""
     encoded_name = bg_accessor.encode_metric_name(name)
     retention = kwargs.get("retention")
-    if isinstance(retention, basestring):
+    if isinstance(retention, str):
         kwargs["retention"] = bg_accessor.Retention.from_string(retention)
     if metadata:
         assert isinstance(metadata, bg_accessor.MetricMetadata)
@@ -129,7 +129,7 @@ def make_metric(name, metadata=None, accessor=None, **kwargs):
     else:
         metadata = bg_accessor.MetricMetadata(**kwargs)
     if not accessor:
-        uid = uuid.uuid5(_UUID_NAMESPACE, encoded_name)
+        uid = uuid.uuid5(_UUID_NAMESPACE, str(encoded_name))
         return bg_accessor.Metric(name, uid, metadata)
     else:
         return accessor.make_metric(name, metadata)
@@ -144,16 +144,16 @@ def _make_easily_queryable_points(start, end, period):
     """
     assert period % 4 == 0
     assert start % period == 0
-    subperiod = period / 4
+    subperiod = int(period / 4)
     res = []
-    for t in xrange(start, end, period):
+    for t in range(start, end, period):
         current_period = (t - start) // period
         # A fourth of points are -1
-        res.append((t+0*subperiod, -1))
+        res.append((t + 0 * subperiod, -1))
         # A fourth of points are +1
-        res.append((t+1*subperiod, +1))
+        res.append((t + 1 * subperiod, +1))
         # A fourth of points are the start timestamp
-        res.append((t+2*subperiod, current_period * 3))
+        res.append((t + 2 * subperiod, current_period * 3))
         # A fourth of points are missing
 
     return res
@@ -186,7 +186,7 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
         self.metadata_cache = self.CACHE_CLASS(
-            self.accessor, {'path': self.tempdir, 'size': 1024*1024})
+            self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 
@@ -227,7 +227,8 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             print("fail to starting cassandra, logging potentially useful debug info",
                   file=sys.stderr)
             for attr in "cassandra_home", "cassandra_yaml", "cassandra_bin", "base_dir", "settings":
-                print(attr, ":", getattr(cls.cassandra, attr, "Unknown"), file=sys.stderr)
+                print(attr, ":", getattr(cls.cassandra,
+                                         attr, "Unknown"), file=sys.stderr)
             cls.cassandra.cleanup()
             raise
 
@@ -265,7 +266,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.addCleanup(self.accessor.shutdown)
         self.addCleanup(self.__drop_all_metrics)
         self.metadata_cache = self.CACHE_CLASS(
-            self.accessor, {'path': self.tempdir, 'size': 1024*1024})
+            self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 

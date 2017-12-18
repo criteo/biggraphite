@@ -165,10 +165,11 @@ class MetricAggregates(object):
                 # The first point to expire is the oldest.
                 start_step = last_update_step - (self._stage0_capacity - 1)
                 end_step = start_step + expired_count
-                for step in xrange(start_step, end_step):
+                for step in range(start_step, end_step):
                     index = step % self._stage0_capacity
                     if not math.isnan(self._values[index]):
-                        expired.append((step * stage_0.precision, self._values[index]))
+                        expired.append(
+                            (step * stage_0.precision, self._values[index]))
                     self._values[index] = _NaN
                 self._stage0_timestamp = point_timestamp
 
@@ -199,9 +200,10 @@ class MetricAggregates(object):
         stage_0 = self._stage0
         # Most ancient step is at the beginning of the stage0 buffer,
         # which is current step - (length - 1)
-        start_step = stage_0.step(self._stage0_timestamp) - (self._stage0_capacity - 1)
+        start_step = stage_0.step(
+            self._stage0_timestamp) - (self._stage0_capacity - 1)
         end_step = start_step + self._stage0_capacity
-        for step in xrange(start_step, end_step):
+        for step in range(start_step, end_step):
             index = step % self._stage0_capacity
             if not math.isnan(self._values[index]):
                 # There is a value for this step => append to result buffer.
@@ -338,7 +340,7 @@ class MetricAggregates(object):
             return result
 
         # Update all the other stages.
-        for stage_index in xrange(1, len(stages)):
+        for stage_index in range(1, len(stages)):
             result_stage = self._update_stage(
                 stage_index, expired_stage0, non_expired_stage0)
             result.extend(result_stage)

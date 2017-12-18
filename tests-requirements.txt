@@ -2,7 +2,7 @@ django-tagging
 freezegun
 mock
 pytz
-testing.cassandra
+testing.cassandra3
 twisted
 unittest2
 zope.interface

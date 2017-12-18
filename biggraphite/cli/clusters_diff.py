@@ -20,18 +20,20 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 from __future__ import print_function
 import argparse
-import urllib2
 import json
 import base64
 import time
 import sys
 import logging
-import urllib
 import collections
 import progressbar
 import operator
 import abc
 import netrc
+
+import six
+from six.moves.urllib import request as urllib
+from six.moves.urllib import parse
 
 
 class Error(Exception):
@@ -55,7 +57,7 @@ class Request(object):
         headers = {}
         if auth_key is not None:
             headers["Authorization"] = "Basic %s" % auth_key
-        request = urllib2.Request(url, data, headers)
+        request = urllib.Request(url, data, headers)
         return request
 
     def _parse_request_result(self, json_str):
@@ -87,7 +89,7 @@ class Request(object):
         start = time.time()
         diffable_targets = []
         try:
-            response = urllib2.urlopen(self._request, timeout=self._timeout_s)
+            response = urllib.urlopen(self._request, timeout=self._timeout_s)
             json_str = response.read()
             diffable_targets = self._parse_request_result(json_str)
         except IOError as e:
@@ -126,7 +128,7 @@ class HostResult(object):
     def get_error_to_query(self):
         """Reverse query_to_error to get error_to_queries."""
         error_to_queries = collections.defaultdict(list)
-        for query, err in self.query_to_error.iteritems():
+        for query, err in self.query_to_error.items():
             error_to_queries[err].append(query)
         return error_to_queries
 
@@ -157,18 +159,21 @@ class DiffableTarget(Diffable):
         if val1 is None or val2 is None:
             return 1.0
 
-        return abs(val1 - val2)/(abs(val1)+abs(val2))
+        return abs(val1 - val2) / (abs(val1) + abs(val2))
 
     def measure_dissymmetry(self, other):
         """Return measure of difference as a Dissymmetry."""
         other_ts_to_val = other.ts_to_val if other else {}
-        all_ts_set = self.ts_to_val.viewkeys() | other_ts_to_val.viewkeys()
+        all_ts_set = six.viewkeys(
+            self.ts_to_val) | six.viewkeys(other_ts_to_val)
 
         if not all_ts_set:
             return None
 
-        val_tuples = [(self.ts_to_val.get(ts), other_ts_to_val.get(ts)) for ts in all_ts_set]
-        diff_measures = [self._measure_relative_gap(val1, val2) for val1, val2 in val_tuples]
+        val_tuples = [(self.ts_to_val.get(ts), other_ts_to_val.get(ts))
+                      for ts in all_ts_set]
+        diff_measures = [self._measure_relative_gap(
+            val1, val2) for val1, val2 in val_tuples]
 
         return Dissymmetry(self.name, diff_measures)
 
@@ -187,7 +192,8 @@ class DiffableQuery(Diffable):
             return 1.0
 
         # if target_dissymmetry is None, both host responses were empty for this target name
-        target_dissymmetry = diffable_targets1.measure_dissymmetry(diffable_targets2)
+        target_dissymmetry = diffable_targets1.measure_dissymmetry(
+            diffable_targets2)
         if not target_dissymmetry:
             return 0.0
 
@@ -293,7 +299,7 @@ class TxtPrinter(Printer):
             "",
             "".center(30, "="),
             header_title.upper().center(30, "=")
-            ]
+        ]
         return "\n".join(seq)
 
     def _format_pctl(self, pctls, nth, unit):
@@ -307,7 +313,8 @@ class TxtPrinter(Printer):
         seq = [
             self._format_header("Parameters"),
             "|",
-            "| netrc_filename : %s" % (opts.netrc_filename or "$HOME/$USER/.netrc"),
+            "| netrc_filename : %s" % (
+                opts.netrc_filename or "$HOME/$USER/.netrc"),
             "|",
             "| hosts :",
             "| \t- %s" % opts.hosts[0],
@@ -323,7 +330,7 @@ class TxtPrinter(Printer):
             "| \t- max number of shown results : %s" % opts.show_max,
             "| \t- verbosity : %s" % opts.verbosity,
             "|",
-            ]
+        ]
         self._print("\n".join(seq))
 
     def _print_pctls(self, name, pctls, prefix="", chip="", delay=""):
@@ -332,9 +339,11 @@ class TxtPrinter(Printer):
             return
         for k in pctls.iterkeys():
             if prefix == "host":
-                self._print("\t%s %s" % (delay, self._format_pctl(pctls, k, unit="s")))
+                self._print("\t%s %s" %
+                            (delay, self._format_pctl(pctls, k, unit="s")))
             else:
-                self._print("\t%s %s" % (delay, self._format_pctl(pctls, k, unit="%")))
+                self._print("\t%s %s" %
+                            (delay, self._format_pctl(pctls, k, unit="%")))
 
     def print_dissymetry_results(self, query_dissymmetries, query_to_target_dissymmetries,
                                  verbosity, show_max):
@@ -363,7 +372,8 @@ class TxtPrinter(Printer):
                               "query", chip=">")
 
             if verbosity >= 1:
-                self._print("\n\tThe %s most dissymmetrical targets : " % show_max)
+                self._print(
+                    "\n\tThe %s most dissymmetrical targets : " % show_max)
                 self._print("\t%s for : " % Printer.TARGET_PCTLS_DESCRIPTION)
                 for target_dissymmetry in query_to_target_dissymmetries[query_dissymmetry.name]:
                     self._print_pctls(target_dissymmetry.name,
@@ -383,7 +393,8 @@ class TxtPrinter(Printer):
             for error, count in error_counts:
                 total_errors += count
 
-            self._print("\nThere was %s error(s) for %s" % (total_errors, host))
+            self._print("\nThere was %s error(s) for %s" %
+                        (total_errors, host))
 
             if error_counts:
                 error_to_queries = error_to_queries_tuple[i]
@@ -438,7 +449,7 @@ def _get_url_from_query(host, prefix, query, from_param, until_param):
     """Encode an url from a given query for a given host."""
     # If the query is not already url-friendly, we make it be
     if "%" not in query:
-        query = urllib.quote(query)
+        query = parse.quote(query)
 
     url = "http://%s/render/?noCache&format=json&from=%s&until=%s&target=%s" % (
         host, from_param, until_param, prefix + query)
@@ -455,7 +466,8 @@ def fetch_queries(host, prefix, auth_key, queries,
         try:
             diffable_targets, time_s = request.execute()
             host_result.add_time_s(query, time_s)
-            host_result.add_diffable_query(DiffableQuery(query, diffable_targets, threshold))
+            host_result.add_diffable_query(
+                DiffableQuery(query, diffable_targets, threshold))
         except RequestError as e:
             host_result.add_error(query, e)
             host_result.add_diffable_query(DiffableQuery(query, [], threshold))
@@ -524,7 +536,7 @@ def _parse_opts(args):
                                    nargs=2, help="hosts to compare", required=True)
     comparison_params.add_argument("--prefixes", metavar="PREFIX", dest="prefixes",
                                    action="store", nargs=2, help="prefix for each host.",
-                                   required=False, default="")
+                                   required=False, default=["", ""])
     comparison_params.add_argument("--input-file", metavar="FILENAME", dest="input_filename",
                                    action="store", help="text file containing one query per line",
                                    required=True)
@@ -563,9 +575,11 @@ def _parse_opts(args):
         if auth is not None:
             username = auth[0]
             password = auth[2]
-            opts.auth_keys.append(base64.encodestring(username + ":" + password).replace("\n", ""))
+            opts.auth_keys.append(base64.encodestring(
+                username + ":" + password).replace("\n", ""))
         else:
-            logging.info(netrc.NetrcParseError("No authenticators for %s" % host))
+            logging.info(netrc.NetrcParseError(
+                "No authenticators for %s" % host))
 
     opts.threshold /= 100
 
@@ -608,20 +622,22 @@ def main(args=None):
     timing_pctls_tuple = (
         host_result_1.compute_timing_pctls(),
         host_result_2.compute_timing_pctls(),
-        )
+    )
     query_to_time_s_tuple = (
         host_result_1.query_to_time_s,
         host_result_2.query_to_time_s
-        )
+    )
 
     error_counts_tuple = (
-        collections.Counter(host_result_1.query_to_error.values()).most_common(),
-        collections.Counter(host_result_2.query_to_error.values()).most_common()
-        )
+        collections.Counter(
+            host_result_1.query_to_error.values()).most_common(),
+        collections.Counter(
+            host_result_2.query_to_error.values()).most_common()
+    )
     error_to_queries_tuple = (
         host_result_1.get_error_to_query(),
         host_result_2.get_error_to_query()
-        )
+    )
 
     # print outputs
     if not opts.output_filename:

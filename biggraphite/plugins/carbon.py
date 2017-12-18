@@ -15,7 +15,7 @@
 from __future__ import absolute_import  # Otherwise carbon is this module.
 
 import time
-import Queue
+from six.moves import queue
 import prometheus_client
 
 try:
@@ -78,7 +78,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._accessor = None
         self._tagdb = None
         self._settings = settings
-        self._metricsToCreate = Queue.Queue()
+        self._metricsToCreate = queue.Queue()
         self._sync_countdown = 0
 
         utils.start_admin(utils.settings_from_confattr(settings))
@@ -119,7 +119,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     @property
     def cache(self):
         if not self._cache:
-            cache = graphite_utils.cache_from_settings(self.accessor, self._settings)
+            cache = graphite_utils.cache_from_settings(
+                self.accessor, self._settings)
             cache.open()
             self._cache = cache
 
@@ -141,7 +142,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             raise Exception('Could not find %s' % (metric_name))
 
         # Round down timestamp because inner functions expect integers.
-        datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
+        datapoints = [(int(timestamp), value)
+                      for timestamp, value in datapoints]
 
         # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
         if self._sync_countdown < 1:
@@ -149,7 +151,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             self._sync_countdown = self._SYNC_EVERY_N_WRITE
         else:
             self._sync_countdown -= 1
-            self.accessor.insert_points_async(metric=metric, datapoints=datapoints)
+            self.accessor.insert_points_async(
+                metric=metric, datapoints=datapoints)
 
     def exists(self, metric_name):
         return self.cache.cache_has(metric_name)
@@ -160,7 +163,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         metric_name = self.encode(metric_name)
 
         metadata = accessor.MetricMetadata(
-            aggregator=accessor.Aggregator.from_carbon_name(aggregation_method),
+            aggregator=accessor.Aggregator.from_carbon_name(
+                aggregation_method),
             retention=accessor.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
@@ -195,7 +199,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         metric_name = self.encode(metric_name)
         old_value = self.getMetadata(metric_name, key)
         if old_value != value:
-            metadata = self.cache.get_metric(metric_name=metric_name, touch=True)
+            metadata = self.cache.get_metric(
+                metric_name=metric_name, touch=True)
             if not metadata:
                 raise ValueError("%s: No such metric" % metric_name)
 
@@ -268,7 +273,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def _createOneMetric(self):
         try:
             metric, metric_name = self._metricsToCreate.get(True, 1)
-        except Queue.Empty:
+        except queue.Queue.Empty:
             return
 
         existing_metric = self.accessor.get_metric(metric.name, touch=True)
@@ -361,7 +366,8 @@ if hasattr(database, 'WhisperDatabase'):
             """Create a WhisperAndBigGraphiteDatabase."""
             self._biggraphite = BigGraphiteDatabase(settings)
             self._whisper = database.WhisperDatabase(settings)
-            MultiDatabase.__init__(self, settings, [self._whisper, self._biggraphite])
+            MultiDatabase.__init__(
+                self, settings, [self._whisper, self._biggraphite])
 
     class BigGraphiteAndWhisperDatabase(MultiDatabase):
         """BigGraphite then Whisper."""
@@ -373,4 +379,5 @@ if hasattr(database, 'WhisperDatabase'):
             """Create a BigGraphiteDatabaseAndWhisper."""
             self._biggraphite = BigGraphiteDatabase(settings)
             self._whisper = database.WhisperDatabase(settings)
-            MultiDatabase.__init__(self, settings, [self._biggraphite, self._whisper])
+            MultiDatabase.__init__(
+                self, settings, [self._biggraphite, self._whisper])

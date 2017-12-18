@@ -4,6 +4,7 @@ import pytest
 import random
 import string
 import time
+import six
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import test_utils as bg_test_utils
@@ -48,21 +49,23 @@ class Bencher(BASE_CLASS):
         return True
 
 
+def _random_name(n):
+    return "".join(
+        [random.choice(string.digits+string.ascii_letters) for i in range(n)])
+
+
 def _gen_metric(accessor):
-    digits = "".join(
-        [random.choice(string.digits+string.letters) for i in xrange(10)])
     retention = bg_accessor.Retention.from_string("86400*1s:10080*60s")
     metadata = bg_accessor.MetricMetadata(retention=retention)
-    return accessor.make_metric(digits, metadata)
+    return accessor.make_metric(_random_name(10), metadata)
 
 
 def make_metric(benchmark):
     with Bencher() as tc:
         ac = tc.get_accessor()
-        digits = "".join(
-            [random.choice(string.digits+string.letters) for i in xrange(10)] )
+        name = _random_name(10)
         benchmark.pedantic(
-            ac.make_metric, args=(digits, {'retention': ""}),
+            ac.make_metric, args=(name, {'retention': ""}),
             iterations=ITERATIONS, rounds=ROUNDS)
 
 @pytest.mark.benchmark(group="metadata")
@@ -118,7 +121,7 @@ def insert_points_async(benchmark):
         ac = tc.get_accessor()
         now = int(time.time())
 
-        metrics = [_gen_metric(ac) for x in xrange(0,100)]
+        metrics = [_gen_metric(ac) for x in range(0,100)]
         for m in metrics:
             ac.create_metric(m)
 
@@ -142,7 +145,7 @@ def insert_points_sync(benchmark):
         ac = tc.get_accessor()
         now = int(time.time())
 
-        metrics = [_gen_metric(ac) for x in xrange(0,100)]
+        metrics = [_gen_metric(ac) for x in range(0,100)]
         for m in metrics:
             ac.create_metric(m)
 
@@ -166,18 +169,20 @@ def get_points(benchmark):
         ac = tc.get_accessor()
         now = int(time.time())
 
-        metrics = [_gen_metric(ac) for x in xrange(0,100)]
+        metrics = [_gen_metric(ac) for x in range(0, 2)]
+        end = int(now / 60) * 60
+        start = end - 3600
+
+        points = [(i + start, i) for i in range(end - start)]
         for m in metrics:
             ac.create_metric(m)
-            ac.insert_points_async(m, [(now, 5050)])
+            ac.insert_points_async(m, points)
         ac.flush()
 
         def run(metrics):
-            end = int(now / 60) * 60
-            start = end - 3600
             for m in metrics:
-                ac.fetch_points(m, start, end, bg_accessor.Stage(86400, 1))
-                ac.fetch_points(m, start, end, bg_accessor.Stage(10080, 60))
+                list(ac.fetch_points(m, start, end, m.metadata.retention.stage0))
+                list(ac.fetch_points(m, start, end, m.metadata.retention[1]))
 
         benchmark.pedantic(
             run, args=(metrics,),

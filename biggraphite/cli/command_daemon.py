@@ -18,11 +18,12 @@
 import logging
 import threading
 import time
-import SimpleHTTPServer
-import SocketServer
 import collections
 import progressbar
-import StringIO
+
+from six import StringIO
+from six.moves import SimpleHTTPServer
+from six.moves import socketserver as SocketServer
 
 from biggraphite.cli import command
 from biggraphite.cli import command_clean, command_repair
@@ -99,7 +100,8 @@ def _run_webserver(workers, accessor, opts):
             request.wfile.write('\n\n')
 
     http_handler = SimpleHTTPServer.SimpleHTTPRequestHandler
-    http_handler.do_GET = lambda req: handle_health_request(req) or handle_worker_request(req)
+    http_handler.do_GET = lambda req: handle_health_request(
+        req) or handle_worker_request(req)
 
     logging.info("Starting http server on %s" % opts.listen_on)
     SocketServer.TCPServer.allow_reuse_address = True
@@ -145,14 +147,16 @@ class CommandDaemon(command.BaseCommand):
                 pass
 
         parser.add_argument = add_arg
-        command_repair.CommandRepair.add_arguments(command_repair.CommandRepair(), parser)
-        command_clean.CommandClean.add_arguments(command_clean.CommandClean(), parser)
+        command_repair.CommandRepair.add_arguments(
+            command_repair.CommandRepair(), parser)
+        command_clean.CommandClean.add_arguments(
+            command_clean.CommandClean(), parser)
 
     @_run_for_ever
     def _run_repair(self, worker, accessor, opts):
         logging.info("Repair started at %s" % time.strftime("%c"))
 
-        fake_stderr = StringIO.StringIO()
+        fake_stderr = StringIO()
         pbar = progressbar.ProgressBar(fd=fake_stderr)
 
         def on_progress(done, total):
@@ -208,7 +212,8 @@ class CommandDaemon(command.BaseCommand):
         # Spawn workers
         for worker in workers.values():
             logging.info("starting %s worker" % worker["name"])
-            th = threading.Thread(name=worker["name"], target=worker["fn"], args=(worker,))
+            th = threading.Thread(
+                name=worker["name"], target=worker["fn"], args=(worker,))
             th.daemon = True
             th.start()
             worker["thread"] = th
