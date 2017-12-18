@@ -1794,7 +1794,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 query = self.__lazy_statements._create_datapoints_table_stmt(stage)
                 schema += query + "\n\n"
                 if not dry_run:
-                    self._execute_metadata(query)
+                    self._execute_data(query)
 
         self.shutdown()
         return schema
