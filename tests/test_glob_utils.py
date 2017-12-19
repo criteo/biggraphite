@@ -87,6 +87,11 @@ class TestGlobUtilsInternals(unittest.TestCase):
             (['fib.bar', 'fib.bart', 'foo.baaa', 'foo.bar', 'foo.bart', 'foo.bli', 'foo.blo'],
              'foo.{bar*,bli}',
              ['foo.bar', 'foo.bart', 'foo.bli']),
+            # issue 290
+            (['fib.bar.la', 'fib.bart.la', 'foo.baaa.la', 'foo.bar.la',
+              'foo.bart.la', 'foo.blit.la', 'foo.blo.la'],
+             'foo.{bar*,bli*}.la',
+             ['foo.bar.la', 'foo.bart.la', 'foo.blit.la']),
         ]
         for (full, glob, filtered) in scenarii:
             self.assertEqual(filtered, filter_metrics(full, glob))
