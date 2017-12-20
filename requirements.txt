@@ -23,13 +23,9 @@ prometheus_client
 lmdb
 
 # Graphite
-# Pin versions before next release
-git+git://github.com/graphite-project/whisper.git#egg=whisper
-git+git://github.com/graphite-project/graphite-web.git#egg=graphite-web
-git+git://github.com/graphite-project/carbon.git#egg=carbon
-# whisper>=1.1.0
-# carbon>=1.1.0
-# graphite-web>=1.1.0
+whisper>=1.1.0
+carbon>=1.1.0
+graphite-web>=1.1.0
 
 # We could use Django<2.0 but we match what graphire requires instead.
 Django>=1.8,<1.11.99

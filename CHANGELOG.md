@@ -6,12 +6,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2017-12-20
+
 ### New
 - Support for Graphite 1.1.0
 - Support for Python 3
+- Add CSV support to bgutil read
 
-### TODO
-- pin versions in requirements.txt
+### Fixed
+- Bug where leaves_only would be ignored when caching values
+- Queries returning no results would no be cached correctly
+- Add locking in metadata_cache
+- Fixed benchmarks
 
 ## [0.9.2] - 2017-12-04
 
@@ -159,7 +165,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/criteo/biggraphite/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/criteo/biggraphite/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/criteo/biggraphite/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/criteo/biggraphite/compare/v0.8.11...v0.9.0
