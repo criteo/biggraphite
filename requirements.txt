@@ -23,9 +23,9 @@ prometheus_client
 lmdb
 
 # Graphite
-whisper>=1.1.0
-carbon>=1.1.0
-graphite-web>=1.1.0
+whisper
+carbon
+graphite-web
 
 # We could use Django<2.0 but we match what graphire requires instead.
 Django>=1.8,<1.11.99
