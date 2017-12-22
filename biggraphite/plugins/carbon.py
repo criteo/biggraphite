@@ -273,7 +273,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def _createOneMetric(self):
         try:
             metric, metric_name = self._metricsToCreate.get(True, 1)
-        except queue.Queue.Empty:
+        except queue.Empty:
             return
 
         existing_metric = self.accessor.get_metric(metric.name, touch=True)
