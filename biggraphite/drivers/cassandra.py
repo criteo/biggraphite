@@ -1253,10 +1253,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         statements_and_args = self._fetch_points_make_selects(
             metric.id, time_start_ms, time_end_ms, stage)
+        # Note: it's unclear if this returns as soon as the first
+        # query has been executed or not. If yes, consider using execute_async
+        # directly.
         query_results = self._execute_concurrent_data(
             statements_and_args,
             results_generator=True,
         )
+
         return bg_accessor.PointGrouper(
             metric, time_start_ms, time_end_ms, stage, query_results, aggregated=aggregated
         )

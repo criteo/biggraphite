@@ -45,6 +45,10 @@ try:
     FetchInProgress = readers.FetchInProgress
 except AttributeError:
     FetchInProgress = None
+try:
+    FindQuery = finders.utils.FindQuery
+except AttributeError:
+    FindQuery = None
 
 
 class Error(Exception):
@@ -100,6 +104,11 @@ class Reader(BaseReader):
 
     def __refresh_metric(self):
         """Set self._metric."""
+        # TODO: This can be blocking, so we need to do one of:
+        # - forward metadata to the constructor (possibly by adding mget
+        #   to the metadata cache and the accessor)
+        # - make fetch_async really async
+        # - use a thread pool in `fetch_multi`
         if self._metric is None:
             self._metric = self._metadata_cache.get_metric(self._metric_name)
 
@@ -114,7 +123,7 @@ class Reader(BaseReader):
             func=aggregation_method, raw_step=raw_step
         )
 
-    def fetch(self, start_time, end_time, now=None):
+    def fetch_async(self, start_time, end_time, now=None, requestContext=None):
         """Fetch point for a given interval as per the Graphite API.
 
         Args:
@@ -123,7 +132,8 @@ class Reader(BaseReader):
           now: Current timestamp as a float, defaults to time.time(), for tests.
 
         Returns:
-          A tuple made of (rounded start time, rounded end time, stage precision), points
+          A callable that returns a tuple made of (rounded start time,
+          rounded end time, stage precision), points
           Points is a list for which missing points are set to None.
         """
         fetch_start = time.time()
@@ -179,12 +189,27 @@ class Reader(BaseReader):
         log.rendering('fetch(%s, %d, %d) - started' % (
             self._metric_name, start_time, end_time))
 
+        return read_points
+
+    def fetch(self, start_time, end_time, now=None, requestContext=None):
+        """Fetch point for a given interval as per the Graphite API.
+
+        Args:
+          start_time: Timestamp to fetch points from, will constrained by retention policy.
+          end_time: Timestamp to fetch points until, will constrained by retention policy.
+          now: Current timestamp as a float, defaults to time.time(), for tests.
+
+        Returns:
+          A tuple made of (rounded start time, rounded end time, stage precision), points
+          Points is a list for which missing points are set to None.
+        """
+        results = self.fetch_async(start_time, end_time, now=now, requestContext=None)
         if FetchInProgress:
-            return FetchInProgress(read_points)
+            return FetchInProgress(results)
         else:
             # That is currently really slow. We need to implement fetch_multi
             # to avoid that.
-            return read_points()
+            return results()
 
     def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.
@@ -329,8 +354,75 @@ class Finder(BaseFinder):
 
         for metric_name in metric_names:
             reader = Reader(
-                self.accessor(), self.cache(), self.carbonlink(), metric_name)
+                self.accessor(), self.cache(), self.carbonlink(), metric_name
+            )
             yield node.LeafNode(metric_name, reader)
 
         for directory in directories:
             yield node.BranchNode(directory)
+
+    def fetch(self, patterns, start_time, end_time, now=None, requestContext=None):
+        """Fetch multiple patterns at once.
+
+        This method is used to fetch multiple patterns at once, this
+        allows alternate finders to do batching on their side when they can.
+
+        Returns:
+          an iterable of
+          {
+            'pathExpression': pattern,
+            'path': node.path,
+            'time_info': time_info,
+            'values': values,
+          }
+        """
+        requestContext = requestContext or {}
+
+        queries = [
+            FindQuery(
+                pattern, start_time, end_time,
+                local=requestContext.get('localOnly'),
+                headers=requestContext.get('forwardHeaders'),
+                leaves_only=True,
+            )
+            for pattern in patterns
+        ]
+
+        # TODO: Implement a real way to fetch multiple nodes at once. This
+        # means that we need to create accessor.fetch_point_sync(). Check
+        # how the concurrent executor works before doing any work.
+
+        # In order to be a little bit more efficient with Graphite 1.1.0 we
+        # first schedule all the queries, then read the results as they come.
+        queries_and_generators = []
+
+        for n, query in self.find_multi(queries):
+            if not isinstance(n, node.LeafNode):
+                continue
+
+            # Call directly the async method
+            gen = n.reader.fetch_async(
+                start_time, end_time,
+                now=now, requestContext=requestContext
+            )
+
+            queries_and_generators.append((n, query, gen))
+
+        results = []
+
+        for n, query, func in queries_and_generators:
+            if FetchInProgress and isinstance(gen, FetchInProgress):
+                # For old graphite versions.
+                time_info, values = gen.waitForResults()
+            else:
+                time_info, values = gen()
+
+            results.append({
+                'pathExpression': query.pattern,
+                'path': n.path,
+                'name': n.path,
+                'time_info': time_info,
+                'values': values,
+            })
+
+        return results
