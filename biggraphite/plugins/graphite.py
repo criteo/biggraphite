@@ -411,11 +411,7 @@ class Finder(BaseFinder):
         results = []
 
         for n, query, func in queries_and_generators:
-            if FetchInProgress and isinstance(gen, FetchInProgress):
-                # For old graphite versions.
-                time_info, values = gen.waitForResults()
-            else:
-                time_info, values = gen()
+            time_info, values = gen()
 
             results.append({
                 'pathExpression': query.pattern,
