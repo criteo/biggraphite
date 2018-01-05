@@ -184,7 +184,7 @@ class Reader(BaseReader):
         else:
             # That is currently really slow. We need to implement fetch_multi
             # to avoid that.
-            return read_points
+            return read_points()
 
     def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.
