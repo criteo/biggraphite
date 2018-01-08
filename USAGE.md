@@ -1,7 +1,12 @@
 # Usage
 
+First you need a working install of Graphite and Carbon: http://graphite.readthedocs.io/en/latest/install-virtualenv.html
+
 Start by installing biggraphite:
 ```bash
+$ # Last release version
+$ pip install biggraphite
+$ # From git
 $ pip install -U https://github.com/criteo/biggraphite/archive/master.zip
 ```
 
