@@ -239,7 +239,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                          for k, v in sorted(labels.items())])
                 instrumentation.cache_record(name, value)
         if self._accessor:
-            self.accessor.background()
+            self.reactor.callInThread(self.accessor.background)
 
     def _createAsync(self, metric, metric_name):
         """Add metric to the queue of metrics to create.
