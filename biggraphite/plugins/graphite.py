@@ -20,7 +20,6 @@ import threading
 from graphite import intervals
 from graphite import node
 from graphite import readers
-from graphite import finders
 from graphite import carbonlink
 from graphite.logger import log
 from graphite.render import hashing
@@ -377,7 +376,7 @@ class Finder(BaseFinder):
         requestContext = requestContext or {}
 
         queries = [
-            FindQuery(
+            finders_utils.FindQuery(
                 pattern, start_time, end_time,
                 local=requestContext.get('localOnly'),
                 headers=requestContext.get('forwardHeaders'),
