@@ -411,7 +411,7 @@ class Finder(BaseFinder):
         results = []
 
         for n, query, func in queries_and_generators:
-            time_info, values = gen()
+            time_info, values = func()
 
             results.append({
                 'pathExpression': query.pattern,
