@@ -34,21 +34,19 @@ from biggraphite import graphite_utils
 _CONFIG_NAME = "biggraphite"
 
 try:
-    BaseReader = readers.utils.BaseReaders
-except AttributeError:
+    from graphite.readers import utils as readers_utils
+    BaseReader = readers_utils.BaseReader
+except ImportError:
     BaseReader = object
 try:
-    BaseFinder = finders.utils.BaseFinder
-except AttributeError:
+    from graphite.finders import utils as finders_utils
+    BaseFinder = finders_utils.BaseFinder
+except ImportError:
     BaseFinder = object
 try:
     FetchInProgress = readers.FetchInProgress
 except AttributeError:
     FetchInProgress = None
-try:
-    FindQuery = finders.utils.FindQuery
-except AttributeError:
-    FindQuery = None
 
 
 class Error(Exception):
