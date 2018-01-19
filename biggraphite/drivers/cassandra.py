@@ -26,6 +26,7 @@ import os
 import random
 import time
 import uuid
+import six
 from os import path as os_path
 from distutils import version
 
@@ -45,6 +46,7 @@ from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
 from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
+from biggraphite.drivers.lucene import cassandra_stratio_lucene
 
 import prometheus_client as pm
 
@@ -90,6 +92,10 @@ DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 DEFAULT_READ_ON_SAMPLING_RATE = 0.1
+DEFAULT_USE_LUCENE = False
+
+USE_LUCENE = bool(os.environ.get('USE_LUCENE', DEFAULT_USE_LUCENE))
+LUCENE_INDEX_REFRESH_PERIOD_SECOND = 61 # Default value
 
 # Exceptions that are not considered fatal during batch jobs.
 # The affected range will simply be ignored.
@@ -412,6 +418,9 @@ _METADATA_CREATION_CQL = ([
     + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
     + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
 )
+
+if USE_LUCENE:
+    _METADATA_CREATION_CQL += cassandra_stratio_lucene.CQL_CREATE_INDICES
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
@@ -1401,7 +1410,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 )
             )
 
-        if GLOBSTAR in components:
+        isFullyDefinedMetric = all(len(c) == 1 and isinstance(c[0],six.string_types) for c in components)
+        if USE_LUCENE and not isFullyDefinedMetric:
+            queries = [cassandra_stratio_lucene.generate_query(self.keyspace_metadata,table,glob,self.max_metrics_per_pattern)]
+        elif GLOBSTAR in components:
             queries = self.__generate_globstar_names_queries(table, components)
         else:
             components.append([_LAST_COMPONENT])

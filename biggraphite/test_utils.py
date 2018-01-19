@@ -22,6 +22,7 @@ from __future__ import print_function
 
 import os
 import sys
+import time
 import tempfile
 import shutil
 import unittest
@@ -269,6 +270,63 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
+        self._patch_accessor()
+
+
+    def _patch_accessor(self):
+        """Override accessor methods for tests
+        to enforce a statio index refresh between writes & reads call
+        """
+        if not bg_cassandra.USE_LUCENE:
+            return
+
+        ## Instead of sleeping I tried running:
+        # SELECT *
+        # FROM keyspace.metrics
+        # WHERE expr(metrics_idx, '{refresh:true}')
+        ## It did not work.
+        ## Adding "refresh:true" to lucene filter didn't work either.
+
+        orig_create_metric = self.accessor.create_metric
+        def _create_metric(metric):
+            self.last_create = time.time()
+            # print("create metric")
+            return orig_create_metric(metric)
+        self.accessor.create_metric = _create_metric
+
+        orig_select_metric = self.accessor._select_metric
+        def _select_metric(metric):
+            if hasattr(self, 'last_create'):
+                time_since_last_create = time.time() - self.last_create
+                time_to_sleep = bg_cassandra.STRATIO_INDEX_REFRESH_PERIOD_SECOND - time_since_last_create
+                # print("select_metric \t time_since_last_create %i, will sleep %i" % (time_since_last_create,time_to_sleep))
+                if time_to_sleep > 0:
+                    time.sleep(time_to_sleep)
+            return orig_select_metric(metric)
+        self.accessor._select_metric = _select_metric
+
+        orig_glob_metric_names = self.accessor.glob_metric_names
+        def _glob_metric_names(glob):
+            if hasattr(self, 'last_create'):
+                time_since_last_create = time.time() - self.last_create
+                time_to_sleep = bg_cassandra.STRATIO_INDEX_REFRESH_PERIOD_SECOND - time_since_last_create
+                # print("glob_metric_names \t time_since_last_create %i, will sleep %i" % (time_since_last_create,time_to_sleep))
+                if time_to_sleep > 0:
+                    time.sleep(time_to_sleep)
+            return orig_glob_metric_names(glob)
+        self.accessor.glob_metric_names = _glob_metric_names
+
+        orig_glob_directory_names = self.accessor.glob_directory_names
+        def _glob_directory_names(glob):
+            if hasattr(self, 'last_create'):
+                time_since_last_create = time.time() - self.last_create
+                time_to_sleep = bg_cassandra.STRATIO_INDEX_REFRESH_PERIOD_SECOND - time_since_last_create
+                # print("glob_directory_names \t time_since_last_create %i, will sleep %i" % (time_since_last_create,time_to_sleep))
+                if time_to_sleep > 0:
+                    time.sleep(time_to_sleep)
+            return orig_glob_directory_names(glob)
+        self.accessor.glob_directory_names = _glob_directory_names
+
 
     @classmethod
     def _reset_keyspace(cls, session, keyspace):
