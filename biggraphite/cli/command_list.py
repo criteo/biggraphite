@@ -19,14 +19,19 @@ from __future__ import print_function
 from biggraphite.cli import command
 from biggraphite.glob_utils import graphite_glob
 
+
 def list_metrics(accessor, pattern):
-    """Return the list of metrics corresponding to pattern. Exit with error message if None.
+    """Return the list of metrics corresponding to pattern.
+    Exit with error message if None.
 
     Args:
         - accessor, Accessor, a connected accessor
         - pattern, string, e.g. my.metric.a or my.metric.**.a
     """
-    metrics_names = graphite_glob(accessor, pattern, metrics=True, directories=False)[0]
+    metrics_names = graphite_glob(accessor,
+                                  pattern,
+                                  metrics=True,
+                                  directories=False)[0]
     for metric in metrics_names:
         if metric is None:
             continue
@@ -55,9 +60,16 @@ class CommandList(command.BaseCommand):
         See command.CommandBase.
         """
         accessor.connect()
-        directories_names = graphite_glob(accessor, opts.glob, metrics=False, directories=True)[1]
+        directories_names = graphite_glob(
+            accessor,
+            opts.glob,
+            metrics=False,
+            directories=True
+            )[1]
         for directory in directories_names:
             print("d %s" % directory)
         for metric in list_metrics(accessor, opts.glob):
             if metric:
-                print("m %s %s" % (metric.name, metric.metadata.as_string_dict()))
+                print("m %s %s" % (
+                    metric.name,
+                    metric.metadata.as_string_dict()))
