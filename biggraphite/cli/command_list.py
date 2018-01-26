@@ -22,6 +22,7 @@ from biggraphite.glob_utils import graphite_glob
 
 def list_metrics(accessor, pattern, graphite=True):
     """Return the list of metrics corresponding to pattern.
+
     Exit with error message if None.
 
     Args:
