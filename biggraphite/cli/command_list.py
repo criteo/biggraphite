@@ -17,18 +17,35 @@
 from __future__ import print_function
 
 from biggraphite.cli import command
+from biggraphite.glob_utils import graphite_glob
 
 
-def list_metrics(accessor, pattern):
-    """Return the list of metrics corresponding to pattern. Exit with error message if None.
+def list_metrics(accessor, pattern, graphite=True):
+    """Return the list of metrics corresponding to pattern.
+
+    Exit with error message if None.
 
     Args:
-        - accessor, Accessor, a connected accessor
-        - pattern, string, e.g. my.metric.a or my.metric.**.a
-    """
-    metric_names = accessor.glob_metric_names(pattern)
+        accessor: Accessor, a connected accessor
+        pattern: string, e.g. my.metric.a or my.metric.**.a
 
-    for metric in metric_names:
+    Optional Args:
+        graphite: bool, use graphite globbing if True.
+
+    Returns:
+        iterable(Metric)
+    """
+    if not graphite:
+        metrics_names = accessor.glob_metric_names(pattern)
+    else:
+        metrics_names, _ = graphite_glob(
+            accessor,
+            pattern,
+            metrics=True,
+            directories=False
+        )
+
+    for metric in metrics_names:
         if metric is None:
             continue
         yield accessor.get_metric(metric)
@@ -49,6 +66,12 @@ class CommandList(command.BaseCommand):
             "glob",
             help="One metric name or globbing on metrics names"
         )
+        parser.add_argument(
+            "--graphite",
+            default=False,
+            action='store_true',
+            help="Enable Graphite globbing"
+        )
 
     def run(self, accessor, opts):
         """List metrics and directories.
@@ -57,8 +80,20 @@ class CommandList(command.BaseCommand):
         """
         accessor.connect()
 
-        for directory in accessor.glob_directory_names(opts.glob):
+        if not opts.graphite:
+            directories_names = accessor.glob_directory_names(opts.glob)
+        else:
+            _, directories_names = graphite_glob(
+                accessor,
+                opts.glob,
+                metrics=False,
+                directories=True
+            )
+        for directory in directories_names:
             print("d %s" % directory)
-        for metric in list_metrics(accessor, opts.glob):
+        for metric in list_metrics(accessor, opts.glob, opts.graphite):
             if metric:
-                print("m %s %s" % (metric.name, metric.metadata.as_string_dict()))
+                print("m %s %s" % (
+                    metric.name,
+                    metric.metadata.as_string_dict()
+                ))
