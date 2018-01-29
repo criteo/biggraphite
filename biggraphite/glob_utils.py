@@ -160,7 +160,7 @@ def tokenize(glob):
         yield token, tmp
 
 
-def _glob_to_regex(glob):
+def glob_to_regex(glob):
     """Convert a Graphite globbing pattern into a regular expression.
 
     This function does not check for glob validity, if you want usable regexes
@@ -272,7 +272,7 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
         # TODO(d.forest): should we instead raise an exception?
         return ([], [])
 
-    glob_re = re.compile(_glob_to_regex(graphite_glob))
+    glob_re = re.compile(glob_to_regex(graphite_glob))
 
     if metrics:
         metrics = accessor.glob_metric_names(graphite_glob)
@@ -286,10 +286,10 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
     else:
         directories = []
 
-    return (metrics, directories)
+    return metrics, directories
 
 
-class GlobExpression:
+class GlobExpression(object):
     """Base class for glob expressions."""
 
     def __repr__(self):
@@ -305,6 +305,7 @@ class GlobExpressionWithValues(GlobExpression):
     def __init__(self, values):
         """Take a list of values, and stores the sorted unique values."""
         self.values = sorted(set(values))
+        self.negated = False
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, self.values)
@@ -324,6 +325,20 @@ class AnyChar(GlobExpression):
     """Represents any single character."""
 
     pass
+
+
+class CharIn(GlobExpressionWithValues):
+    """Represents any single character."""
+
+    pass
+
+
+class CharNotIn(GlobExpressionWithValues):
+    """Represents any single character."""
+
+    def __init__(self, values):
+        super(CharNotIn, self).__init__(values)
+        self.negated = True
 
 
 class AnySequence(GlobExpression):
@@ -400,10 +415,16 @@ class GraphiteGlobParser:
         """
         j = self._find_char_selector_end(i, n)
         if j < n:
+            chars = self._glob[i:j]
+            # FIXME: expand char ranges
+            if chars[0] == '!':
+                char = CharNotIn(chars[1:])
+            else:
+                char = CharIn(chars)
             # +1 to skip closing bracket
             i = j + 1
             self._commit_sequence()
-            self._component.append(AnyChar())
+            self._component.append(char)
         else:
             # Reached end of string: unbalanced bracket
             self._sequence += '['
@@ -522,3 +543,15 @@ class GraphiteGlobParser:
 
         self._commit_component()
         return self._parsed
+
+    @staticmethod
+    def is_fully_defined(components):
+        """Return True if the components represent a fully-defined metric name."""
+        if Globstar() in components:
+            return False
+        for c in components:
+            if len(c) != 1:
+                return False
+            if not is_fixed_sequence(c[0]):
+                return False
+        return True

@@ -1,0 +1,5 @@
+import os
+
+LAST_COMPONENT = "__END__"
+COMPONENTS_MAX_LEN = int(os.environ.get('BG_COMPONENTS_MAX_LEN', 64))
+DIRECTORY_SEPARATOR = "."

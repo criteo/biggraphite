@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright 2016 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +17,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import collections
-import itertools
 import json
 import logging
 import multiprocessing
@@ -34,7 +32,6 @@ import cassandra
 from cassandra import auth
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
-from cassandra import encoder as c_encoder
 from cassandra import marshal as c_marshal
 from cassandra import murmur3
 from cassandra import policies as c_policies
@@ -42,11 +39,13 @@ from cassandra import query as c_query
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
+from biggraphite.drivers import cassandra_stratio_lucene as lucene
+from biggraphite.drivers import cassandra_sasi as sasi
+from biggraphite.drivers import cassandra_common as common
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
 from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
-from biggraphite.drivers.lucene import cassandra_stratio_lucene
 
 import prometheus_client as pm
 
@@ -65,8 +64,6 @@ log = logging.getLogger(__name__)
 MINUTE = 60
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
-GLOBSTAR = bg_glob.Globstar()
-ANYSEQUENCE = bg_glob.AnySequence()
 
 # Round the row size to 1000 seconds
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
@@ -92,10 +89,7 @@ DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 DEFAULT_READ_ON_SAMPLING_RATE = 0.1
-DEFAULT_USE_LUCENE = False
-
-USE_LUCENE = bool(os.environ.get('USE_LUCENE', DEFAULT_USE_LUCENE))
-LUCENE_INDEX_REFRESH_PERIOD_SECOND = 61 # Default value
+DEFAULT_STRATIO_LUCENE = False
 
 # Exceptions that are not considered fatal during batch jobs.
 # The affected range will simply be ignored.
@@ -105,7 +99,7 @@ BATCH_IGNORED_EXCEPTIONS = (
 )
 BATCH_MAX_IGNORED_ERRORS = 100
 
-DIRECTORY_SEPARATOR = '.'
+DIRECTORY_SEPARATOR = common.DIRECTORY_SEPARATOR
 
 consistency_name_to_value = cassandra.ConsistencyLevel.name_to_value
 
@@ -144,6 +138,7 @@ OPTIONS = {
     "data_read_consistency": _consistency_validator,
     "updated_on_ttl_sec": int,
     "read_on_sampling_rate": float,
+    "stratio_lucene": bool,
 }
 
 
@@ -253,7 +248,12 @@ def add_argparse_arguments(parser):
     parser.add_argument(
         "--cassandra_read_on_sampling_rate",
         help="Updated 'read_on' field every x calls.",
-        default=DEFAULT_READ_ON_SAMPLING_RATE)
+        default=DEFAULT_READ_ON_SAMPLING_RATE),
+    parser.add_argument(
+        "--cassandra_stratio_lucene",
+        help="Use the Stratio Lucene Index.",
+        default=DEFAULT_STRATIO_LUCENE,
+    )
 
 
 class Error(bg_accessor.Error):
@@ -323,8 +323,8 @@ _FLUSH_MEMORY_EVERY_S = 15 * MINUTE
 # Support for TWCS is still experimental and require Cassandra >=3.8.
 _COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
 
-_COMPONENTS_MAX_LEN = int(os.environ.get('BG_COMPONENTS_MAX_LEN', 64))
-_LAST_COMPONENT = "__END__"
+_COMPONENTS_MAX_LEN = common.COMPONENTS_MAX_LEN
+_LAST_COMPONENT = common.LAST_COMPONENT
 _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
     "component_%d text" % n for n in range(_COMPONENTS_MAX_LEN)
 )
@@ -381,15 +381,6 @@ _METADATA_CREATION_CQL_DIRECTORIES = str(
     "  PRIMARY KEY (name)"
     ");"
 )
-_METADATA_CREATION_CQL_PARENT_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (parent)"
-    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
-    "  WITH OPTIONS = {"
-    "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
-    "    'case_sensitive': 'true'"
-    "  };" % {"table": t}
-    for t in ('metrics', 'directories')
-]
 _METADATA_CREATION_CQL_ID_INDEXES = [
     "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (id)"
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
@@ -397,30 +388,24 @@ _METADATA_CREATION_CQL_ID_INDEXES = [
     "    'mode': 'SPARSE'"
     "  };" % {"table": "metrics_metadata"},
 ]
-_METADATA_CREATION_CQL_PATH_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (component_%(component)d)"
-    "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
-    "  WITH OPTIONS = {"
-    "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
-    "    'case_sensitive': 'true'"
-    "  };" % {"table": t, "component": n}
-    for t in ('metrics', 'directories')
-    for n in range(_COMPONENTS_MAX_LEN)
-]
 _METADATA_CREATION_CQL = ([
     _METADATA_CREATION_CQL_METRICS,
     _METADATA_CREATION_CQL_DIRECTORIES,
     _METADATA_CREATION_CQL_METRICS_METADATA,
-] + _METADATA_CREATION_CQL_PATH_INDEXES
-    + _METADATA_CREATION_CQL_PARENT_INDEXES
-    + _METADATA_CREATION_CQL_ID_INDEXES
-    + _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX
-    + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
-    + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
+] + _METADATA_CREATION_CQL_ID_INDEXES
+  + _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX
+  + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
+  + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
+  # FIXME: Use the correct index in clean/repair
+  + sasi.METADATA_CREATION_CQL_PARENT_INDEXES
 )
 
-if USE_LUCENE:
-    _METADATA_CREATION_CQL += cassandra_stratio_lucene.CQL_CREATE_INDICES
+_METADATA_CREATION_CQL_SASI = (
+    sasi.METADATA_CREATION_CQL_PATH_INDEXES
+)
+GLOBSTAR = bg_glob.Globstar()
+
+_METADATA_CREATION_CQL_LUCENE = lucene.CQL_CREATE_INDICES
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
@@ -834,7 +819,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
                  data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY,
                  updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
-                 read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE):
+                 read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
+                 stratio_lucene=DEFAULT_STRATIO_LUCENE):
         """Record parameters needed to connect.
 
         Args:
@@ -876,6 +862,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.contact_points_metadata = contact_points_metadata
         self.port = port
         self.port_metadata = port_metadata
+        self.stratio_lucene = stratio_lucene
         self.max_metrics_per_pattern = max_metrics_per_pattern
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
@@ -917,6 +904,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__shard = self.__shard = bg_accessor.pack_shard(replica, writer)
         self.__shard = c_marshal.int16_unpack(
             c_marshal.uint16_pack(self.__shard))
+
+        if self.stratio_lucene:
+            self.metadata_query_generator = lucene.CassandraStratioLucene(
+                self.keyspace_metadata, self.max_queries_per_pattern, self.max_metrics_per_pattern
+            )
+        else:
+            self.metadata_query_generator = sasi.CassandraSASI(
+                self.keyspace_metadata, self.max_queries_per_pattern, self.max_metrics_per_pattern
+            )
 
     def connect(self):
         """See bg_accessor.Accessor."""
@@ -1410,17 +1406,24 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 )
             )
 
-        isFullyDefinedMetric = all(len(c) == 1 and isinstance(c[0],six.string_types) for c in components)
-        if USE_LUCENE and not isFullyDefinedMetric:
-            queries = [cassandra_stratio_lucene.generate_query(self.keyspace_metadata,table,glob,self.max_metrics_per_pattern)]
-        elif GLOBSTAR in components:
-            queries = self.__generate_globstar_names_queries(table, components)
+        if self.__glob_parser.is_fully_defined(components):
+            # When the glob is a fully defined metric, we can take a shortcut. glob can't be used
+            # directly because, for example a.{b} would be a.b. We could probably extract some code from
+            # cassandra_sasi to do this when globs are combinations of fully defined paths.
+            if table == 'metrics':
+                query = self.__select_metric_statement
+            else:
+                query = self.__select_directory_statement
+            path = DIRECTORY_SEPARATOR.join([c[0] for c in components])
+            queries = [query.bind([path])]
         else:
-            components.append([_LAST_COMPONENT])
-            queries = self.__generate_normal_names_queries(table, components)
+            queries = self.metadata_query_generator.generate_queries(table, components)
 
         if self.cache:
-            cached_results = self.cache.get_many(queries)
+            # As queries can be statements, we use the string representation (which always contain
+            # the query and the parameters).
+            keys = [str(query) for query in queries]
+            cached_results = self.cache.get_many(keys)
             for query in cached_results:
                 queries.remove(query)
         else:
@@ -1428,10 +1431,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         statements_with_params = []
         for query in queries:
-            statement = c_query.SimpleStatement(
-                query,
-                consistency_level=self._meta_read_consistency,
-            )
+            if isinstance(query, six.string_types):
+                statement = c_query.SimpleStatement(
+                    query,
+                    consistency_level=self._meta_read_consistency,
+                )
+            else:
+                statement = query
             statements_with_params.append((statement, ()))
 
         query_results = self._execute_concurrent_metadata(
@@ -1459,7 +1465,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             try:
                 for success, results in query_results:
-                    query = results.response_future.query.query_string
+                    query = str(results.response_future.query)
                     # Make sure we also cache empty results.
                     fetched_results[query] = []
                     for result in results:
@@ -1478,212 +1484,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     fetched_results, timeout=self.cache_metadata_ttl)
 
         return _extract_results(query_results)
-
-    def __generate_normal_names_queries(self, table, components):
-        # Only keep the component parts that enable us to build prefix queries.
-        # This means any uninterrupted sequence of strings or braces selectors.
-        # On the way, we keep the position and value counts of selectors for
-        # further query simplification.
-        idxlens = []
-        combinations = 1
-        for cidx, component in enumerate(components):
-            entry = []
-            end = 0
-            for pidx, part in enumerate(component):
-                if isinstance(part, bg_glob.SequenceIn):
-                    count = len(part.values)
-                    combinations *= count
-                    entry.append((pidx, count))
-                elif not bg_glob.is_fixed_sequence(part):
-                    # If we have globs we can't do much more.
-                    break
-
-                end = pidx + 1
-
-            idxlens.append(entry)
-            simplified_component = component[:end]
-            if len(simplified_component) < len(component):
-                simplified_component.append(ANYSEQUENCE)
-
-            components[cidx] = simplified_component
-
-        # Skip any additional work if we have a basic query.
-        if combinations == 1:
-            return [self.__build_select_names_query(table, components)]
-
-        # Reduce complexity by dropping the rightmost selector from each
-        # component, starting with the shallowest component, until we have a low
-        # enough combination count.
-        for cidx, entry in enumerate(idxlens):
-            if combinations <= self.max_queries_per_pattern:
-                break
-
-            while len(entry) > 0 and combinations > self.max_queries_per_pattern:
-                component = components[cidx]
-                idx, count = entry.pop()
-
-                surrounding_anyseqs = 0
-                if idx > 0 and component[idx - 1] == ANYSEQUENCE:
-                    surrounding_anyseqs += 1
-                if idx < len(component) - 1 and component[idx + 1] == ANYSEQUENCE:
-                    surrounding_anyseqs += 1
-
-                # If we have surrounding AnySeqs, then drop elements so that
-                # only one remains. Otherwise, replace current part with AnySeq.
-                if surrounding_anyseqs > 0:
-                    while surrounding_anyseqs > 0:
-                        del(component[idx])
-                        surrounding_anyseqs -= 1
-                else:
-                    component[idx] = ANYSEQUENCE
-
-                combinations /= count
-
-        # Pre-compute all possible values for each component.
-        for cidx, component in enumerate(components):
-            suffix = []
-            if component[-1] == ANYSEQUENCE:
-                if len(component) == 1:
-                    components[cidx] = [component]
-                    continue
-                else:
-                    suffix.append(ANYSEQUENCE)
-
-            values = ['']
-            for part in component:
-                if bg_glob.is_fixed_sequence(part):
-                    values = [x + part for x in values]
-                elif isinstance(part, bg_glob.SequenceIn):
-                    values = [x + y
-                              for x in values
-                              for y in part.values]
-                else:
-                    break
-
-            components[cidx] = [[x] + suffix for x in values]
-
-        # Generate queries using the combinations of pre-computed values for the
-        # components.
-        return [
-            self.__build_select_names_query(table, combination)
-            for combination in itertools.product(*components)
-        ]
-
-    def __generate_globstar_names_queries(self, table, components):
-        # Handling more than one of these can cause combinatorial explosion.
-        if components.count(GLOBSTAR) > 1:
-            raise bg_accessor.InvalidGlobError(
-                "Contains more than one globstar (**) operator"
-            )
-
-        # If the globstar operator is at the end of the pattern, then we can
-        # find corresponding metrics with a prefix search;
-        # otherwise, we have to generate incremental queries that go up to a
-        # certain depth (_COMPONENTS_MAX_LEN - #components).
-        gs_index = components.index(GLOBSTAR)
-        if gs_index == len(components) - 1:
-            return [
-                self.__build_select_names_query(table, components[:gs_index])
-            ]
-
-        prefix = components[:gs_index]
-        suffix = components[gs_index + 1:] + [[_LAST_COMPONENT]]
-        max_wildcards = min(self.max_queries_per_pattern,
-                            _COMPONENTS_MAX_LEN - len(components))
-        return [
-            self.__build_select_names_query(
-                table,
-                prefix + wildcards * [[bg_glob.AnySequence()]] + suffix,
-            )
-            for wildcards in range(1, max_wildcards)
-        ]
-
-    def __build_select_names_query(self, table, components):
-        query_select = "SELECT name FROM \"%s\".\"%s\"" % (
-            self.keyspace_metadata,
-            table,
-        )
-        query_limit = "LIMIT %d" % (self.max_metrics_per_pattern + 1)
-
-        if len(components) == 0:
-            return "%s %s;" % (query_select, query_limit)
-
-        # If all components are constant values we can search by exact name.
-        # If all but the last component are constant values we can search by
-        # exact parent, in which case we may benefit from filtering the last
-        # component by prefix when we have one. (Code refers to the previous-to
-        # -last component because of the __END__ suffix we use).
-        #
-        # We are not using prefix search on the parent because it appears to be
-        # too slow/costly at the moment (see #174 for details).
-        if (
-            components[-1] == [_LAST_COMPONENT] and  # Not a prefix globstar
-            all(len(c) == 1 and bg_glob.is_fixed_sequence(c[0])
-                for c in components[:-2])
-        ):
-            last = components[-2]
-            if len(last) == 1 and bg_glob.is_fixed_sequence(last[0]):
-                # XXX(d.forest): do not try to optimize by passing the raw glob
-                #                and using it here; because this is invalid in
-                #                cases where the glob contains braces.
-                name = DIRECTORY_SEPARATOR.join(
-                    itertools.chain.from_iterable(components[:-1]))
-                return "%s WHERE name = %s %s;" % (
-                    query_select,
-                    c_encoder.cql_quote(name),
-                    query_limit,
-                )
-            else:
-                if len(last) > 0 and bg_glob.is_fixed_sequence(last[0]):
-                    prefix_filter = "AND component_%d LIKE %s" % (
-                        len(components) - 2,
-                        c_encoder.cql_quote(last[0] + '%'),
-                    )
-                    allow_filtering = "ALLOW FILTERING"
-                else:
-                    prefix_filter = ''
-                    allow_filtering = ''
-
-                parent = itertools.chain.from_iterable(components[:-2])
-                parent = DIRECTORY_SEPARATOR.join(parent) + DIRECTORY_SEPARATOR
-                return "%s WHERE parent = %s %s %s %s;" % (
-                    query_select,
-                    c_encoder.cql_quote(parent),
-                    prefix_filter,
-                    query_limit,
-                    allow_filtering,
-                )
-
-        where_clauses = []
-
-        for n, component in enumerate(components):
-            if len(component) == 0:
-                continue
-
-            # We are currently using prefix indexes, so if we do not have a
-            # prefix value (i.e. it is a wildcard), then the current component
-            # cannot be constrained inside the request.
-            value = component[0]
-            if not bg_glob.is_fixed_sequence(value):
-                continue
-
-            if len(component) == 1:
-                op = '='
-            else:
-                op = "LIKE"
-                value += '%'
-
-            clause = "component_%d %s %s" % (n, op, c_encoder.cql_quote(value))
-            where_clauses.append(clause)
-
-        if len(where_clauses) == 0:
-            return "%s %s;" % (query_select, query_limit)
-
-        return "%s WHERE %s %s ALLOW FILTERING;" % (
-            query_select,
-            " AND ".join(where_clauses),
-            query_limit
-        )
 
     def background(self):
         """Perform periodic background operations."""
@@ -1798,7 +1598,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.keyspace not in keyspaces:
             raise CassandraError("Missing keyspace '%s'." % self.keyspace)
 
-        for cql in _METADATA_CREATION_CQL:
+        queries = _METADATA_CREATION_CQL
+        if self.stratio_lucene:
+            queries += _METADATA_CREATION_CQL_LUCENE
+        else:
+            queries += _METADATA_CREATION_CQL_SASI
+
+        for cql in queries:
             query = cql % {"keyspace": self.keyspace_metadata}
             schema += query + "\n\n"
             if not dry_run:

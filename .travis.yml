@@ -9,7 +9,18 @@ matrix:
     - python: 'pypy'
       env: TOXENV=pypy-coverage
     - python: 'pypy'
-      env: TOXENV=pylama
+      env:
+        - TOXENV=pylama
+        ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
+        - CASSANDRA_VERSION=3.11.1
+        - CASSANDRA_STRATIO_LUCENE_VERSION=${CASSANDRA_VERSION}.0
+        - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
+      # We need a java env to build and run the Lucene plugin.
+      jdk: oraclejdk8
+      addons:
+        apt:
+          packages:
+            - oracle-java8-installer
     - language: java
       jdk: oraclejdk8
       env: JAVA=true
@@ -21,10 +32,6 @@ matrix:
 env:
   global:
     - JAVA=false # Default
-    ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
-    - CASSANDRA_VERSION=3.11.0
-    - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
-
 
 install:
   ### Java: We download now some dependencies to limit the number of messages later
@@ -43,13 +50,6 @@ after_success:
 ### sudo is required by pip
 sudo: required
 
-### As of 2016-11, when Sudo is required, java8 is removed (WHY?)
-dist: trusty
-
 ### As of 2016-04 Travis provides Cassandra 2.1 by default so we bundle our own
 before_install:
-   - mkdir .deps
-   - cd .deps
-   - wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
-   - tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
-   - cd -
+   - ./tools/install-deps.sh

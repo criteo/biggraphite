@@ -39,6 +39,8 @@ from biggraphite import metadata_cache as bg_metadata_cache
 
 
 HAS_CASSANDRA_HOME = bool(os.getenv("CASSANDRA_HOME"))
+CASSANDRA_HOSTPORT = os.getenv("CASSANDRA_HOSTPORT")
+HAS_CASSANDRA = HAS_CASSANDRA_HOME or CASSANDRA_HOSTPORT
 
 # Only try to import cassandra if we are going to use it. This is better
 # than using try/except because the failure case is easier to handle.
@@ -204,7 +206,7 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
 
 
 @unittest.skipUnless(
-    HAS_CASSANDRA_HOME, "CASSANDRA_HOME must be set to a >=3.5 install",
+    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
 )
 class TestCaseWithAccessor(TestCaseWithTempDir):
     """A TestCase with an Accessor for an ephemeral Cassandra cluster."""
@@ -216,6 +218,23 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     def setUpClass(cls):
         """Create the test Cassandra Cluster as cls.cassandra."""
         super(TestCaseWithAccessor, cls).setUpClass()
+
+        cls.cassandra = None
+        if CASSANDRA_HOSTPORT:
+            host, cls.port = CASSANDRA_HOSTPORT.split(':')
+            cls.contact_points = [host]
+        else:
+            self.setUpCassandra(cls)
+
+        # Make it easy to do raw queries to Cassandra.
+        cls.cluster = c_cluster.Cluster(cls.contact_points, cls.port)
+        cls.session = cls.cluster.connect()
+        cls._reset_keyspace(cls.session, cls.KEYSPACE)
+        cls._reset_keyspace(cls.session, cls.KEYSPACE + "_metadata")
+        cls.accessor_settings = {}
+
+    @classmethod
+    def setUpCassandra(cls):
         cls.cassandra = _SlowerTestingCassandra(
             auto_start=False,
             boot_timeout=_SlowerTestingCassandra.BOOT_TIMEOUT
@@ -239,19 +258,14 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
                               for s in cls.cassandra.server_list()]
         cls.port = cls.cassandra.cassandra_yaml["native_transport_port"]
 
-        # Make it easy to do raw queries to Cassandra.
-        cls.cluster = c_cluster.Cluster(cls.contact_points, cls.port)
-        cls.session = cls.cluster.connect()
-        cls._reset_keyspace(cls.session, cls.KEYSPACE)
-        cls._reset_keyspace(cls.session, cls.KEYSPACE + "_metadata")
-
     @classmethod
     def tearDownClass(cls):
         """Stop the test Cassandra Cluster."""
         super(TestCaseWithAccessor, cls).tearDownClass()
         cls.session.shutdown()
         cls.cluster.shutdown()
-        cls.cassandra.stop()
+        if cls.cassandra:
+            cls.cassandra.stop()
 
     def setUp(self):
         """Create a new Accessor in self.acessor."""
@@ -261,6 +275,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             contact_points=self.contact_points,
             port=self.port,
             timeout=60,
+            **self.accessor_settings
         )
         self.accessor.syncdb()
         self.accessor.connect()
@@ -270,68 +285,22 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
-        self._patch_accessor()
-
-
-    def _patch_accessor(self):
-        """Override accessor methods for tests
-        to enforce a statio index refresh between writes & reads call
-        """
-        if not bg_cassandra.USE_LUCENE:
-            return
-
-        ## Instead of sleeping I tried running:
-        # SELECT *
-        # FROM keyspace.metrics
-        # WHERE expr(metrics_idx, '{refresh:true}')
-        ## It did not work.
-        ## Adding "refresh:true" to lucene filter didn't work either.
-
-        orig_create_metric = self.accessor.create_metric
-        def _create_metric(metric):
-            self.last_create = time.time()
-            # print("create metric")
-            return orig_create_metric(metric)
-        self.accessor.create_metric = _create_metric
-
-        orig_select_metric = self.accessor._select_metric
-        def _select_metric(metric):
-            if hasattr(self, 'last_create'):
-                time_since_last_create = time.time() - self.last_create
-                time_to_sleep = bg_cassandra.STRATIO_INDEX_REFRESH_PERIOD_SECOND - time_since_last_create
-                # print("select_metric \t time_since_last_create %i, will sleep %i" % (time_since_last_create,time_to_sleep))
-                if time_to_sleep > 0:
-                    time.sleep(time_to_sleep)
-            return orig_select_metric(metric)
-        self.accessor._select_metric = _select_metric
-
-        orig_glob_metric_names = self.accessor.glob_metric_names
-        def _glob_metric_names(glob):
-            if hasattr(self, 'last_create'):
-                time_since_last_create = time.time() - self.last_create
-                time_to_sleep = bg_cassandra.STRATIO_INDEX_REFRESH_PERIOD_SECOND - time_since_last_create
-                # print("glob_metric_names \t time_since_last_create %i, will sleep %i" % (time_since_last_create,time_to_sleep))
-                if time_to_sleep > 0:
-                    time.sleep(time_to_sleep)
-            return orig_glob_metric_names(glob)
-        self.accessor.glob_metric_names = _glob_metric_names
-
-        orig_glob_directory_names = self.accessor.glob_directory_names
-        def _glob_directory_names(glob):
-            if hasattr(self, 'last_create'):
-                time_since_last_create = time.time() - self.last_create
-                time_to_sleep = bg_cassandra.STRATIO_INDEX_REFRESH_PERIOD_SECOND - time_since_last_create
-                # print("glob_directory_names \t time_since_last_create %i, will sleep %i" % (time_since_last_create,time_to_sleep))
-                if time_to_sleep > 0:
-                    time.sleep(time_to_sleep)
-            return orig_glob_directory_names(glob)
-        self.accessor.glob_directory_names = _glob_directory_names
-
 
     @classmethod
     def _reset_keyspace(cls, session, keyspace):
         drop_keyspace(session, keyspace)
         create_unreplicated_keyspace(session, keyspace)
+
+    def flush(self):
+        """Flush all kind of buffers related to Cassandra."""
+        self.accessor.flush()
+
+        # When using Lucene, we need to force a refresh on the index as the default
+        # refresh period is 60s.
+        if self.accessor.stratio_lucene:
+            statements = self.accessor.metadata_query_generator.sync_queries()
+            for statement in statements:
+                self.session.execute(statement)
 
     def make_metric(self, name, metadata=None, **kwargs):
         """Create a bg_accessor.Metric with specified metadata."""
