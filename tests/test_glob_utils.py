@@ -113,7 +113,8 @@ class TestGlobUtilsInternals(unittest.TestCase):
             ("b[i\\]m", [['b', bg_glob.AnyChar(), 'm']], False),
             ("a[x-xy]b", [['a', bg_glob.AnyChar(), 'b']], False),
             ("a[y-xz]b", [['a', bg_glob.AnyChar(), 'b']], False),
-            ("a.b.{c,d}", [['a'], ['b'], [bg_glob.SequenceIn(['c', 'd'])]], False),
+            ("a.b.{c,d}", [['a'], ['b'], [
+             bg_glob.SequenceIn(['c', 'd'])]], False),
             ("a.b.{c,d}-{e,f}",
              [['a'], ['b'],
               [bg_glob.SequenceIn(['c', 'd']), '-',
@@ -137,6 +138,7 @@ class TestGlobUtilsInternals(unittest.TestCase):
             self.assertSequenceEqual(expected, parsed)
             fully_defined = parser.is_fully_defined(parsed)
             self.assertEqual(fd, fully_defined, parsed)
+
 
 class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
     _metric_names = sorted([

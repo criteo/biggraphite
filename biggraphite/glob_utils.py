@@ -337,6 +337,7 @@ class CharNotIn(GlobExpressionWithValues):
     """Represents any single character."""
 
     def __init__(self, values):
+        """Initializes the CharNotIn."""
         super(CharNotIn, self).__init__(values)
         self.negated = True
 

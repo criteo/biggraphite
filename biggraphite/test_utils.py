@@ -22,7 +22,6 @@ from __future__ import print_function
 
 import os
 import sys
-import time
 import tempfile
 import shutil
 import unittest
@@ -224,7 +223,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             host, cls.port = CASSANDRA_HOSTPORT.split(':')
             cls.contact_points = [host]
         else:
-            self.setUpCassandra(cls)
+            cls.setUpCassandra()
 
         # Make it easy to do raw queries to Cassandra.
         cls.cluster = c_cluster.Cluster(cls.contact_points, cls.port)
@@ -235,6 +234,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
 
     @classmethod
     def setUpCassandra(cls):
+        """Start Cassandra."""
         cls.cassandra = _SlowerTestingCassandra(
             auto_start=False,
             boot_timeout=_SlowerTestingCassandra.BOOT_TIMEOUT
@@ -297,7 +297,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
 
         # When using Lucene, we need to force a refresh on the index as the default
         # refresh period is 60s.
-        if self.accessor.stratio_lucene:
+        if self.accessor.use_lucene:
             statements = self.accessor.metadata_query_generator.sync_queries()
             for statement in statements:
                 self.session.execute(statement)

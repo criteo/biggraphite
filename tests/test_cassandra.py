@@ -44,7 +44,7 @@ assert _QUERY_RANGE == len(_USEFUL_POINTS)
 class BaseTestAccessorWithCassandraMetadata(bg_test_utils.TestCaseWithAccessor):
 
     def test_glob_metrics(self):
-        IS_LUCENE = self.accessor_settings.get('stratio_lucene', False)
+        IS_LUCENE = self.accessor_settings.get('use_lucene', False)
 
         metrics = [
             "a", "a.a", "a.b", "a.a.a", "a.b.c", "a.x.y",
@@ -389,7 +389,7 @@ class TestAccessorWithCassandraSASI(BaseTestAccessorWithCassandraMetadata):
 
 class TestAccessorWithCassandraLucene(BaseTestAccessorWithCassandraMetadata):
     def setUp(self):
-        self.accessor_settings['stratio_lucene'] = True
+        self.accessor_settings['use_lucene'] = True
         super(TestAccessorWithCassandraLucene, self).setUp()
 
 

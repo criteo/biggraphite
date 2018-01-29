@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Cassandra indexing code using the Stratio Lucene plugin.
+
+See https://github.com/Stratio/cassandra-lucene-index
+"""
 from __future__ import absolute_import
 from __future__ import print_function
 
@@ -22,7 +26,7 @@ from biggraphite.drivers import cassandra_common
 
 _COMPONENTS_INDEX_MAX_LEN = cassandra_common.COMPONENTS_MAX_LEN
 
-LUCENE_INDEX_REFRESH_PERIOD_SECOND = 61 # Default value FIXME: use it
+LUCENE_INDEX_REFRESH_PERIOD_SECOND = 61  # Default value FIXME: use it
 
 _CQL_PATH_COMPONENTS_INDEX_FIELDS = ",\n".join(
     "        component_%d : {type: \"string\"}" % n for n in range(_COMPONENTS_INDEX_MAX_LEN)
@@ -56,7 +60,6 @@ class CassandraStratioLucene(object):
 
     def generate_queries(self, table, components):
         """Generate queries based on components."""
-
         filters = lucene.translate_to_lucene_filter(components)
         cql = "SELECT name FROM %s.%s" % (self.keyspace_metadata, table)
         if filters:
@@ -66,9 +69,11 @@ class CassandraStratioLucene(object):
         return [cql]
 
     def sync_queries(self):
+        """Generate queries to refresh the index."""
         for table in ('metrics', 'directories'):
             statement = c_query.SimpleStatement(
-                _CQL_SYNC_INDEX % {'keyspace': self.keyspace_metadata, 'table': table},
+                _CQL_SYNC_INDEX % {
+                    'keyspace': self.keyspace_metadata, 'table': table},
                 consistency_level=c_query.ConsistencyLevel.ALL
             )
             yield statement

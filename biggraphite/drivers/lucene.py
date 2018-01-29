@@ -21,8 +21,10 @@ import six
 from biggraphite import glob_utils
 from biggraphite.drivers import cassandra_common
 
+
 class Error(Exception):
     """Base class for all exceptions from this module."""
+
 
 class GlobError(Exception):
     """Base class for all translation exceptions from this module."""
@@ -49,7 +51,7 @@ FIELD_REGEX_VALUE = '{ field:"%s", type:"regexp", value:"%s" }'
 
 
 def translate_to_lucene_filter(components):
-    """Translate a list of constraints on components to a lucene query
+    """Translate a list of constraints on components to a lucene query.
 
     Take a glob components iterable. Build an equivalent Apache Lucene filter using
     hardcoded assumptions about the index schema.
@@ -73,11 +75,13 @@ def translate_to_lucene_filter(components):
             must_list = _build_filters(components)
         else:
             # GLOBSTAR is only supported at the end of a glob syntax
-            raise GlobError("Metric pattern syntax only supports '%s' at the end" % GLOBSTAR)
+            raise GlobError(
+                "Metric pattern syntax only supports '%s' at the end" % GLOBSTAR)
     elif (  # Parent query
             len(components) > 1
             and
-            all(len(c) == 1 and glob_utils.is_fixed_sequence(c[0]) for c in components[:-1])
+            all(len(c) == 1 and glob_utils.is_fixed_sequence(
+                c[0]) for c in components[:-1])
             and
             isinstance(components[-1][0], glob_utils.AnySequence)
     ):
@@ -88,13 +92,15 @@ def translate_to_lucene_filter(components):
     else:
         must_list = _build_filters(components)
         # Restrict length by matching the END_MARK
-        must_list.append(FIELD_MATCH_VALUE % (_component_name(len(components)), END_MARK))
+        must_list.append(FIELD_MATCH_VALUE %
+                         (_component_name(len(components)), END_MARK))
 
     if not must_list:
         return None
 
     # Join the constraints (with a nice indentation)
     return LUCENE_FILTER % ",\n            ".join(must_list)
+
 
 def _component_name(idx):
     """Helper to get the name of a component."""
@@ -107,7 +113,8 @@ def _build_filters(components):
     for idx, component in enumerate(components):
         if len(component) == 0:
             # FIXME: When can this happen ?
-            raise GlobError("Illegal glob component %s in glob %s" % (component, components))
+            raise GlobError("Illegal glob component %s in glob %s" %
+                            (component, components))
         elif len(component) == 1:
             must_list.append(_build_simple_field_constrain(idx, component[0]))
         else:  # len(component) > 1
@@ -129,7 +136,8 @@ def _build_simple_field_constrain(index, value):
     elif isinstance(value, glob_utils.CharIn):
         return FIELD_REGEX_VALUE % (_component_name(index), '[' + ''.join(value.values) + ']')
     elif isinstance(value, glob_utils.SequenceIn):
-        return '{ field:"%s", type:"contains", values:["%s"] }' % (_component_name(index), '","'.join(value.values))
+        return '{ field:"%s", type:"contains", values:["%s"] }' % (
+            _component_name(index), '","'.join(value.values))
     elif isinstance(value, glob_utils.AnyChar):
         return FIELD_REGEX_VALUE % (_component_name(index), '.')
     else:
@@ -154,8 +162,7 @@ def _build_regex_field_constrain(index, component):
             else:
                 regex += '(' + '|'.join(subcomponent.values) + ')'
         elif isinstance(subcomponent, glob_utils.AnyChar):
-            # TODO: Fix AST so that AnyChar contains the actual alternatives (currently it discards the information)
-            regex += '.'  # This is inexact, should be '[..]'
+            regex += '.'
         else:
             raise GlobError("Unhandled type '%s'" % subcomponent)
     return FIELD_REGEX_VALUE % (_component_name(index), regex)

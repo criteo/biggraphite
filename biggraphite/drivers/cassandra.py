@@ -89,7 +89,7 @@ DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 DEFAULT_READ_ON_SAMPLING_RATE = 0.1
-DEFAULT_STRATIO_LUCENE = False
+DEFAULT_USE_LUCENE = False
 
 # Exceptions that are not considered fatal during batch jobs.
 # The affected range will simply be ignored.
@@ -138,7 +138,7 @@ OPTIONS = {
     "data_read_consistency": _consistency_validator,
     "updated_on_ttl_sec": int,
     "read_on_sampling_rate": float,
-    "stratio_lucene": bool,
+    "use_lucene": bool,
 }
 
 
@@ -250,9 +250,9 @@ def add_argparse_arguments(parser):
         help="Updated 'read_on' field every x calls.",
         default=DEFAULT_READ_ON_SAMPLING_RATE),
     parser.add_argument(
-        "--cassandra_stratio_lucene",
+        "--cassandra_use_lucene",
         help="Use the Stratio Lucene Index.",
-        default=DEFAULT_STRATIO_LUCENE,
+        default=DEFAULT_USE_LUCENE,
     )
 
 
@@ -396,7 +396,7 @@ _METADATA_CREATION_CQL = ([
   + _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX
   + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
   + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
-  # FIXME: Use the correct index in clean/repair
+    # FIXME: Use the correct index in clean/repair
   + sasi.METADATA_CREATION_CQL_PARENT_INDEXES
 )
 
@@ -820,7 +820,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                  data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY,
                  updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
                  read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
-                 stratio_lucene=DEFAULT_STRATIO_LUCENE):
+                 use_lucene=DEFAULT_USE_LUCENE):
         """Record parameters needed to connect.
 
         Args:
@@ -862,7 +862,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.contact_points_metadata = contact_points_metadata
         self.port = port
         self.port_metadata = port_metadata
-        self.stratio_lucene = stratio_lucene
+        self.use_lucene = use_lucene
         self.max_metrics_per_pattern = max_metrics_per_pattern
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
@@ -905,7 +905,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__shard = c_marshal.int16_unpack(
             c_marshal.uint16_pack(self.__shard))
 
-        if self.stratio_lucene:
+        if self.use_lucene:
             self.metadata_query_generator = lucene.CassandraStratioLucene(
                 self.keyspace_metadata, self.max_queries_per_pattern, self.max_metrics_per_pattern
             )
@@ -1407,9 +1407,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             )
 
         if self.__glob_parser.is_fully_defined(components):
-            # When the glob is a fully defined metric, we can take a shortcut. glob can't be used
-            # directly because, for example a.{b} would be a.b. We could probably extract some code from
-            # cassandra_sasi to do this when globs are combinations of fully defined paths.
+            # When the glob is a fully defined metric, we can take a shortcut.
+            # `glob` can't be used directly because, for example a.{b} would be a.b.
+            # We could probably extract some code from cassandra_sasi to do this when globs
+            # are combinations of fully defined paths.
             if table == 'metrics':
                 query = self.__select_metric_statement
             else:
@@ -1417,12 +1418,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
             path = DIRECTORY_SEPARATOR.join([c[0] for c in components])
             queries = [query.bind([path])]
         else:
-            queries = self.metadata_query_generator.generate_queries(table, components)
+            queries = self.metadata_query_generator.generate_queries(
+                table, components)
 
         if self.cache:
-            # As queries can be statements, we use the string representation (which always contain
-            # the query and the parameters).
-            keys = [str(query) for query in queries]
+            # As queries can be statements, we use the string representation
+            # (which always contains the query and the parameters).
+            keys = [str(q) for q in queries]
             cached_results = self.cache.get_many(keys)
             for query in cached_results:
                 queries.remove(query)
@@ -1599,7 +1601,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             raise CassandraError("Missing keyspace '%s'." % self.keyspace)
 
         queries = _METADATA_CREATION_CQL
-        if self.stratio_lucene:
+        if self.use_lucene:
             queries += _METADATA_CREATION_CQL_LUCENE
         else:
             queries += _METADATA_CREATION_CQL_SASI
