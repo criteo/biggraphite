@@ -67,8 +67,8 @@ class TestGlobUtilsInternals(unittest.TestCase):
 
     def test_glob_to_regex(self):
         def filter_metrics(metrics, glob):
-            print(glob + "   ===>   " + bg_glob._glob_to_regex(glob))
-            glob_re = re.compile(bg_glob._glob_to_regex(glob))
+            print(glob + "   ===>   " + bg_glob.glob_to_regex(glob))
+            glob_re = re.compile(bg_glob.glob_to_regex(glob))
             return list(filter(glob_re.match, metrics))
 
         scenarii = [
@@ -106,13 +106,14 @@ class TestGlobUtilsInternals(unittest.TestCase):
             ("a.b**c", [['a'], ['b'], bg_glob.Globstar(), ['c']], False),
             ("a.**.c", [['a'], bg_glob.Globstar(), ['c']], False),
             ("a.**", [['a'], bg_glob.Globstar()], False),
-            ("a[xyz].b", [['a', bg_glob.AnyChar()], ['b']], False),
-            ("a[!rat].b", [['a', bg_glob.AnyChar()], ['b']], False),
-            ("pl[a-ox]p", [['pl', bg_glob.AnyChar(), 'p']], False),
-            ("a[b-dopx-z]b.c", [['a', bg_glob.AnyChar(), 'b'], ['c']], False),
-            ("b[i\\]m", [['b', bg_glob.AnyChar(), 'm']], False),
-            ("a[x-xy]b", [['a', bg_glob.AnyChar(), 'b']], False),
-            ("a[y-xz]b", [['a', bg_glob.AnyChar(), 'b']], False),
+            ("a[xyz].b", [['a', bg_glob.CharIn(['x', 'y', 'z'])], ['b']], False),
+            ("a[!rat].b", [['a', bg_glob.CharNotIn(['r', 'a', 't'])], ['b']], False),
+            ("pl[a-ox]p", [['pl', bg_glob.CharIn(['a-o', 'x']), 'p']], False),
+            ("a[b-dopx-z]b.c",
+             [['a', bg_glob.CharIn(['b-d', 'o', 'p', 'x-z']), 'b'], ['c']], False),
+            ("b[i\\]m", [['b', bg_glob.CharIn(['\\', 'i']), 'm']], False),
+            ("a[x-xy]b", [['a', bg_glob.CharIn(['x-x', 'y']), 'b']], False),
+            ("a[y-xz]b", [['a', bg_glob.CharIn(['y-x', 'z']), 'b']], False),
             ("a.b.{c,d}", [['a'], ['b'], [
              bg_glob.SequenceIn(['c', 'd'])]], False),
             ("a.b.{c,d}-{e,f}",

@@ -407,6 +407,21 @@ class GraphiteGlobParser:
 
         return j
 
+    def _group_char_selector(self, chars):
+        """Separate chars from char ranges."""
+        i = 0
+        result = set()
+        size = len(chars)
+        while i < size:
+            if i < size - 2 and chars[i+1] == '-':
+                # char range.
+                result.add(chars[i:i+3])
+                i += 3
+            elif chars[i] != '-':
+                result.add(chars[i])
+                i += 1
+        return result
+
     def _parse_char_selector(self, i, n):
         """Parse character selector, with support for negation and ranges.
 
@@ -417,10 +432,11 @@ class GraphiteGlobParser:
         j = self._find_char_selector_end(i, n)
         if j < n:
             chars = self._glob[i:j]
-            # FIXME: expand char ranges
             if chars[0] == '!':
-                char = CharNotIn(chars[1:])
+                chars = self._group_char_selector(chars[1:])
+                char = CharNotIn(chars)
             else:
+                chars = self._group_char_selector(chars)
                 char = CharIn(chars)
             # +1 to skip closing bracket
             i = j + 1

@@ -23,7 +23,7 @@ if [ -n "${CASSANDRA_STRATIO_LUCENE_VERSION}" ]; then
     git clone http://github.com/Stratio/cassandra-lucene-index
     cd cassandra-lucene-index
     git checkout ${CASSANDRA_STRATIO_LUCENE_VERSION}
-    git checkout -b ${CASSANDRA_STRATIO_LUCENE_VERSIO}
+    git checkout -b ${CASSANDRA_STRATIO_LUCENE_VERSION}
 
     mvn clean package -DskipTests
     cp plugin/target/cassandra-lucene-index-plugin-*.jar ${CASSANDRA_HOME}/lib/
