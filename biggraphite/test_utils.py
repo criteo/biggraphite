@@ -212,7 +212,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
 
     KEYSPACE = "testkeyspace"
     CACHE_CLASS = bg_metadata_cache.MemoryCache
-
+    ACCESSOR_SETTINGS = {}
     @classmethod
     def setUpClass(cls):
         """Create the test Cassandra Cluster as cls.cassandra."""
@@ -230,7 +230,15 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         cls.session = cls.cluster.connect()
         cls._reset_keyspace(cls.session, cls.KEYSPACE)
         cls._reset_keyspace(cls.session, cls.KEYSPACE + "_metadata")
-        cls.accessor_settings = {}
+        cls.accessor = bg_cassandra.build(
+            keyspace=cls.KEYSPACE,
+            contact_points=cls.contact_points,
+            port=cls.port,
+            timeout=60,
+            **cls.ACCESSOR_SETTINGS
+        )
+        cls.accessor.syncdb()
+        cls.accessor.connect()
 
     @classmethod
     def setUpCassandra(cls):
@@ -262,29 +270,26 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     def tearDownClass(cls):
         """Stop the test Cassandra Cluster."""
         super(TestCaseWithAccessor, cls).tearDownClass()
-        cls.session.shutdown()
+        cls.accessor.shutdown()
         cls.cluster.shutdown()
+        cls.session = None
+        cls.cluster = None
         if cls.cassandra:
             cls.cassandra.stop()
+            cls.cassandra = None
 
     def setUp(self):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithAccessor, self).setUp()
-        self.accessor = bg_cassandra.build(
-            keyspace=self.KEYSPACE,
-            contact_points=self.contact_points,
-            port=self.port,
-            timeout=60,
-            **self.accessor_settings
-        )
-        self.accessor.syncdb()
-        self.accessor.connect()
-        self.addCleanup(self.accessor.shutdown)
-        self.addCleanup(self.__drop_all_metrics)
         self.metadata_cache = self.CACHE_CLASS(
             self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
         self.metadata_cache.open()
-        self.addCleanup(self.metadata_cache.close)
+
+    def tearDown(self):
+        super(TestCaseWithAccessor, self).tearDown()
+        self.metadata_cache.close()
+        self.accessor.flush()
+        self.__drop_all_metrics()
 
     @classmethod
     def _reset_keyspace(cls, session, keyspace):

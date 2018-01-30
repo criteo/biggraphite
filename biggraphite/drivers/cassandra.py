@@ -1587,7 +1587,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         schema = ""
 
-        self._connect_clusters()
+        was_connected = self.is_connected
+        if not self.is_connected:
+            self._connect_clusters()
+
         self.__cluster_data.refresh_schema_metadata()
         self.__cluster_metadata.refresh_schema_metadata()
 
@@ -1642,7 +1645,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 if not dry_run:
                     self._execute_data(query)
 
-        self.shutdown()
+        if not was_connected:
+            self.shutdown()
         return schema
 
     def touch_metric(self, metric_name):

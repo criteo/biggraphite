@@ -44,7 +44,7 @@ assert _QUERY_RANGE == len(_USEFUL_POINTS)
 class _BaseTestAccessorWithCassandraMetadata(object):
 
     def test_glob_metrics(self):
-        IS_LUCENE = self.accessor_settings.get('use_lucene', False)
+        IS_LUCENE = self.ACCESSOR_SETTINGS.get('use_lucene', False)
 
         metrics = [
             "a", "a.a", "a.b", "a.a.a", "a.b.c", "a.x.y",
@@ -124,8 +124,8 @@ class _BaseTestAccessorWithCassandraMetadata(object):
                 "-{b,c,d}?suffix.a.t",
                 "-{b,c,d}[ha].a.t",
                 "-{b,c,d}[ha]suffix.a.t",
-                "-{b,c,d}[!-].a.t",
-                "-{b,c,d}[!-]suffix.a.t",
+                "-{b,c,d}[!ha].a.t",
+                "-{b,c,d}[!ha]suffix.a.t",
                 "-{b,c,d}*.a.t",
                 "-{b,c,d}*suffix.a.t",
                 u"-{b,c,d}*suffix.a.t",
@@ -284,9 +284,6 @@ class _BaseTestAccessorWithCassandraMetadata(object):
         metric1 = self.make_metric("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
 
-        # Set ttl to a lower value
-        self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
-
         # Setting up the moc function
         isUpdated = [False]
 
@@ -296,35 +293,17 @@ class _BaseTestAccessorWithCassandraMetadata(object):
         old_touch_fn = self.accessor.touch_metric
         self.accessor.touch_metric = touch_metric_moc
 
-        time.sleep(3)
+        time.sleep(2)
+        self.accessor.get_metric(metric1.name, touch=True)
+        self.assertEqual(isUpdated[0], False)
+
+        old_ttl = self.accessor._CassandraAccessor__metadata_touch_ttl_sec
+        self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
         self.accessor.get_metric(metric1.name, touch=True)
         self.assertEqual(isUpdated[0], True)
 
+        self.accessor._CassandraAccessor__metadata_touch_ttl_sec = old_ttl
         self.accessor.touch_metric = old_touch_fn
-        self.addCleanup(self.accessor.drop_all_metrics)
-
-    def test_metrics_ttl_not_refreshed(self):
-        metric1 = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric1)
-
-        # Setting up the moc function
-        isUpdated = [False]
-
-        def touch_metric_moc(*args, **kwargs):
-            isUpdated[0] = True
-
-        old_touch_fn = self.accessor.touch_metric
-        self.accessor.touch_metric = touch_metric_moc
-
-        time.sleep(3)
-        self.accessor.get_metric(metric1.name)
-        self.assertEqual(isUpdated[0], False)
-
-        self.accessor.get_metric(metric1.name, touch=True)
-        self.assertEqual(isUpdated[0], False)
-
-        self.accessor.touch_metric = old_touch_fn
-        self.addCleanup(self.accessor.drop_all_metrics)
 
     def test_clean_expired(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
@@ -390,9 +369,7 @@ class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,
 
 class TestAccessorWithCassandraLucene(_BaseTestAccessorWithCassandraMetadata,
                                       bg_test_utils.TestCaseWithAccessor):
-    def setUp(self):
-        self.accessor_settings['use_lucene'] = True
-        super(TestAccessorWithCassandraLucene, self).setUp()
+    ACCESSOR_SETTINGS = {'use_lucene': True}
 
 
 class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
@@ -429,7 +406,6 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
     def test_insert_fetch(self):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.flush()
-        self.addCleanup(self.accessor.drop_all_metrics)
 
         # TODO: Test fetch at different stages for a given metric.
         fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END)
@@ -447,7 +423,6 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.accessor.insert_points(_METRIC, _POINTS)
 
         self.flush()
-        self.addCleanup(self.accessor.drop_all_metrics)
 
         # TODO: Test fetch at different stages for a given metric.
         fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END)
@@ -464,7 +439,7 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         return None
 
     def test_create_datapoints_table_dtcs(self):
-        """Validate that we can create table."""
+        """Validate that we can create a DTCS table."""
         orig_cs = bg_cassandra._COMPACTION_STRATEGY
         bg_cassandra._COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
 
@@ -510,7 +485,7 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
     def test_create_datapoints_table_twcs(self):
-        """Validate that we can create table."""
+        """Validate that we can create a TWCS table."""
         min_version = version.LooseVersion('3.8')
         if self._get_version() < min_version:
             print('Skipping TWCS test, incompatible version')
