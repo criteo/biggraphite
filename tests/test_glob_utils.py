@@ -134,11 +134,10 @@ class TestGlobUtilsInternals(unittest.TestCase):
             ("a..b", [['a'], ['b']], True),
         ]
         parser = bg_glob.GraphiteGlobParser()
-        for i, (glob, expected, fd) in enumerate(scenarii):
+        for i, (glob, expected, fully_defined) in enumerate(scenarii):
             parsed = parser.parse(glob)
             self.assertSequenceEqual(expected, parsed)
-            fully_defined = parser.is_fully_defined(parsed)
-            self.assertEqual(fd, fully_defined, parsed)
+            self.assertEqual(fully_defined, parser.is_fully_defined(parsed), parsed)
 
 
 class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
