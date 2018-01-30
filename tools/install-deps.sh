@@ -26,5 +26,5 @@ if [ -n "${CASSANDRA_STRATIO_LUCENE_VERSION}" ]; then
     git checkout -b ${CASSANDRA_STRATIO_LUCENE_VERSION}
 
     mvn clean package -DskipTests
-    cp plugin/target/cassandra-lucene-index-plugin-*.jar ${CASSANDRA_HOME}/lib/
+    cp -v plugin/target/cassandra-lucene-index-plugin-*.jar ${CASSANDRA_HOME}/lib/
 fi
