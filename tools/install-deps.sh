@@ -19,7 +19,7 @@ fi
 
 
 if [ -n "${CASSANDRA_STRATIO_LUCENE_VERSION}" ]; then
-    if [ -n "{CASSANDRA_STRATIO_LUCENE_BUILD}" ]; then
+    if [ -n "${CASSANDRA_STRATIO_LUCENE_BUILD}" ]; then
         cd .deps
         git clone http://github.com/Stratio/cassandra-lucene-index
         cd cassandra-lucene-index
