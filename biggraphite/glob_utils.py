@@ -420,6 +420,9 @@ class GraphiteGlobParser:
             elif chars[i] != '-':
                 result.add(chars[i])
                 i += 1
+            else:
+                # Ignore wrongly positioned -
+                i += 1
         return result
 
     def _parse_char_selector(self, i, n):

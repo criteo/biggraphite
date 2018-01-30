@@ -41,7 +41,7 @@ _USEFUL_POINTS = _POINTS[_EXTRA_POINTS:-_EXTRA_POINTS]
 assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 
-class BaseTestAccessorWithCassandraMetadata(bg_test_utils.TestCaseWithAccessor):
+class _BaseTestAccessorWithCassandraMetadata(object):
 
     def test_glob_metrics(self):
         IS_LUCENE = self.accessor_settings.get('use_lucene', False)
@@ -383,11 +383,13 @@ class BaseTestAccessorWithCassandraMetadata(bg_test_utils.TestCaseWithAccessor):
         self.accessor.map(_callback)
 
 
-class TestAccessorWithCassandraSASI(BaseTestAccessorWithCassandraMetadata):
+class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,
+                                    bg_test_utils.TestCaseWithAccessor):
     pass
 
 
-class TestAccessorWithCassandraLucene(BaseTestAccessorWithCassandraMetadata):
+class TestAccessorWithCassandraLucene(_BaseTestAccessorWithCassandraMetadata,
+                                      bg_test_utils.TestCaseWithAccessor):
     def setUp(self):
         self.accessor_settings['use_lucene'] = True
         super(TestAccessorWithCassandraLucene, self).setUp()
