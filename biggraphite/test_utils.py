@@ -213,6 +213,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     KEYSPACE = "testkeyspace"
     CACHE_CLASS = bg_metadata_cache.MemoryCache
     ACCESSOR_SETTINGS = {}
+
     @classmethod
     def setUpClass(cls):
         """Create the test Cassandra Cluster as cls.cassandra."""
@@ -286,6 +287,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.metadata_cache.open()
 
     def tearDown(self):
+        """Cleanup after tests."""
         super(TestCaseWithAccessor, self).tearDown()
         self.metadata_cache.close()
         self.accessor.flush()

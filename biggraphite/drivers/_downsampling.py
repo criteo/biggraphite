@@ -67,6 +67,7 @@ class Downsampler(object):
         return self._names_to_aggregates[metric.name].update(sorted(points))
 
     def clear(self):
+        """Clear internal structures."""
         self._names_to_aggregates.clear()
         self._last_purge = 0
 
