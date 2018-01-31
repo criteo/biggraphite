@@ -92,12 +92,18 @@ component_4=NULL,
 component_63=NULL
 ```
 
+Two indexing system can be used to filter metrics.
+
+### SASI
 An SSTable-Attached Secondary Index (SASI, [see the official documentation for details](https://github.com/apache/cassandra/blob/trunk/doc/SASI.md)) is declared on each of the component columns.
 
 We use SASI because it is able to process multi-column queries by intersection (as opposed to a brute-force approach relying on Cassandra's `ALLOW FILTERING`). It indexes tokens using one B+Tree per indexed column in the original SSTable. After finding the keys (tokens) in the B+Trees, SASI picks the column with the least results and merges the results together. If one column is 100 times larger than the others it will use multiple lookups, otherwise it just uses a merge join.
 
 As SASI's support for LIKE queries is limited to finding substrings, we actually look for `a.*.c` when asked for `a.x*z.c` and then do client-side filtering.
 
+### Lucene
+
+Using the [cassandra-lucene-index](https://github.com/Stratio/cassandra-lucene-index) you can have better performances if you have more than 10M metrics. You'll simply need to set `BG_CASSANDRA_LUCENE=True` 
 
 ## Directories (path nodes) metadata table
 

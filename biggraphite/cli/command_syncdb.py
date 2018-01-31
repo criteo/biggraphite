@@ -73,7 +73,7 @@ class CommandSyncdb(command.BaseCommand):
         """Run the command."""
         retentions = []
 
-        if opts.storage_schemas:
+        if HAVE_CARBON and opts.storage_schemas:
             retentions.extend(self._get_retentions_from_storage_schemas(opts))
         if opts.retention:
             retentions.extend(

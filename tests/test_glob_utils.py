@@ -67,8 +67,8 @@ class TestGlobUtilsInternals(unittest.TestCase):
 
     def test_glob_to_regex(self):
         def filter_metrics(metrics, glob):
-            print(glob + "   ===>   " + bg_glob._glob_to_regex(glob))
-            glob_re = re.compile(bg_glob._glob_to_regex(glob))
+            print(glob + "   ===>   " + bg_glob.glob_to_regex(glob))
+            glob_re = re.compile(bg_glob.glob_to_regex(glob))
             return list(filter(glob_re.match, metrics))
 
         scenarii = [
@@ -99,42 +99,45 @@ class TestGlobUtilsInternals(unittest.TestCase):
     def test_graphite_glob_parser(self):
         scenarii = [
             # Positive examples
-            ("a.b", [['a'], ['b']]),
-            ("a?b.c", [['a', bg_glob.AnyChar(), 'b'], ['c']]),
-            ("a.b*c", [['a'], ['b', bg_glob.AnySequence(), 'c']]),
-            ("a.b**c", [['a'], ['b'], bg_glob.Globstar(), ['c']]),
-            ("a.**.c", [['a'], bg_glob.Globstar(), ['c']]),
-            ("a.**", [['a'], bg_glob.Globstar()]),
-            ("a[xyz].b", [['a', bg_glob.AnyChar()], ['b']]),
-            ("a[!rat].b", [['a', bg_glob.AnyChar()], ['b']]),
-            ("pl[a-ox]p", [['pl', bg_glob.AnyChar(), 'p']]),
-            ("a[b-dopx-z]b.c", [['a', bg_glob.AnyChar(), 'b'], ['c']]),
-            ("b[i\\]m", [['b', bg_glob.AnyChar(), 'm']]),
-            ("a[x-xy]b", [['a', bg_glob.AnyChar(), 'b']]),
-            ("a[y-xz]b", [['a', bg_glob.AnyChar(), 'b']]),
-            ("a.b.{c,d}", [['a'], ['b'], [bg_glob.SequenceIn(['c', 'd'])]]),
+            ("a.b", [['a'], ['b']], True),
+            ("a.{b}", [['a'], ['b']], True),
+            ("a?b.c", [['a', bg_glob.AnyChar(), 'b'], ['c']], False),
+            ("a.b*c", [['a'], ['b', bg_glob.AnySequence(), 'c']], False),
+            ("a.b**c", [['a'], ['b'], bg_glob.Globstar(), ['c']], False),
+            ("a.**.c", [['a'], bg_glob.Globstar(), ['c']], False),
+            ("a.**", [['a'], bg_glob.Globstar()], False),
+            ("a[xyz].b", [['a', bg_glob.CharIn(['x', 'y', 'z'])], ['b']], False),
+            ("a[!rat].b", [['a', bg_glob.CharNotIn(['r', 'a', 't'])], ['b']], False),
+            ("pl[a-ox]p", [['pl', bg_glob.CharIn(['a-o', 'x']), 'p']], False),
+            ("a[b-dopx-z]b.c",
+             [['a', bg_glob.CharIn(['b-d', 'o', 'p', 'x-z']), 'b'], ['c']], False),
+            ("b[i\\]m", [['b', bg_glob.CharIn(['\\', 'i']), 'm']], False),
+            ("a[x-xy]b", [['a', bg_glob.CharIn(['x-x', 'y']), 'b']], False),
+            ("a[y-xz]b", [['a', bg_glob.CharIn(['y-x', 'z']), 'b']], False),
+            ("a.b.{c,d}", [['a'], ['b'], [
+             bg_glob.SequenceIn(['c', 'd'])]], False),
             ("a.b.{c,d}-{e,f}",
              [['a'], ['b'],
               [bg_glob.SequenceIn(['c', 'd']), '-',
-               bg_glob.SequenceIn(['e', 'f'])]]),
+               bg_glob.SequenceIn(['e', 'f'])]], False),
             ("a.b.oh{c{d,e,}{a,b},f{g,h}i}ah",
              [['a'], ['b'],
               ['oh', bg_glob.SequenceIn(['ca', 'cb', 'cda', 'cdb', 'cea',
-                                         'ceb', 'fgi', 'fhi']), 'ah']]),
+                                         'ceb', 'fgi', 'fhi']), 'ah']], False),
             ("a.b{some, x{chars[!xyz], plop}}c",
-             [['a'], ['b', bg_glob.AnySequence(), 'c']]),
-            ("a.{b}", [['a'], ['b']]),
+             [['a'], ['b', bg_glob.AnySequence(), 'c']], False),
             # Negative examples
-            ("a[.b", [['a['], ['b']]),
-            ("a{.b", [['a{'], ['b']]),
-            ("a{.b.c}", [['a{'], ['b'], ['c}']]),
-            ("a.", [['a']]),
-            ("a..b", [['a'], ['b']]),
+            ("a[.b", [['a['], ['b']], True),
+            ("a{.b", [['a{'], ['b']], True),
+            ("a{.b.c}", [['a{'], ['b'], ['c}']], True),
+            ("a.", [['a']], True),
+            ("a..b", [['a'], ['b']], True),
         ]
         parser = bg_glob.GraphiteGlobParser()
-        for (glob, expected) in scenarii:
+        for i, (glob, expected, fully_defined) in enumerate(scenarii):
             parsed = parser.parse(glob)
             self.assertSequenceEqual(expected, parsed)
+            self.assertEqual(fully_defined, parser.is_fully_defined(parsed), parsed)
 
 
 class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
