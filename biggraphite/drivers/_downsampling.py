@@ -66,6 +66,10 @@ class Downsampler(object):
         # Sort points by increasing timestamp, because put expects them in order.
         return self._names_to_aggregates[metric.name].update(sorted(points))
 
+    def clear(self):
+        self._names_to_aggregates.clear()
+        self._last_purge = 0
+
     def purge(self, now=time.time()):
         """Purge unused data."""
         if now - self._last_purge <= self.PURGE_EVERY_S:

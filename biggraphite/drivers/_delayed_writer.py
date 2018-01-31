@@ -52,6 +52,11 @@ class DelayedWriter(object):
         self._last_write_ms = 0
         self._points = collections.defaultdict(dict)
 
+    def clear(self):
+        """Reset internal structures."""
+        self._queue = []
+        self._points.clear()
+
     def feed(self, metric, datapoints):
         """Feed the delayed writer.
 

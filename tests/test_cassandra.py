@@ -404,11 +404,13 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.flush()
 
     def test_insert_fetch(self):
+        self.accessor.create_metric(_METRIC)
         self.accessor.insert_points(_METRIC, _POINTS)
         self.flush()
 
         # TODO: Test fetch at different stages for a given metric.
         fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END)
+
         # assertEqual is very slow when the diff is huge, so we give it a chance of
         # failing early to avoid imprecise test timeouts.
         self.assertEqual(_QUERY_RANGE, len(fetched))
@@ -421,7 +423,6 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.accessor.shard = bg_accessor.pack_shard(replica=3, writer=0xFFFF)
         self.accessor.insert_points(_METRIC, _POINTS)
-
         self.flush()
 
         # TODO: Test fetch at different stages for a given metric.
