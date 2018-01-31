@@ -70,7 +70,7 @@ class _BaseTestAccessorWithCassandraMetadata(object):
             # Lucene is supposed to give perfect results, so filter wrongly expected matches.
             if IS_LUCENE:
                 glob_re = re.compile(bg_glob_utils.glob_to_regex(glob))
-                expected_matches = filter(glob_re.match, expected_matches)
+                expected_matches = list(filter(glob_re.match, expected_matches))
 
             self.assertEqual(expected_matches, matches)
 
