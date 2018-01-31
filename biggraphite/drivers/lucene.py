@@ -122,7 +122,7 @@ def _build_filters(components):
             # Behavior and performances of underlying implementations are almost the same.
             # We therefore only use the most expressive syntax: 'regexp'
             must_list.append(_build_regex_field_constrain(idx, component))
-    return filter(None, must_list)
+    return list(filter(None, must_list))
 
 
 def _build_simple_field_constrain(index, value):
