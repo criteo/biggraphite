@@ -1425,10 +1425,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.cache:
             # As queries can be statements, we use the string representation
             # (which always contains the query and the parameters).
-            keys = [str(q) for q in queries]
-            cached_results = self.cache.get_many(keys)
+            keys_to_queries = {str(q): q for q in queries}
+            cached_results = self.cache.get_many(keys_to_queries.keys())
             for query in cached_results:
-                queries.remove(query)
+                queries.remove(keys_to_queries[query])
         else:
             cached_results = {}
 
