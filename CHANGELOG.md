@@ -6,9 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.5] - 2018-02-01
+
+### Fixed
+
+- Cache issues with globs
+
 ## [0.10.4] - 2018-01-31
 
-## Added
+### Added
 
 - Experimental Lucene index (with BG_CASSANDRA_USE_LUCENE).
 
@@ -184,8 +190,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.10.4...HEAD
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.10.3...v0.10.4
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.10.5...HEAD
+[0.10.5]: https://github.com/criteo/biggraphite/compare/v0.10.4...v0.10.5
+[0.10.4]: https://github.com/criteo/biggraphite/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/criteo/biggraphite/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/criteo/biggraphite/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/criteo/biggraphite/compare/v0.10.0...v0.10.1
