@@ -21,6 +21,7 @@ import re
 from distutils import version
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import test_utils as bg_test_utils
 from biggraphite import glob_utils as bg_glob_utils
 from biggraphite.drivers import cassandra as bg_cassandra
@@ -178,6 +179,35 @@ class _BaseTestAccessorWithCassandraMetadata(object):
 
         self.accessor.drop_all_metrics()
         assert_find("*", [])
+
+    def test_glob_metrics_cached(self):
+        metrics = ["a", "a.b", "x.y.z"]
+        for name in metrics:
+            metric = bg_test_utils.make_metric(name)
+            self.accessor.create_metric(metric)
+        self.flush()
+
+        cache = bg_accessor_cache.MemoryCache(10, 60)
+        original_cache = self.accessor.cache
+        self.accessor.cache = cache
+
+        def assert_find(glob, results):
+            res = self.accessor.glob_metric_names(glob)
+            self.assertEqual(results, list(res))
+
+        # Nothing should be cached here.
+        assert_find('**', metrics)
+        assert_find('a', ['a'])
+
+        # Things should be cached here.
+        assert_find('**', metrics)
+        assert_find('a', ['a'])
+
+        # Make sure we use the cache.
+        self.accessor.cache.get = lambda _, version: ['fake']
+        assert_find('a', ['fake'])
+
+        self.accessor.cache = original_cache
 
     def test_glob_too_many_directories(self):
         for name in "a", "a.b", "x.y.z":
