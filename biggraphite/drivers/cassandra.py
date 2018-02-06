@@ -1362,6 +1362,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if (int(time.time()) - int(updated_on / 1000)) >= self.__metadata_touch_ttl_sec:
             self.touch_metric(metric_name)
 
+    def __query_key(self, statement, params):
+        if isinstance(statement, six.string_types):
+            return statement
+        else:
+            if not params:
+                return str(statement)
+            else:
+                return str(statement) + str(params)
+
     def get_metric(self, metric_name, touch=False):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name, touch=touch)
@@ -1422,16 +1431,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             queries = self.metadata_query_generator.generate_queries(
                 table, components)
 
-        if self.cache:
-            # As queries can be statements, we use the string representation
-            # (which always contains the query and the parameters).
-            keys_to_queries = {str(q): q for q in queries}
-            cached_results = self.cache.get_many(keys_to_queries.keys())
-            for query in cached_results:
-                queries.remove(keys_to_queries[query])
-        else:
-            cached_results = {}
-
         statements_with_params = []
         for query in queries:
             if isinstance(query, six.string_types):
@@ -1442,6 +1441,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
             else:
                 statement = query
             statements_with_params.append((statement, ()))
+
+        if self.cache:
+            # As queries can be statements, we use the string representation
+            # (which always contains the query and the parameters).
+            # WARNING: With the current code PrepareStatement would not be cached.
+            keys_to_queries = {self.__query_key(*sp): sp for sp in statements_with_params}
+            cached_results = self.cache.get_many(keys_to_queries.keys())
+            for key in cached_results:
+                statements_with_params.remove(keys_to_queries[key])
+        else:
+            cached_results = {}
 
         query_results = self._execute_concurrent_metadata(
             statements_with_params,
@@ -1459,7 +1469,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 (glob, table, self.max_metrics_per_pattern)
             )
 
-            for query, names in cached_results.items():
+            for _, names in cached_results.items():
                 for name in names:
                     n_metrics += 1
                     if n_metrics > self.max_metrics_per_pattern:
@@ -1468,13 +1478,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             try:
                 for success, results in query_results:
-                    query = str(results.response_future.query)
+                    key = self.__query_key(results.response_future.query, None)
                     # Make sure we also cache empty results.
-                    fetched_results[query] = []
+                    fetched_results[key] = []
                     for result in results:
                         n_metrics += 1
                         name = result[0]
-                        fetched_results[query].append(name)
+                        fetched_results[key].append(name)
                         if n_metrics > self.max_metrics_per_pattern:
                             raise too_many_metrics
                         yield name
