@@ -193,19 +193,23 @@ class _BaseTestAccessorWithCassandraMetadata(object):
 
         def assert_find(glob, results):
             res = self.accessor.glob_metric_names(glob)
-            self.assertEqual(results, list(res))
+            self.assertEqual(set(results), set(res))
 
         # Nothing should be cached here.
         assert_find('**', metrics)
         assert_find('a', ['a'])
+        assert_find('{x,y}.*y.[z]', ['x.y.z'])
 
         # Things should be cached here.
         assert_find('**', metrics)
         assert_find('a', ['a'])
+        assert_find('{x,y}.*y.[z]', ['x.y.z'])
 
         # Make sure we use the cache.
         self.accessor.cache.get = lambda _, version: ['fake']
         assert_find('a', ['fake'])
+        assert_find('**', ['fake'])
+        assert_find('{x,y}.*y.[z]', ['fake'])
 
         self.accessor.cache = original_cache
 
