@@ -23,37 +23,39 @@ from biggraphite import utils as bg_utils
 
 from biggraphite.cli import (
     command_clean,
+    command_copy,
+    command_daemon,
+    command_delete,
     command_du,
+    command_graphite_web,
     command_info,
     command_list,
     command_read,
     command_repair,
     command_shell,
+    command_stats,
+    command_syncdb,
     command_test,
     command_write,
-    command_syncdb,
-    command_stats,
-    command_daemon,
-    command_copy,
-    command_delete,
 )
 
 
 COMMANDS = [
-    command_test.CommandTest(),
     command_clean.CommandClean(),
+    command_copy.CommandCopy(),
+    command_daemon.CommandDaemon(),
+    command_delete.CommandDelete(),
     command_du.CommandDu(),
+    command_graphite_web.CommandGraphiteWeb(),
+    command_info.CommandInfo(),
     command_list.CommandList(),
     command_read.CommandRead(),
-    command_info.CommandInfo(),
     command_repair.CommandRepair(),
     command_shell.CommandShell(),
-    command_write.CommandWrite(),
-    command_syncdb.CommandSyncdb(),
     command_stats.CommandStats(),
-    command_daemon.CommandDaemon(),
-    command_copy.CommandCopy(),
-    command_delete.CommandDelete(),
+    command_syncdb.CommandSyncdb(),
+    command_test.CommandTest(),
+    command_write.CommandWrite(),
 ]
 
 
