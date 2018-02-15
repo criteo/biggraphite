@@ -1148,6 +1148,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         components = self._components_from_name(metric.name)
+        assert(metric.id != None and metric.metadata != None)
+
         queries = []
 
         # Check if parent dir exists. This is one round-trip but worthwile since
@@ -1172,7 +1174,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         self._execute_concurrent_metadata(
             queries,
-            raise_on_first_error=False)
+            raise_on_first_error=False,
+        )
 
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
@@ -1306,6 +1309,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return res
 
     def _update_metric_read_on(self, metric_name):
+        if self.get_metric(metric_name):
+            log.debug('trying to update non-existing metric')
+            return
+
         rate = int(1 / self.__read_on_sampling_rate)
 
         skip = self.__read_on_counter % rate > 0
@@ -1379,19 +1386,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
         result = self._select_metric(metric_name)
         if not result:
             return None
-        id = result[0]
+        uid = result[0]
         config = result[1]
         updated_on = result[2]
 
         # Return None if any of the important column is missing.
-        if not result[0] or not result[1]:
+        if not result[0] or not result[1] or not updated_on:
             return None
 
         if touch:
             self.__touch_metadata_on_need(metric_name, updated_on)
 
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-        return bg_accessor.Metric(metric_name, id, metadata)
+        return bg_accessor.Metric(metric_name, uid, metadata)
 
     def glob_directory_names(self, glob):
         """Return a sorted list of metric directories matching this glob."""
