@@ -76,7 +76,6 @@ def get_requests(filename):
     f = open(filename, "rb")
     pcap = dpkt.pcap.Reader(f)
 
-    requests = []
     for timestamp, packet in pcap:
         res = handle_packet(timestamp, packet)
         if res is not None:
@@ -131,7 +130,7 @@ def _do_request(*args, **kwargs):
     assert _WORKER is not None, "_setup_process was never called"
     try:
         return _WORKER.do_request(*args, **kwargs)
-    except Exception as e:
+    except Exception:
         logging.exception("%s" % (args))
         return 0
 
@@ -172,6 +171,7 @@ def _parse_opts(args):
 
 
 def read_requests(opts):
+    """Read all requests."""
     if opts.progress:
         # If we want progress, we read everything.
         requests = []

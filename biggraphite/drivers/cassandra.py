@@ -1148,7 +1148,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         components = self._components_from_name(metric.name)
-        assert(metric.id != None and metric.metadata != None)
+        assert(metric.id is not None and metric.metadata is not None)
 
         queries = []
 
