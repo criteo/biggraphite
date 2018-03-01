@@ -976,19 +976,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "UPDATE \"%s\".metrics_metadata SET updated_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
         )
-        try:
-            # TODO: Remove that in the next version, but this will
-            # make the update easier.
-            self.__insert_metrics_metadata_statement = __prepare(
-                "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
-                " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
-            )
-        except cassandra.DriverException as e:
-            log.debug(e)
-            self.__insert_metrics_metadata_statement = __prepare(
-                "INSERT INTO \"%s\".metrics_metadata (name, updated_on, id, config)"
-                " VALUES (?, now(), ?, ?);" % self.keyspace_metadata
-            )
+        self.__insert_metrics_metadata_statement = __prepare(
+            "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
+            " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
+        )
         self.__update_metric_read_on_metadata_statement = __prepare(
             "UPDATE \"%s\".metrics_metadata SET read_on=now()"
             " WHERE name=?;" % self.keyspace_metadata
@@ -1309,10 +1300,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return res
 
     def _update_metric_read_on(self, metric_name):
-        if self.get_metric(metric_name):
-            log.debug('trying to update non-existing metric')
-            return
-
         rate = int(1 / self.__read_on_sampling_rate)
 
         skip = self.__read_on_counter % rate > 0
@@ -1366,7 +1353,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return bool(result)
 
     def __touch_metadata_on_need(self, metric_name, updated_on):
-        if (int(time.time()) - int(updated_on / 1000)) >= self.__metadata_touch_ttl_sec:
+        if not updated_on:
+            delta = self.__metadata_touch_ttl_sec + 1
+        else:
+            delta = int(time.time()) - int(updated_on / 1000)
+        if delta >= self.__metadata_touch_ttl_sec:
             self.touch_metric(metric_name)
 
     def __query_key(self, statement, params):
@@ -1391,7 +1382,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         updated_on = result[2]
 
         # Return None if any of the important column is missing.
-        if not result[0] or not result[1] or not updated_on:
+        if not uid or not config:
             return None
 
         if touch:
@@ -1722,19 +1713,24 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # doing its work.
             for i, result in enumerate(rows):
                 metric_name = result[0]
-                id = result[2]
+                uid = result[2]
                 config = result[3]
                 done = token - start_token
 
-                metadata = bg_accessor.MetricMetadata.from_string_dict(config)
+                if not uid and not config:
+                    log.debug("Skipping partial metric: %s" % metric_name)
+                    continue
+
                 try:
-                    metric = bg_accessor.Metric(metric_name, id, metadata)
-                    callback(metric, done + 1, total)
+                    metadata = bg_accessor.MetricMetadata.from_string_dict(config)
+                    metric = bg_accessor.Metric(metric_name, uid, metadata)
                 # Avoid failing if either name, id, or metadata is missing.
-                except AssertionError as e:
+                except Exception as e:
                     log.debug("Skipping corrupted metric: %s raising %s" %
                               (result, str(e)))
                     continue
+
+                callback(metric, done + 1, total)
 
             # Then, read new data.
             try:
