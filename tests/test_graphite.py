@@ -51,6 +51,11 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
             accessor=self.accessor,
             metadata_cache=self.metadata_cache,
         )
+
+        # Make sure that carbonlink is enabled.
+        from django.conf import settings as django_settings
+        django_settings.CARBONLINK_HOSTS = ['localhost:12345']
+
         self.carbonlink = self.finder.carbonlink()
         self.reader = bg_graphite.Reader(
             self.accessor, self.metadata_cache, self.carbonlink, _METRIC_NAME)
@@ -89,14 +94,14 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(expected_points, points)
 
     def test_carbon_protocol_read(self):
-        _METRIC_NAME = 'fake.name'
-        _METRIC = bg_test_utils.make_metric(_METRIC_NAME)
+        metric_name = 'fake.name'
+        metric = bg_test_utils.make_metric(_METRIC_NAME)
         # Custom aggregator to make sure all goes right.
-        _METRIC.metadata.aggregator = bg_accessor.Aggregator.minimum
-        self.accessor.create_metric(_METRIC)
+        metric.metadata.aggregator = bg_accessor.Aggregator.minimum
+        self.accessor.create_metric(metric)
         self.accessor.flush()
         self.reader = bg_graphite.Reader(
-            self.accessor, self.metadata_cache, self.carbonlink, _METRIC_NAME
+            self.accessor, self.metadata_cache, self.carbonlink, metric_name
         )
 
         with mock.patch('graphite.carbonlink.CarbonLinkPool.query') as carbonlink_query_mock:

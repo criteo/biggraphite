@@ -157,7 +157,7 @@ def add_argparse_arguments(parser):
     parser.add_argument(
         "--cache",
         help="BigGraphite cache (%s))" % ', '.join([v[0] for v in CACHES]),
-        default=DEFAULT_DRIVER)
+        default=DEFAULT_CACHE)
     parser.add_argument(
         "--cache-size",
         help="Metadata cache size.")
