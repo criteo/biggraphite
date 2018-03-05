@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.7] - 2018-02-15
+
+### Added
+- Added bgutil graphite_web to debug the graphite web plugin.
+
+### Fixed
+- Reduce calls to biggraphite_metadata.metrics_metadata when reading points.
+
 ## [0.10.6] - 2018-02-15
 
 ### Added
@@ -200,7 +208,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.10.6...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.10.7...HEAD
+[0.10.7]: https://github.com/criteo/biggraphite/compare/v0.10.6...v0.10.7
 [0.10.6]: https://github.com/criteo/biggraphite/compare/v0.10.5...v0.10.6
 [0.10.5]: https://github.com/criteo/biggraphite/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/criteo/biggraphite/compare/v0.10.3...v0.10.4
