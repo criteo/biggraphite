@@ -37,6 +37,7 @@ reduces the number of round-trips between graphite/carbon and cassandra.
 - ```BG_CACHE_SIZE```: size of the cache.
 - ```BG_CACHE_TTL```: TTL of items in the cache
 - ```BG_CACHE_SYNC```: when using disk cache, should writes be synchronous or not.
+- ```BG_SYNC_EVERY_N_WRITES```: controls the amount of sync calls we do to Cassandra.
 
 ## Logging
 

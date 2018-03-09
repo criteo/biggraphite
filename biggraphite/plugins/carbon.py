@@ -43,8 +43,13 @@ WRITE_TIME = prometheus_client.Histogram(
     buckets=(0.005, .01, .025, .05, .075,
              .1, .25, .5, .75,
              1.0, 2.5, 5.0, 7.5))
+
 CREATE_TIME = prometheus_client.Summary(
     "bg_create_latency_seconds", "create latency in seconds")
+
+EXISTS_TIME = prometheus_client.Summary(
+    "bg_exists_latency_seconds", "create latency in seconds")
+
 CREATES = prometheus_client.Counter("bg_creates", "metric creations")
 
 
@@ -80,6 +85,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._settings = settings
         self._metricsToCreate = queue.Queue()
         self._sync_countdown = 0
+        self._sync_every_n_write = settings.get(
+            'BG_SYNC_EVERY_N_WRITE', self._SYNC_EVERY_N_WRITE
+        )
 
         utils.start_admin(utils.settings_from_confattr(settings))
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
@@ -103,7 +111,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             cache = self.cache
             if accessor and cache:
                 self._tagdb = tags.BigGraphiteTagDB(
-                    accessor=accessor, metadata_cache=cache)
+                    accessor=accessor, metadata_cache=cache
+                )
 
         return self._tagdb
 
@@ -120,7 +129,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def cache(self):
         if not self._cache:
             cache = graphite_utils.cache_from_settings(
-                self.accessor, self._settings)
+                self.accessor, self._settings, 'carbon')
             cache.open()
             self._cache = cache
 
@@ -148,12 +157,13 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
         if self._sync_countdown < 1:
             self.accessor.insert_points(metric=metric, datapoints=datapoints)
-            self._sync_countdown = self._SYNC_EVERY_N_WRITE
+            self._sync_countdown = self._sync_every_n_write
         else:
             self._sync_countdown -= 1
             self.accessor.insert_points_async(
                 metric=metric, datapoints=datapoints)
 
+    @EXISTS_TIME.time()
     def exists(self, metric_name):
         return self.cache.cache_has(metric_name)
 

@@ -295,7 +295,7 @@ class Finder(BaseFinder):
                 # TODO: Allow to use Django's cache.
                 from django.conf import settings as django_settings
                 cache = graphite_utils.cache_from_settings(
-                    self.accessor(), django_settings)
+                    self.accessor(), django_settings, "graphite")
                 cache.open()
                 self._cache = cache
         return self._cache

@@ -39,8 +39,26 @@ import random
 import cachetools
 import lmdb
 import six
+import prometheus_client
+
 
 from biggraphite import accessor as bg_accessor
+
+
+METRICS_LABELS = ['type', 'name']
+
+CACHE_SIZE = prometheus_client.Gauge(
+    'bg_cache_size', 'Current size', METRICS_LABELS,
+)
+CACHE_MAX_SIZE = prometheus_client.Gauge(
+    'bg_cache_maxsize', 'Max size', METRICS_LABELS,
+)
+CACHE_HITS = prometheus_client.Counter(
+    'bg_cache_hits_total', 'Cache hits', METRICS_LABELS,
+)
+CACHE_MISSES = prometheus_client.Counter(
+    'bg_cache_misses_total', 'Cache misses', METRICS_LABELS,
+)
 
 
 class Error(Exception):
@@ -55,12 +73,11 @@ class MetadataCache(object):
     """A metadata cache."""
 
     __metaclass__ = abc.ABCMeta
+    TYPE = 'abstract'
 
-    def __init__(self, accessor, settings):
+    def __init__(self, accessor, settings, name=None):
         """Create a new DiskCache."""
         assert accessor
-        self.hit_count = 0
-        self.miss_count = 0
         self._lock = threading.Lock()
         self._accessor_lock = threading.Lock()
         self._accessor = accessor
@@ -70,13 +87,22 @@ class MetadataCache(object):
         self._json_cache_lock = threading.Lock()
         self._json_cache = {}
 
+        if name is None:
+            name = str(hash(self))
+        self.name = name
+
+        self._size = CACHE_SIZE.labels(self.TYPE, name)
+        self._max_size = CACHE_MAX_SIZE.labels(self.TYPE, name)
+        self._hits = CACHE_HITS.labels(self.TYPE, name)
+        self._misses = CACHE_MISSES.labels(self.TYPE, name)
+
     @abc.abstractmethod
     def open(self):
         """Allocate ressources used by the cache.
 
         Safe to call again after close() returned.
         """
-        pass
+        name = self.name
 
     def __enter__(self):
         self.open()
@@ -94,9 +120,22 @@ class MetadataCache(object):
         """
         pass
 
+    @property
+    def hit_count(self):
+        return self._hits._value.get()
+
+    @property
+    def miss_count(self):
+        return self._misses._value.get()
+
     def cache_has(self, metric_name):
         """Check if a metric is cached."""
-        return self._cache_has(metric_name)
+        hit = self._cache_has(metric_name)
+        if hit:
+            self._hits.inc()
+        else:
+            self._misses.inc()
+        return hit
 
     def cache_set(self, metric_name, metric):
         """Insert a metric in the cache."""
@@ -134,9 +173,9 @@ class MetadataCache(object):
         """Return a Metric for this metric_name, None if no such metric."""
         metric, hit = self._cache_get(metric_name)
         if hit:
-            self.hit_count += 1
+            self._hits.inc()
         else:
-            self.miss_count += 1
+            self._misses.inc()
         # Check that is still doesn't exists.
         if not metric:
             with self._accessor_lock:
@@ -191,18 +230,26 @@ class MetadataCache(object):
         """Put metric in the cache."""
         pass
 
+    @abc.abstractmethod
+    def stats(self):
+        """Current stats about the cache the cache."""
+        return {'size': 0, 'maxsize': 0, 'hits': 0, 'miss': 0}
+
 
 class MemoryCache(MetadataCache):
     """A per-process memory cache."""
 
-    def __init__(self, accessor, settings):
+    TYPE = 'memory'
+
+    def __init__(self, accessor, settings, name=None):
         """Initialize the memory cache."""
-        super(MemoryCache, self).__init__(accessor, settings)
+        super(MemoryCache, self).__init__(accessor, settings, name)
         self.__size = settings.get('size', 1 * 1000 * 1000)
         self.__ttl = int(settings.get('ttl', 24 * 60 * 60))
 
     def open(self):
         """Allocate ressources used by the cache."""
+        super(MemoryCache, self).open()
         def _timer():
             # Use a custom timer to try to spread expirations. Within one instance it
             # won't change anything but it will be better if you run multiple instances.
@@ -212,6 +259,7 @@ class MemoryCache(MetadataCache):
 
     def close(self):
         """Free resources allocated by open()."""
+        super(MemoryCache, self).close()
         self.__cache = None
 
     def _cache_has(self, metric_name):
@@ -272,6 +320,15 @@ class MemoryCache(MetadataCache):
                 total = end_key - start_key if start_key and end_key else None
                 callback_on_progress(done, total)
 
+    def stats(self):
+        """Current stats about the cache the cache."""
+        return {
+            'size': self.__cache.currsize,
+            'maxsize': self.__cache.maxsize,
+            'hits': self._hits._value.get(),
+            'miss': self._misses._value.get(),
+        }
+
 
 class DiskCache(MetadataCache):
     """A metadata cache that can be shared between processes trusting each other.
@@ -279,6 +336,8 @@ class DiskCache(MetadataCache):
     open() and close() are the only thread unsafe methods.
     See module-level comments for the design.
     """
+
+    TYPE = 'disk'
 
     __SINGLETONS = {}
     __SINGLETONS_LOCK = threading.Lock()
@@ -295,9 +354,9 @@ class DiskCache(MetadataCache):
     MAP_SIZE = (1024 * 1024 * 1024 * 16 if sys.maxsize >
                 2**32 else 1024 * 1024 * 1024)
 
-    def __init__(self, accessor, settings):
+    def __init__(self, accessor, settings, name=None):
         """Create a new DiskCache."""
-        super(DiskCache, self).__init__(accessor, settings)
+        super(DiskCache, self).__init__(accessor, settings, name)
 
         path = settings.get("path")
         assert path
@@ -368,7 +427,7 @@ class DiskCache(MetadataCache):
         if self.__env:
             self.__env.close()
             self.__env = None
-            super(DiskCache, self).close()
+        super(DiskCache, self).close()
 
     def _cache_has(self, metric_name):
         """Check if metric is cached."""
@@ -456,13 +515,14 @@ class DiskCache(MetadataCache):
         with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
             txn.put(key, value, dupdata=False, overwrite=True)
 
-    def stat(self):
+    def stats(self):
         """Count number of cached entries."""
-        ret = {}
-        ret[''] = self.__env.stat(),
+        ret = super(MemoryCache, self).stat()
+        ret['root'] = self.__env.stat(),
         for name, database in self.__databases.items():
             with self.__env.begin(database, write=False) as txn:
                 ret[name] = txn.stat(database)
+
         return ret
 
     def __value_from_strings(self, metric_id, metric_metadata):
