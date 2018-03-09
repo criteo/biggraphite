@@ -1020,6 +1020,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         lb_policy = c_policies.TokenAwarePolicy(
             c_policies.DCAwareRoundRobinPolicy()
         )
+        # See https://datastax-oss.atlassian.net/browse/PYTHON-643
+        lb_policy.shuffle_replicas = True
 
         cluster = c_cluster.Cluster(
             contact_points, port,
