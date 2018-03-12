@@ -43,8 +43,13 @@ WRITE_TIME = prometheus_client.Histogram(
     buckets=(0.005, .01, .025, .05, .075,
              .1, .25, .5, .75,
              1.0, 2.5, 5.0, 7.5))
+
 CREATE_TIME = prometheus_client.Summary(
     "bg_create_latency_seconds", "create latency in seconds")
+
+EXISTS_TIME = prometheus_client.Summary(
+    "bg_exists_latency_seconds", "create latency in seconds")
+
 CREATES = prometheus_client.Counter("bg_creates", "metric creations")
 
 
@@ -54,7 +59,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     The class definition registers the plugin thanks to TimeSeriesDatabase's metaclass.
 
     It performs an asynchronous (non durable) write most of the time, except once
-    every _SYNC_EVERY_N_WRITE to give errors a chance to bubble up and bound the
+    every _SYNC_EVERY_N_WRITES to give errors a chance to bubble up and bound the
     number of points we may lose when the process terminates.
     Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9 .
     """
@@ -64,7 +69,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         member.value for member in list(accessor.Aggregator)]
 
     # See class pydoc for the rational.
-    _SYNC_EVERY_N_WRITE = 10
+    _SYNC_EVERY_N_WRITES = 10
 
     def __init__(self, settings):
         """Create a BigGraphiteDatabase."""
@@ -80,6 +85,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._settings = settings
         self._metricsToCreate = queue.Queue()
         self._sync_countdown = 0
+        self._sync_every_n_writes = settings.get(
+            'BG_SYNC_EVERY_N_WRITES', self._SYNC_EVERY_N_WRITES
+        )
 
         utils.start_admin(utils.settings_from_confattr(settings))
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
@@ -103,7 +111,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             cache = self.cache
             if accessor and cache:
                 self._tagdb = tags.BigGraphiteTagDB(
-                    accessor=accessor, metadata_cache=cache)
+                    accessor=accessor, metadata_cache=cache
+                )
 
         return self._tagdb
 
@@ -120,7 +129,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def cache(self):
         if not self._cache:
             cache = graphite_utils.cache_from_settings(
-                self.accessor, self._settings)
+                self.accessor, self._settings, 'carbon')
             cache.open()
             self._cache = cache
 
@@ -148,12 +157,13 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
         if self._sync_countdown < 1:
             self.accessor.insert_points(metric=metric, datapoints=datapoints)
-            self._sync_countdown = self._SYNC_EVERY_N_WRITE
+            self._sync_countdown = self._sync_every_n_writes
         else:
             self._sync_countdown -= 1
             self.accessor.insert_points_async(
                 metric=metric, datapoints=datapoints)
 
+    @EXISTS_TIME.time()
     def exists(self, metric_name):
         return self.cache.cache_has(metric_name)
 
@@ -172,11 +182,12 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self.cache.cache_set(metric_name, metric)
         self._createAsync(metric, orig_metric_name)
 
-    def tag(self, metric):
+    def tag(self, *metrics):
         # FIXME: We probably don't want this to be synchronous.
         if not HAVE_TAGS:
             return
-        self.tagdb.tag_series(metric)
+        for metric in metrics:
+            self.tagdb.tag_series(metric)
 
     def getMetadata(self, metric_name, key):
         metric_name = self.encode(metric_name)

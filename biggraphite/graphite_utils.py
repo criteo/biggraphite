@@ -31,7 +31,7 @@ def accessor_from_settings(settings):
     return bg_utils.accessor_from_settings(settings)
 
 
-def cache_from_settings(accessor, settings):
+def cache_from_settings(accessor, settings, name=None):
     """Get Cache from Graphite-related configuration object.
 
     Args:
@@ -42,4 +42,4 @@ def cache_from_settings(accessor, settings):
       Cache (not opened).
     """
     settings = bg_utils.settings_from_confattr(settings)
-    return bg_utils.cache_from_settings(accessor, settings)
+    return bg_utils.cache_from_settings(accessor, settings, name)

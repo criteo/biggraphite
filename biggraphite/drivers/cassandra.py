@@ -47,17 +47,26 @@ from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
 from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
 
-import prometheus_client as pm
+import prometheus_client
 
-pm_deleted_directories = pm.Counter(
-    'biggraphite_cassandra_deleted_directories',
+
+PM_DELETED_DIRECTORIES = prometheus_client.Counter(
+    'bg_cassandra_deleted_directories',
     'Number of directory that have been deleted so far')
-pm_repaired_directories = pm.Counter(
-    'biggraphite_cassandra_repaired_directories',
+PM_REPAIRED_DIRECTORIES = prometheus_client.Counter(
+    'bg_cassandra_repaired_directories',
     'Number of missing directory created')
-pm_expired_metrics = pm.Counter(
-    'biggraphite_cassandra_expired_metrics',
+PM_EXPIRED_METRICS = prometheus_client.Counter(
+    'bg_cassandra_expired_metrics',
     'Number of metrics that has been cleaned due to expiration')
+
+UPDATED_ON = prometheus_client.Summary(
+    "bg_cassandra_updated_on_latency_seconds", "create latency in seconds"
+)
+READ_ON = prometheus_client.Summary(
+    "bg_cassandra_read_on_latency_seconds", "create latency in seconds"
+)
+
 
 log = logging.getLogger(__name__)
 
@@ -515,6 +524,7 @@ def getConnectionClass():
         """A connection with a cap on the number of in-flight requests per host."""
 
         # 300 is the minimum with protocol version 3, default is 65536
+        # TODO: explain why we need that. I think it's to limit memory usage.
         max_in_flight = 600
 
     getConnectionClass.classes[REACTOR_TO_USE] = _CappedConnection
@@ -776,9 +786,9 @@ def expose_metrics(metrics, cluster_name=''):
 
     for attr in dir(metrics):
         if attr.startswith('on_'):
-            metric_name = 'biggraphite_cassandra_' + \
+            metric_name = 'bg_cassandra_' + \
                 cluster_name + '_' + attr[3:]
-            cpt = pm.Counter(metric_name, '')
+            cpt = prometheus_client.Counter(metric_name, '')
             metrics_adp[metric_name] = cpt
             setattr(metrics, attr, counter_adaptor(cpt, attr))
 
@@ -999,10 +1009,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _connect_clusters(self):
         self.__cluster_metadata, self.__session_metadata = self._connect(
-            self.contact_points_metadata, self.port_metadata)
+            self.__cluster_metadata, self.__session_metadata,
+            self.contact_points_metadata, self.port_metadata
+        )
         if self.contact_points_data != self.contact_points_metadata:
             self.__cluster_data, self.__session_data = self._connect(
-                self.contact_points_data, self.port)
+                self.__cluster_data, self.__session_data,
+                self.contact_points_data, self.port
+            )
         else:
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
@@ -1016,24 +1030,29 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__metrics["data"] = expose_metrics(
                 self.__cluster_data.metrics, 'data')
 
-    def _connect(self, contact_points, port):
+    def _connect(self, cluster, session, contact_points, port):
         lb_policy = c_policies.TokenAwarePolicy(
             c_policies.DCAwareRoundRobinPolicy()
         )
         # See https://datastax-oss.atlassian.net/browse/PYTHON-643
         lb_policy.shuffle_replicas = True
 
-        cluster = c_cluster.Cluster(
-            contact_points, port,
-            compression=self.__compression,
-            auth_provider=self.auth_provider,
-            # Metrics are disabled because too expensive to compute.
-            metrics_enabled=False,
-            load_balancing_policy=lb_policy,
-        )
+        if not cluster:
+            cluster = c_cluster.Cluster(
+                contact_points, port,
+                compression=self.__compression,
+                auth_provider=self.auth_provider,
+                # Metrics are disabled because too expensive to compute.
+                metrics_enabled=False,
+                load_balancing_policy=lb_policy,
+            )
 
-        # Limits in flight requests
-        cluster.connection_class = getConnectionClass()
+            # Limits in flight requests
+            cluster.connection_class = getConnectionClass()
+
+        if session:
+            session.shutdown()
+
         session = cluster.connect()
         session.row_factory = c_query.tuple_factory  # Saves 2% CPU
         if self.__timeout:
@@ -1310,11 +1329,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if skip:
             return
 
-        log.debug('updating read_on for %s' % metric_name)
-        self._execute_async_metadata(
-            self.__update_metric_read_on_metadata_statement,
-            (metric_name,)
-        )
+        with READ_ON.time():
+            log.debug('updating read_on for %s' % metric_name)
+            self._execute_async_metadata(
+                self.__update_metric_read_on_metadata_statement,
+                (metric_name,)
+            )
 
     def _select_metric(self, metric_name):
         """Fetch metric metadata."""
@@ -1667,6 +1687,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.shutdown()
         return schema
 
+    @UPDATED_ON.time()
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""
         super(_CassandraAccessor, self).touch_metric(metric_name)
@@ -1674,14 +1695,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__bulkimport:
             return
 
-        queries = []
-        queries.append((
+        self._execute_async_metadata(
             self.__touch_metrics_metadata_statement,
-            [metric_name],
-        ))
-
-        for statement, args in queries:
-            self._execute_metadata(statement, args)
+            (metric_name,)
+        )
 
     def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0):
         """See bg_accessor.Accessor.
@@ -1819,7 +1836,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     dir_name + DIRECTORY_SEPARATOR + '_')
                 queries = self._create_parent_dirs_queries(components)
                 for query in queries:
-                    pm_repaired_directories.inc()
+                    PM_REPAIRED_DIRECTORIES.inc()
                     yield query
 
         log.info("Start creating missing directories")
@@ -1888,7 +1905,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 dir_name = response.result_or_exc.response_future.query.values[0]
                 dir_name = dir_name.rpartition('.')[0]
                 log.info("Scheduling delete for empty dir '%s'" % dir_name)
-                pm_deleted_directories.inc()
+                PM_DELETED_DIRECTORIES.inc()
                 yield delete_empty_dir_stm, (dir_name,)
 
         log.info("Starting cleanup of empty dir")
@@ -1999,7 +2016,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         def run(rows):
             for name, _ in rows:
                 log.info("Scheduling delete for obsolete metric %s", name)
-                pm_expired_metrics.inc()
+                PM_EXPIRED_METRICS.inc()
                 yield (delete, (name,))
                 yield (delete_metadata, (name,))
 

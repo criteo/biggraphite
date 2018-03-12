@@ -119,7 +119,7 @@ def accessor_from_settings(settings):
     raise ConfigError("Invalid value '%s' for BG_DRIVER." % driver_name)
 
 
-def cache_from_settings(accessor, settings):
+def cache_from_settings(accessor, settings, cname=None):
     """Get Cache from configuration.
 
     Args:
@@ -139,7 +139,7 @@ def cache_from_settings(accessor, settings):
 
     for name, cache in CACHES:
         if name == cache_name:
-            return cache(accessor, cache_settings)
+            return cache(accessor, cache_settings, cname)
 
     raise ConfigError("Invalid value '%s' for BG_CACHE." % cache_name)
 
