@@ -524,6 +524,7 @@ def getConnectionClass():
         """A connection with a cap on the number of in-flight requests per host."""
 
         # 300 is the minimum with protocol version 3, default is 65536
+        # TODO: explain why we need that. I think it's to limit memory usage.
         max_in_flight = 600
 
     getConnectionClass.classes[REACTOR_TO_USE] = _CappedConnection
@@ -1008,10 +1009,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _connect_clusters(self):
         self.__cluster_metadata, self.__session_metadata = self._connect(
-            self.contact_points_metadata, self.port_metadata)
+            self.__cluster_metadata, self.__session_metadata,
+            self.contact_points_metadata, self.port_metadata
+        )
         if self.contact_points_data != self.contact_points_metadata:
             self.__cluster_data, self.__session_data = self._connect(
-                self.contact_points_data, self.port)
+                self.__cluster_data, self.__session_data,
+                self.contact_points_data, self.port
+            )
         else:
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
@@ -1025,24 +1030,29 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__metrics["data"] = expose_metrics(
                 self.__cluster_data.metrics, 'data')
 
-    def _connect(self, contact_points, port):
+    def _connect(self, cluster, session, contact_points, port):
         lb_policy = c_policies.TokenAwarePolicy(
             c_policies.DCAwareRoundRobinPolicy()
         )
         # See https://datastax-oss.atlassian.net/browse/PYTHON-643
         lb_policy.shuffle_replicas = True
 
-        cluster = c_cluster.Cluster(
-            contact_points, port,
-            compression=self.__compression,
-            auth_provider=self.auth_provider,
-            # Metrics are disabled because too expensive to compute.
-            metrics_enabled=False,
-            load_balancing_policy=lb_policy,
-        )
+        if not cluster:
+            cluster = c_cluster.Cluster(
+                contact_points, port,
+                compression=self.__compression,
+                auth_provider=self.auth_provider,
+                # Metrics are disabled because too expensive to compute.
+                metrics_enabled=False,
+                load_balancing_policy=lb_policy,
+            )
 
-        # Limits in flight requests
-        cluster.connection_class = getConnectionClass()
+            # Limits in flight requests
+            cluster.connection_class = getConnectionClass()
+
+        if session:
+            session.shutdown()
+
         session = cluster.connect()
         session.row_factory = c_query.tuple_factory  # Saves 2% CPU
         if self.__timeout:
