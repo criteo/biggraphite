@@ -102,7 +102,7 @@ class MetadataCache(object):
 
         Safe to call again after close() returned.
         """
-        name = self.name
+        pass
 
     def __enter__(self):
         self.open()
@@ -122,10 +122,12 @@ class MetadataCache(object):
 
     @property
     def hit_count(self):
+        """Hit counter."""
         return self._hits._value.get()
 
     @property
     def miss_count(self):
+        """Miss counter."""
         return self._misses._value.get()
 
     def cache_has(self, metric_name):
@@ -250,6 +252,7 @@ class MemoryCache(MetadataCache):
     def open(self):
         """Allocate ressources used by the cache."""
         super(MemoryCache, self).open()
+
         def _timer():
             # Use a custom timer to try to spread expirations. Within one instance it
             # won't change anything but it will be better if you run multiple instances.

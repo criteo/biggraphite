@@ -788,7 +788,7 @@ def expose_metrics(metrics, cluster_name=''):
         if attr.startswith('on_'):
             metric_name = 'bg_cassandra_' + \
                 cluster_name + '_' + attr[3:]
-            cpt = pm.Counter(metric_name, '')
+            cpt = prometheus_client.Counter(metric_name, '')
             metrics_adp[metric_name] = cpt
             setattr(metrics, attr, counter_adaptor(cpt, attr))
 
