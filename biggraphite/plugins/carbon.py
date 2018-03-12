@@ -59,7 +59,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     The class definition registers the plugin thanks to TimeSeriesDatabase's metaclass.
 
     It performs an asynchronous (non durable) write most of the time, except once
-    every _SYNC_EVERY_N_WRITE to give errors a chance to bubble up and bound the
+    every _SYNC_EVERY_N_WRITES to give errors a chance to bubble up and bound the
     number of points we may lose when the process terminates.
     Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9 .
     """
@@ -69,7 +69,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         member.value for member in list(accessor.Aggregator)]
 
     # See class pydoc for the rational.
-    _SYNC_EVERY_N_WRITE = 10
+    _SYNC_EVERY_N_WRITES = 10
 
     def __init__(self, settings):
         """Create a BigGraphiteDatabase."""
@@ -85,8 +85,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._settings = settings
         self._metricsToCreate = queue.Queue()
         self._sync_countdown = 0
-        self._sync_every_n_write = settings.get(
-            'BG_SYNC_EVERY_N_WRITE', self._SYNC_EVERY_N_WRITE
+        self._sync_every_n_writes = settings.get(
+            'BG_SYNC_EVERY_N_WRITES', self._SYNC_EVERY_N_WRITES
         )
 
         utils.start_admin(utils.settings_from_confattr(settings))
@@ -157,7 +157,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
         if self._sync_countdown < 1:
             self.accessor.insert_points(metric=metric, datapoints=datapoints)
-            self._sync_countdown = self._sync_every_n_write
+            self._sync_countdown = self._sync_every_n_writes
         else:
             self._sync_countdown -= 1
             self.accessor.insert_points_async(
