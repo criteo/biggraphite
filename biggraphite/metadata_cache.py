@@ -92,6 +92,7 @@ class MetadataCache(object):
         self.name = name
 
         self._size = CACHE_SIZE.labels(self.TYPE, name)
+        self._size.set_function(lambda: self.stats()['size'])
         self._max_size = CACHE_MAX_SIZE.labels(self.TYPE, name)
         self._hits = CACHE_HITS.labels(self.TYPE, name)
         self._misses = CACHE_MISSES.labels(self.TYPE, name)
@@ -248,6 +249,7 @@ class MemoryCache(MetadataCache):
         super(MemoryCache, self).__init__(accessor, settings, name)
         self.__size = settings.get('size', 1 * 1000 * 1000)
         self.__ttl = int(settings.get('ttl', 24 * 60 * 60))
+        self._max_size.set(self.__size)
 
     def open(self):
         """Allocate ressources used by the cache."""
@@ -373,6 +375,7 @@ class DiskCache(MetadataCache):
             "metric_to_meta": None
         }
         self.__metric_to_metadata_db = None
+        self._max_size.set(self.__size)
 
     def open(self):
         """Allocate ressources used by the cache.
