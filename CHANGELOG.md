@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2018-03-13
+
+### Added
+
+- Metrics for metadata cache and cassandra operations.
+- Ability to configure SYNC_EVERY_N_WRITES in carbon
+- Shuffle Cassandra replicas
+
+### Fixed
+
+- Connection leak when Cassandra connection fails
+
 ## [0.10.7] - 2018-02-15
 
 ### Added
@@ -208,7 +220,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.10.7...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.11.0...HEAD
+[0.10.7]: https://github.com/criteo/biggraphite/compare/v0.10.7...v0.11.0
 [0.10.7]: https://github.com/criteo/biggraphite/compare/v0.10.6...v0.10.7
 [0.10.6]: https://github.com/criteo/biggraphite/compare/v0.10.5...v0.10.6
 [0.10.5]: https://github.com/criteo/biggraphite/compare/v0.10.4...v0.10.5
