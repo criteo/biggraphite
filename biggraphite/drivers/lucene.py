@@ -17,6 +17,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import six
+import json
 
 from biggraphite import glob_utils
 from biggraphite.drivers import cassandra_common
@@ -45,9 +46,6 @@ LUCENE_FILTER = """{
         ]
     }
 }"""
-
-FIELD_MATCH_VALUE = '{ field:"%s", type:"match", value:"%s" }'
-FIELD_REGEX_VALUE = '{ field:"%s", type:"regexp", value:"%s" }'
 
 
 def translate_to_lucene_filter(components):
@@ -88,12 +86,13 @@ def translate_to_lucene_filter(components):
         parent = ""
         for component in components[:-1]:
             parent += component[0] + "."
-        must_list.append(FIELD_MATCH_VALUE % ('parent', parent))
+        must_list.append(json.dumps(
+            {"field": "parent", "type": "match", "value": parent}))
     else:
         must_list = _build_filters(components)
         # Restrict length by matching the END_MARK
-        must_list.append(FIELD_MATCH_VALUE %
-                         (_component_name(len(components)), END_MARK))
+        must_list.append(json.dumps(
+            {"field": _component_name(len(components)), "type": "match", "value": END_MARK}))
 
     if not must_list:
         return None
@@ -130,18 +129,23 @@ def _build_simple_field_constrain(index, value):
     if isinstance(value, glob_utils.AnySequence):
         return None  # No constrain
     elif isinstance(value, six.string_types):
-        return FIELD_MATCH_VALUE % (_component_name(index), value)
+        field = {"field": _component_name(index),
+                 "type": "match", "value": value}
     elif isinstance(value, glob_utils.CharNotIn):
-        return FIELD_REGEX_VALUE % '[^' + ''.join(value.values) + ']'
+        field = {"field": _component_name(index),
+                 "type": "regexp", "value": '[^' + ''.join(value.values) + ']'}
     elif isinstance(value, glob_utils.CharIn):
-        return FIELD_REGEX_VALUE % (_component_name(index), '[' + ''.join(value.values) + ']')
+        field = {"field": _component_name(index),
+                 "type": "regexp", "value": '[' + ''.join(value.values) + ']'}
     elif isinstance(value, glob_utils.SequenceIn):
-        return '{ field:"%s", type:"contains", values:["%s"] }' % (
-            _component_name(index), '","'.join(value.values))
+        field = {"field": _component_name(index),
+                 "type": "contains", "values": value.values}
     elif isinstance(value, glob_utils.AnyChar):
-        return FIELD_REGEX_VALUE % (_component_name(index), '.')
+        field = {"field": _component_name(index),
+                 "type": "regexp", "value": '.'}
     else:
         raise GlobError("Unhandled type '%s'" % value)
+    return json.dumps(field)
 
 
 def _build_regex_field_constrain(index, component):
@@ -165,4 +169,6 @@ def _build_regex_field_constrain(index, component):
             regex += '.'
         else:
             raise GlobError("Unhandled type '%s'" % subcomponent)
-    return FIELD_REGEX_VALUE % (_component_name(index), regex)
+    field = {"field": _component_name(index),
+             "type": "regexp", "value": regex}
+    return json.dumps(field)
