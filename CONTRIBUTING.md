@@ -50,6 +50,10 @@ source ${BG_VENV}/bin/activate
 # We want NO prefix in order to have a good interaction with virtual env.
 export GRAPHITE_NO_PREFIX=true
 
+# Install Graphite Web and Carbon
+pip install graphite-web
+pip install carbon
+
 # Install the libffi-dev package from your distribution before running pip install
 pip install -r requirements.txt
 pip install -r tests-requirements.txt
