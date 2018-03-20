@@ -53,6 +53,7 @@ def translate_to_lucene_filter(components):
             "must": []
         }
     }
+    must_list = []
     globstars = components.count(GLOBSTAR)
 
     if globstars > 1:
@@ -65,7 +66,7 @@ def translate_to_lucene_filter(components):
         if gs_index == len(components) - 1:
             # No define length: match on components before the GLOBSTAR
             components.pop()
-            lucene_filter["filter"]["must"] = _build_filters(components)
+            must_list = _build_filters(components)
         else:
             # GLOBSTAR is only supported at the end of a glob syntax
             raise GlobError(
@@ -81,16 +82,18 @@ def translate_to_lucene_filter(components):
         parent = ""
         for component in components[:-1]:
             parent += component[0] + "."
-        lucene_filter["filter"]["must"].append(
+        must_list.append(
             {"field": "parent", "type": "match", "value": parent})
     else:
-        lucene_filter["filter"]["must"] = _build_filters(components)
+        must_list = _build_filters(components)
         # Restrict length by matching the END_MARK
-        lucene_filter["filter"]["must"].append(
+        must_list.append(
             {"field": _component_name(len(components)), "type": "match", "value": END_MARK})
 
-    if not lucene_filter["filter"]["must"]:
+    if not must_list:
         return None
+
+    lucene_filter["filter"]["must"] = must_list
 
     # Join the constraints (with a nice indentation)
     return json.dumps(lucene_filter)
