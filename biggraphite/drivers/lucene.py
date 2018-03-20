@@ -38,15 +38,6 @@ ANYSEQUENCE = glob_utils.AnySequence()
 # Value stored in Cassandra columns component_? to mark the end of the metric name or pattern
 END_MARK = cassandra_common.LAST_COMPONENT
 
-LUCENE_FILTER = """{
-    filter: {
-        type: "boolean",
-        must: [
-            %s
-        ]
-    }
-}"""
-
 
 def translate_to_lucene_filter(components):
     """Translate a list of constraints on components to a lucene query.
@@ -56,8 +47,12 @@ def translate_to_lucene_filter(components):
 
     Return an Lucene filter json string.
     """
-    must_list = []
-
+    lucene_filter = {
+        "filter": {
+            "type": "boolean",
+            "must": []
+        }
+    }
     globstars = components.count(GLOBSTAR)
 
     if globstars > 1:
@@ -70,7 +65,7 @@ def translate_to_lucene_filter(components):
         if gs_index == len(components) - 1:
             # No define length: match on components before the GLOBSTAR
             components.pop()
-            must_list = _build_filters(components)
+            lucene_filter["filter"]["must"] = _build_filters(components)
         else:
             # GLOBSTAR is only supported at the end of a glob syntax
             raise GlobError(
@@ -86,19 +81,19 @@ def translate_to_lucene_filter(components):
         parent = ""
         for component in components[:-1]:
             parent += component[0] + "."
-        must_list.append(json.dumps(
-            {"field": "parent", "type": "match", "value": parent}))
+        lucene_filter["filter"]["must"].append(
+            {"field": "parent", "type": "match", "value": parent})
     else:
-        must_list = _build_filters(components)
+        lucene_filter["filter"]["must"] = _build_filters(components)
         # Restrict length by matching the END_MARK
-        must_list.append(json.dumps(
-            {"field": _component_name(len(components)), "type": "match", "value": END_MARK}))
+        lucene_filter["filter"]["must"].append(
+            {"field": _component_name(len(components)), "type": "match", "value": END_MARK})
 
-    if not must_list:
+    if not lucene_filter["filter"]["must"]:
         return None
 
     # Join the constraints (with a nice indentation)
-    return LUCENE_FILTER % ",\n            ".join(must_list)
+    return json.dumps(lucene_filter)
 
 
 def _component_name(idx):
@@ -145,7 +140,7 @@ def _build_simple_field_constrain(index, value):
                  "type": "regexp", "value": '.'}
     else:
         raise GlobError("Unhandled type '%s'" % value)
-    return json.dumps(field)
+    return field
 
 
 def _build_regex_field_constrain(index, component):
@@ -169,6 +164,5 @@ def _build_regex_field_constrain(index, component):
             regex += '.'
         else:
             raise GlobError("Unhandled type '%s'" % subcomponent)
-    field = {"field": _component_name(index),
-             "type": "regexp", "value": regex}
-    return json.dumps(field)
+    return {"field": _component_name(index),
+            "type": "regexp", "value": regex}
