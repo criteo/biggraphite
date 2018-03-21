@@ -17,6 +17,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import six
+import json
 
 from biggraphite import glob_utils
 from biggraphite.drivers import cassandra_common
@@ -37,18 +38,6 @@ ANYSEQUENCE = glob_utils.AnySequence()
 # Value stored in Cassandra columns component_? to mark the end of the metric name or pattern
 END_MARK = cassandra_common.LAST_COMPONENT
 
-LUCENE_FILTER = """{
-    filter: {
-        type: "boolean",
-        must: [
-            %s
-        ]
-    }
-}"""
-
-FIELD_MATCH_VALUE = '{ field:"%s", type:"match", value:"%s" }'
-FIELD_REGEX_VALUE = '{ field:"%s", type:"regexp", value:"%s" }'
-
 
 def translate_to_lucene_filter(components):
     """Translate a list of constraints on components to a lucene query.
@@ -58,8 +47,13 @@ def translate_to_lucene_filter(components):
 
     Return an Lucene filter json string.
     """
+    lucene_filter = {
+        "filter": {
+            "type": "boolean",
+            "must": []
+        }
+    }
     must_list = []
-
     globstars = components.count(GLOBSTAR)
 
     if globstars > 1:
@@ -88,18 +82,21 @@ def translate_to_lucene_filter(components):
         parent = ""
         for component in components[:-1]:
             parent += component[0] + "."
-        must_list.append(FIELD_MATCH_VALUE % ('parent', parent))
+        must_list.append(
+            {"field": "parent", "type": "match", "value": parent})
     else:
         must_list = _build_filters(components)
         # Restrict length by matching the END_MARK
-        must_list.append(FIELD_MATCH_VALUE %
-                         (_component_name(len(components)), END_MARK))
+        must_list.append(
+            {"field": _component_name(len(components)), "type": "match", "value": END_MARK})
 
     if not must_list:
         return None
 
+    lucene_filter["filter"]["must"] = must_list
+
     # Join the constraints (with a nice indentation)
-    return LUCENE_FILTER % ",\n            ".join(must_list)
+    return json.dumps(lucene_filter)
 
 
 def _component_name(idx):
@@ -130,18 +127,23 @@ def _build_simple_field_constrain(index, value):
     if isinstance(value, glob_utils.AnySequence):
         return None  # No constrain
     elif isinstance(value, six.string_types):
-        return FIELD_MATCH_VALUE % (_component_name(index), value)
+        field = {"field": _component_name(index),
+                 "type": "match", "value": value}
     elif isinstance(value, glob_utils.CharNotIn):
-        return FIELD_REGEX_VALUE % '[^' + ''.join(value.values) + ']'
+        field = {"field": _component_name(index),
+                 "type": "regexp", "value": '[^' + ''.join(value.values) + ']'}
     elif isinstance(value, glob_utils.CharIn):
-        return FIELD_REGEX_VALUE % (_component_name(index), '[' + ''.join(value.values) + ']')
+        field = {"field": _component_name(index),
+                 "type": "regexp", "value": '[' + ''.join(value.values) + ']'}
     elif isinstance(value, glob_utils.SequenceIn):
-        return '{ field:"%s", type:"contains", values:["%s"] }' % (
-            _component_name(index), '","'.join(value.values))
+        field = {"field": _component_name(index),
+                 "type": "contains", "values": value.values}
     elif isinstance(value, glob_utils.AnyChar):
-        return FIELD_REGEX_VALUE % (_component_name(index), '.')
+        field = {"field": _component_name(index),
+                 "type": "regexp", "value": '.'}
     else:
         raise GlobError("Unhandled type '%s'" % value)
+    return field
 
 
 def _build_regex_field_constrain(index, component):
@@ -165,4 +167,5 @@ def _build_regex_field_constrain(index, component):
             regex += '.'
         else:
             raise GlobError("Unhandled type '%s'" % subcomponent)
-    return FIELD_REGEX_VALUE % (_component_name(index), regex)
+    return {"field": _component_name(index),
+            "type": "regexp", "value": regex}
