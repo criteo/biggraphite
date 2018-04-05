@@ -49,6 +49,11 @@ class CommandClean(command.BaseCommand):
             action='store_true'
         )
         parser.add_argument(
+            "--clean-corrupted",
+            help="clean corrupted metrics",
+            action='store_true'
+        )
+        parser.add_argument(
             "--quiet", action="store_const", default=False, const=True,
             help="Show no output unless there are problems."
         )
@@ -82,25 +87,44 @@ class CommandClean(command.BaseCommand):
                 self.pbar.update(done)
             on_progress = _on_progress
 
-        with accessor as bg_acc:
-            if opts.clean_cache:
-                if opts.storage_dir:
-                    settings = {"path": opts.storage_dir, "ttl": opts.max_age}
+        accessor.connect()
 
-                    logging.info("Cleaning cache from %s", settings)
-                    with metadata_cache.DiskCache(bg_acc, settings) as cache:
-                        cache.clean()
-                else:
-                    logging.error('Cannot clean disk cache because storage_dir'
-                                  ' is empty')
+        if opts.clean_cache:
+            if opts.storage_dir:
+                settings = {"path": opts.storage_dir, "ttl": opts.max_age}
 
-            if opts.clean_backend:
-                logging.info("Cleaning backend, removing things before %d",
-                             opts.max_age)
-                bg_acc.clean(max_age=opts.max_age,
-                             shard=opts.shard, nshards=opts.nshards,
-                             start_key=opts.start_key,
-                             end_key=opts.end_key,
-                             callback_on_progress=on_progress)
+                logging.info("Cleaning cache from %s", settings)
+                with metadata_cache.DiskCache(accessor, settings) as cache:
+                    cache.clean()
+            else:
+                logging.error('Cannot clean disk cache because storage_dir'
+                              ' is empty')
+
+        if opts.clean_backend:
+            logging.info("Cleaning backend, removing things before %d",
+                         opts.max_age)
+            accessor.clean(max_age=opts.max_age,
+                           shard=opts.shard, nshards=opts.nshards,
+                           start_key=opts.start_key,
+                           end_key=opts.end_key,
+                           callback_on_progress=on_progress)
+
+        if opts.clean_corrupted:
+            def callback(metric, done, total):
+                # TODO: Probably worth removing old metrics here
+                # instead of in the driver... The index doesn't work
+                # well anyway.
+                on_progress(done, total)
+
+            def errback(metric):
+                logging.info("Removing %s" % metric)
+                accessor.delete_metric(metric)
+
+            logging.info("Cleaning corrupted metrics")
+            accessor.map(shard=opts.shard, nshards=opts.nshards,
+                         start_key=opts.start_key,
+                         end_key=opts.end_key,
+                         callback=callback,
+                         errback=errback)
 
         self.pbar.finish()

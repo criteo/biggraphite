@@ -1031,6 +1031,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self.__cluster_data.metrics, 'data')
 
     def _connect(self, cluster, session, contact_points, port):
+        print(contact_points)
         lb_policy = c_policies.TokenAwarePolicy(
             c_policies.DCAwareRoundRobinPolicy()
         )
@@ -1700,7 +1701,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             (metric_name,)
         )
 
-    def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0):
+    def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0, errback=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
@@ -1738,6 +1739,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
                 if not uid and not config:
                     log.debug("Skipping partial metric: %s" % metric_name)
+                    if errback:
+                        errback(metric_name)
                     continue
 
                 try:
@@ -1747,6 +1750,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 except Exception as e:
                     log.debug("Skipping corrupted metric: %s raising %s" %
                               (result, str(e)))
+                    if errback:
+                        errback(metric_name)
                     continue
 
                 callback(metric, done + 1, total)

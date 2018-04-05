@@ -393,7 +393,10 @@ class _BaseTestAccessorWithCassandraMetadata(object):
             self.assertIsNotNone(metric)
             self.assertTrue(done <= total)
 
-        self.accessor.map(_callback)
+        def _errback(name):
+            self.assertIsNotNone(name)
+
+        self.accessor.map(_callback, errback=_errback)
 
 
 class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,

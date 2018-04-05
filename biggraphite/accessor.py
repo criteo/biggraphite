@@ -907,7 +907,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1):
+    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None):
         """Call callback on each metric.
 
         This operation can potentially be very slow.
@@ -917,6 +917,7 @@ class Accessor(object):
 
         Args:
           callback: callable(metric: Metric, done: int, total: int)
+          errback: callable(metric: string) when a corrupted metric is found
           start_key: string, start at key >= start_key.
           end_key: string, stop at key < end_key.
           shard: int, shard to repair.

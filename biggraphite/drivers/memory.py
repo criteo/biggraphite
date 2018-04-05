@@ -242,10 +242,10 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
         self.map(_callback, *args, **kwargs)
 
-    def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0):
+    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None):
         """See bg_accessor.Accessor."""
         super(_MemoryAccessor, self).map(
-            callback, start_key, end_key, shard, nshards)
+            callback, start_key, end_key, shard, nshards, errback)
 
         metrics = self._name_to_metric
         total = len(metrics)
