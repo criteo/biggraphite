@@ -17,6 +17,7 @@
 
 import logging
 import os
+import time
 import sys
 import progressbar
 
@@ -110,10 +111,18 @@ class CommandClean(command.BaseCommand):
                            callback_on_progress=on_progress)
 
         if opts.clean_corrupted:
+            now = time.time()
             def callback(metric, done, total):
                 # TODO: Probably worth removing old metrics here
                 # instead of in the driver... The index doesn't work
                 # well anyway.
+                if metric.updated_on:
+                    delta = now - time.mktime(metric.updated_on.timetuple())
+                else:
+                    delta = now
+                if delta > opts.max_age:
+                    logging.info("Removing %s (%s)" % (metric.name, delta))
+                    accessor.delete_metric(metric.name)
                 on_progress(done, total)
 
             def errback(metric):

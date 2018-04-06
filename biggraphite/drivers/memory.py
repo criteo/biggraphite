@@ -17,6 +17,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import collections
+import datetime
 import uuid
 import logging
 
@@ -130,7 +131,11 @@ class _MemoryAccessor(bg_accessor.Accessor):
         # Cleanup name (avoid double dots)
         name = ".".join(self._components_from_name(name))
         uid = uuid.uuid5(self._UUID_NAMESPACE, name)
-        return bg_accessor.Metric(name, uid, metadata)
+        now = datetime.datetime.now()
+        return bg_accessor.Metric(
+            name, uid, metadata,
+            created_on=now, updated_on=now, read_on=None,
+        )
 
     def create_metric(self, metric):
         """See the real Accessor for a description."""

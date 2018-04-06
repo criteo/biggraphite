@@ -562,7 +562,7 @@ class MetricMetadata(object):
     __slots__ = (
         "aggregator",
         "retention",
-        "carbon_xfilesfactor",
+        "carbon_xfilesfactor"
     )
 
     _DEFAULT_AGGREGATOR = Aggregator.average
@@ -636,10 +636,14 @@ class Metric(object):
     __slots__ = (
         "name",
         "id",
-        "metadata"
+        "metadata",
+        "created_on",
+        "updated_on",
+        "read_on",
     )
 
-    def __init__(self, name, id, metadata):
+    def __init__(self, name, id, metadata,
+                 created_on=None, updated_on=None, read_on=None):
         """Record its arguments."""
         super(Metric, self).__init__()
         assert name, "Metric: name is None"
@@ -648,6 +652,9 @@ class Metric(object):
         self.name = encode_metric_name(name)
         self.id = id
         self.metadata = metadata
+        self.created_on = created_on
+        self.updated_on = updated_on
+        self.read_on = read_on
 
     def __getattr__(self, name):
         return getattr(self.metadata, name)
