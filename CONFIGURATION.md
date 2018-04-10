@@ -24,6 +24,10 @@ This is the main backend for BigGraphite and the one that should be used in prod
 - ```BG_CASSANDRA_META_WRITE_CONSISTENCY```: Data write consistency (default: ```ONE```)
 - ```BG_CASSANDRA_REPLICA_ID```: Identifier of this replica (default: ```0```)
 
+You can also fine-tune the schema of your tables directly as needed. If you
+want to active read repairs, you'll also want to set:
+`'unsafe_aggressive_sstable_expiration': 'true'`.
+
 ## Memory Backend
 
 The in-memory backend can be used during development to make debuging easier.
