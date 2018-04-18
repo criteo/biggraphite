@@ -285,7 +285,9 @@ class _BaseTestAccessorWithCassandraMetadata(object):
 
         self.accessor.create_metric(metric)
         self.assertEqual(self.accessor.has_metric(metric.name), True)
+
         self.accessor.delete_metric(metric.name)
+        self.flush()
         self.assertEqual(self.accessor.has_metric(metric.name), False)
 
     def test_repair(self):
