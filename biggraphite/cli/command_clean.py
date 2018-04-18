@@ -112,6 +112,7 @@ class CommandClean(command.BaseCommand):
 
         if opts.clean_corrupted:
             now = time.time()
+
             def callback(metric, done, total):
                 # TODO: Probably worth removing old metrics here
                 # instead of in the driver... The index doesn't work

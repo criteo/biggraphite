@@ -61,6 +61,7 @@ class CommandRead(command.BaseCommand):
         )
         parser.add_argument(
             "--async",
+            dest="is_async",
             help="Do reads asynchronously.",
             action="store_true"
         )
@@ -86,7 +87,7 @@ class CommandRead(command.BaseCommand):
         output_csv = opts.output_csv
 
         async_results = []
-        if opts.async:
+        if opts.is_async:
             # Fetch all points asynchronously.
             for metric in metrics:
                 results = self._fetch_points(
