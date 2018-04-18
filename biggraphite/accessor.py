@@ -562,7 +562,7 @@ class MetricMetadata(object):
     __slots__ = (
         "aggregator",
         "retention",
-        "carbon_xfilesfactor",
+        "carbon_xfilesfactor"
     )
 
     _DEFAULT_AGGREGATOR = Aggregator.average
@@ -636,10 +636,14 @@ class Metric(object):
     __slots__ = (
         "name",
         "id",
-        "metadata"
+        "metadata",
+        "created_on",
+        "updated_on",
+        "read_on",
     )
 
-    def __init__(self, name, id, metadata):
+    def __init__(self, name, id, metadata,
+                 created_on=None, updated_on=None, read_on=None):
         """Record its arguments."""
         super(Metric, self).__init__()
         assert name, "Metric: name is None"
@@ -648,6 +652,9 @@ class Metric(object):
         self.name = encode_metric_name(name)
         self.id = id
         self.metadata = metadata
+        self.created_on = created_on
+        self.updated_on = updated_on
+        self.read_on = read_on
 
     def __getattr__(self, name):
         return getattr(self.metadata, name)
@@ -907,7 +914,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1):
+    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None):
         """Call callback on each metric.
 
         This operation can potentially be very slow.
@@ -917,6 +924,7 @@ class Accessor(object):
 
         Args:
           callback: callable(metric: Metric, done: int, total: int)
+          errback: callable(metric: string) when a corrupted metric is found
           start_key: string, start at key >= start_key.
           end_key: string, stop at key < end_key.
           shard: int, shard to repair.

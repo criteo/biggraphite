@@ -996,15 +996,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
         self.__delete_metric = __prepare(
             "DELETE FROM \"%s\".metrics WHERE name=?;" % (
-                self.keyspace_metadata)
+                self.keyspace_metadata),
+            consistency=cassandra.ConsistencyLevel.QUORUM,
         )
         self.__delete_directory = __prepare(
             "DELETE FROM \"%s\".directories WHERE name=?;" % (
-                self.keyspace_metadata)
+                self.keyspace_metadata),
+            consistency=cassandra.ConsistencyLevel.QUORUM,
         )
         self.__delete_metric_metadata = __prepare(
             "DELETE FROM \"%s\".metrics_metadata WHERE name=?;" % (
-                self.keyspace_metadata)
+                self.keyspace_metadata),
+            consistency=cassandra.ConsistencyLevel.QUORUM,
         )
 
     def _connect_clusters(self):
@@ -1031,6 +1034,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self.__cluster_data.metrics, 'data')
 
     def _connect(self, cluster, session, contact_points, port):
+        print(contact_points)
         lb_policy = c_policies.TokenAwarePolicy(
             c_policies.DCAwareRoundRobinPolicy()
         )
@@ -1209,8 +1213,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def delete_metric(self, name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).delete_metric(name)
-        self._execute_metadata(self.__delete_metric, [name])
-        self._execute_metadata(self.__delete_metric_metadata, [name])
+        self._execute_async_metadata(self.__delete_metric, [name])
+        self._execute_async_metadata(self.__delete_metric_metadata, [name])
 
     def delete_directory(self, directory):
         """See bg_accessor.Accessor."""
@@ -1700,7 +1704,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             (metric_name,)
         )
 
-    def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0):
+    def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0, errback=None):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
@@ -1710,8 +1714,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             start_key, end_key, shard, nshards)
 
         select = self._prepare_background_request(
-            "SELECT name, token(name), id, config FROM \"%s\".metrics_metadata"
-            " WHERE token(name) > ? LIMIT %d ;"
+            "SELECT name, token(name), id, config, "
+            "dateOf(created_on), dateOf(updated_on), dateOf(read_on) "
+            "FROM \"%s\".metrics_metadata "
+            "WHERE token(name) > ? LIMIT %d ;"
             % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
         select.request_timeout = None
         select.fetch_size = DEFAULT_MAX_BATCH_UTIL
@@ -1735,18 +1741,26 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 uid = result[2]
                 config = result[3]
                 done = token - start_token
+                created_on, updated_on, read_on = result[4:]
 
                 if not uid and not config:
                     log.debug("Skipping partial metric: %s" % metric_name)
+                    if errback:
+                        errback(metric_name)
                     continue
 
                 try:
                     metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-                    metric = bg_accessor.Metric(metric_name, uid, metadata)
+                    metric = bg_accessor.Metric(
+                        metric_name, uid, metadata,
+                        created_on, updated_on, read_on,
+                    )
                 # Avoid failing if either name, id, or metadata is missing.
                 except Exception as e:
                     log.debug("Skipping corrupted metric: %s raising %s" %
                               (result, str(e)))
+                    if errback:
+                        errback(metric_name)
                     continue
 
                 callback(metric, done + 1, total)

@@ -96,15 +96,15 @@ class TestMain(bg_test_utils.TestCaseWithFakeAccessor):
             with open(metric_path, 'w'):
                 pass
 
-        paths = list(import_whisper._Walker(root, '.*\.wsp').paths())
+        paths = list(import_whisper._Walker(root, r'.*\.wsp').paths())
         self.assertEqual(len(paths), 4)
         paths = list(import_whisper._Walker(
-            root, '.*/toto/lulu/.*\.wsp').paths())
+            root, r'.*/toto/lulu/.*\.wsp').paths())
         self.assertEqual(len(paths), 2)
         paths = list(import_whisper._Walker(
-            root, '.*(hello|world)\.wsp').paths())
+            root, r'.*(hello|world)\.wsp').paths())
         self.assertEqual(len(paths), 2)
-        paths = list(import_whisper._Walker(root, '.*/d/.*\.wsp').paths())
+        paths = list(import_whisper._Walker(root, r'.*/d/.*\.wsp').paths())
         self.assertEqual(len(paths), 1)
 
     def _call_main(self):

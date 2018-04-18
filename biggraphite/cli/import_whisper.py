@@ -173,7 +173,7 @@ def _parse_opts(args):
         description="Import whisper files into BigGraphite.")
     parser.add_argument("root_directory", metavar="WHISPER_DIR",
                         help="directory in which to find whisper files")
-    parser.add_argument("--filter", type=str, default=".*\.wsp",
+    parser.add_argument("--filter", type=str, default=r".*\.wsp",
                         help="Only import metrics matching this filter")
     parser.add_argument("--prefix", metavar="WHISPER_PREFIX", default="",
                         help="prefix to prepend to metric names")

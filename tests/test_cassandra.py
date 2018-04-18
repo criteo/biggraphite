@@ -285,7 +285,9 @@ class _BaseTestAccessorWithCassandraMetadata(object):
 
         self.accessor.create_metric(metric)
         self.assertEqual(self.accessor.has_metric(metric.name), True)
+
         self.accessor.delete_metric(metric.name)
+        self.flush()
         self.assertEqual(self.accessor.has_metric(metric.name), False)
 
     def test_repair(self):
@@ -393,7 +395,10 @@ class _BaseTestAccessorWithCassandraMetadata(object):
             self.assertIsNotNone(metric)
             self.assertTrue(done <= total)
 
-        self.accessor.map(_callback)
+        def _errback(name):
+            self.assertIsNotNone(name)
+
+        self.accessor.map(_callback, errback=_errback)
 
 
 class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,

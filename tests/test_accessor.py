@@ -227,6 +227,18 @@ class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
                 self.accessor.insert_points, _METRIC, (0, 42),
             )
 
+    def test_map(self):
+        self.accessor.create_metric(_METRIC)
+
+        def _callback(metric, done, total):
+            self.assertIsNotNone(metric)
+            self.assertTrue(done <= total)
+
+        def _errback(name):
+            self.assertIsNotNone(name)
+
+        self.accessor.map(_callback, errback=_errback)
+
 
 class TestPointGrouper(unittest.TestCase):
 
