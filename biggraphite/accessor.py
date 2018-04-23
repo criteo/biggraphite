@@ -91,7 +91,9 @@ def _wait_async_call(async_function, *args, **kwargs):
         event.set()
 
     async_function(*args, on_done=on_done, **kwargs)
-    event.wait()
+    # c.f. https://github.com/criteo/biggraphite/issues/296
+    # under higher load BG will freeze, blocking on this wait()
+    event.wait(3.0)
     if exception_box[0]:
         raise exception_box[0]
 
