@@ -1034,7 +1034,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self.__cluster_data.metrics, 'data')
 
     def _connect(self, cluster, session, contact_points, port):
-        print(contact_points)
         lb_policy = c_policies.TokenAwarePolicy(
             c_policies.DCAwareRoundRobinPolicy()
         )
@@ -1412,6 +1411,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return None
 
         if touch:
+            # Small trick here: we also check that the parent directory
+            # exists because that's what we check to create the directory
+            # hierarchy.
+            # We do it only on 'touch==True' because we know that the caller
+            # accepts a small performance penalty already.
+            parent_dir = metric_name.rpartition(".")[0]
+            if parent_dir and not self.has_directory(parent_dir):
+                return None
+
+            # Set 'updated_on' if needed
             self.__touch_metadata_on_need(metric_name, updated_on)
 
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
