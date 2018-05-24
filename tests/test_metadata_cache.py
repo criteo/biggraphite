@@ -127,6 +127,19 @@ class CacheBaseTest(object):
         self.assertEqual(self.metadata_cache.miss_count, 1)
 
 
+    def test_stats(self):
+        ret = self.metadata_cache.stats()
+        self.assertNotEqual(len(ret), 0)
+
+        metric_name = "a.b.test"
+        metric = bg_test_utils.make_metric(metric_name)
+
+        self.metadata_cache.create_metric(metric)
+
+        ret = self.metadata_cache.stats()
+        self.assertNotEqual(len(ret), 0)
+
+
 class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
 
     CACHE_CLASS = bg_metadata_cache.DiskCache
