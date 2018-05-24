@@ -126,7 +126,6 @@ class CacheBaseTest(object):
         self.assertEqual(self.metadata_cache.hit_count, 2)
         self.assertEqual(self.metadata_cache.miss_count, 1)
 
-
     def test_stats(self):
         ret = self.metadata_cache.stats()
         self.assertNotEqual(len(ret), 0)
