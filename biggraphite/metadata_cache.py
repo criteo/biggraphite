@@ -523,7 +523,7 @@ class DiskCache(MetadataCache):
 
     def stats(self):
         """Count number of cached entries."""
-        ret = super(MemoryCache, self).stat()
+        ret = super(DiskCache, self).stats()
         ret['root'] = self.__env.stat(),
         for name, database in self.__databases.items():
             with self.__env.begin(database, write=False) as txn:
