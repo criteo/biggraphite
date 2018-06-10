@@ -9,8 +9,7 @@ tabulate
 sortedcontainers
 
 # Cassandra driver
-# 3.12.0 suffers from https://datastax-oss.atlassian.net/projects/PYTHON/issues/PYTHON-862
-cassandra-driver==3.11.0
+cassandra-driver
 scales
 
 # Core
