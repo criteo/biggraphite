@@ -310,6 +310,9 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             for statement in statements:
                 self.session.execute(statement)
 
+        # Hope that after this all async calls will have been processed.
+        self.cluster.refresh_schema_metadata()
+
     def make_metric(self, name, metadata=None, **kwargs):
         """Create a bg_accessor.Metric with specified metadata."""
         return make_metric(name, metadata=metadata, accessor=self.accessor, **kwargs)
