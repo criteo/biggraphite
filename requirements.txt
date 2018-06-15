@@ -12,6 +12,10 @@ sortedcontainers
 cassandra-driver
 scales
 
+# ElasticSearch
+elasticsearch
+elasticsearch-dsl
+
 # Core
 six
 enum34

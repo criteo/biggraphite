@@ -3,23 +3,23 @@
 from concurrent import futures
 import argparse
 import csv
-import datetime
 import elasticsearch
+import cassandra.util
 import json
 import os
 import sys
 import threading
 import uuid
 
-
 UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
-INDEX = 'biggraphite'
-INDEX_BODY = {
+DIRECTORIES = set()
+INDEX_PREFIX = 'biggraphite_'
+INDEX_BODY_METRICS = {
     "settings": {
         "index": {
             "number_of_shards": 3,
-            "number_of_replicas": 2,
+            "number_of_replicas": 1,
         },
     },
     "mappings": {
@@ -28,7 +28,7 @@ INDEX_BODY = {
                 "length": {"type": "long"},
                 "created_on": {"type": "date"},
                 "read_on": {"type": "date"},
-                "updated_on_on": {"type": "date"},
+                "updated_on": {"type": "date"},
                 "name": {
                     "type": "text",
                     "index": "not_analyzed",
@@ -46,15 +46,59 @@ INDEX_BODY = {
         },
     },
 }
+INDEX_BODY_DIRECTORIES = {
+    "settings": {
+        "index": {
+            "number_of_shards": 3,
+            "number_of_replicas": 1,
+        },
+    },
+    "mappings": {
+        "directory": {
+            "properties": {
+                "length": {"type": "long"},
+                "name": {
+                    "type": "text",
+                    "index": "not_analyzed",
+                },
+            },
+        },
+    },
+}
 
 for i in range(64):
-    INDEX_BODY["mappings"]["metric"]["properties"]["p%d" % i] = {
+    INDEX_BODY_METRICS["mappings"]["metric"]["properties"]["p%d" % i] = {
+        "type": "text",
+        "index": "not_analyzed",
+    }
+    INDEX_BODY_DIRECTORIES["mappings"]["directory"]["properties"]["p%d" % i] = {
         "type": "text",
         "index": "not_analyzed",
     }
 
+def uuid_to_datetime(u):
+    try:
+        if u:
+            return cassandra.util.datetime_from_uuid1(uuid.UUID(u))
+    except Exception as e:
+        print("%s: %s" % (u, e))
+        return None
+    return None
 
-def document(metric, config, created_on, uid):
+
+def document_base(name):
+    data = {
+        "length": name.count("."),
+        "name": name,
+    }
+
+    for i, component in enumerate(name.split(".")):
+        data["p%d" % i] = component
+
+    return data
+
+
+def document(metric, config, created_on, updated_on, read_on, uid):
     """Creates a document."""
     try:
         config = config.replace("'", '"')
@@ -62,16 +106,14 @@ def document(metric, config, created_on, uid):
     except ValueError:
         config = {}
 
-    # TODO: handle uid and timestamps correctly.
-    data = {
-        "length": metric.count("."),
-        "created_on": datetime.datetime.utcnow(),
-        "updated_on": datetime.datetime.utcnow(),
-        "name": metric,
+    data = document_base(metric)
+    data.update({
+        "uuid": uid,
+        "created_on": uuid_to_datetime(created_on),
+        "updated_on": uuid_to_datetime(updated_on),
+        "read_on": uuid_to_datetime(read_on),
         "config": config,
-    }
-    for i, component in enumerate(metric.split(".")):
-        data["p%d" % i] = component
+    })
     return data
 
 
@@ -85,13 +127,40 @@ def read_metrics(filename):
 
 def create(es, row):
     """Creates a metric."""
+    metric = row[0]
+    create_metric(es, row)
+
+    # Create directories
+    components = metric.split(".")
+    components = list(filter(None, components))
+    path = []
+    for part in components[:-1]:
+        path.append(part)
+        directory = ".".join(path)
+        if directory not in DIRECTORIES:
+            DIRECTORIES.add(directory)
+            create_directory(es, directory)
+
+
+def create_metric(es, row):
     metric, config, created_on, uid, read_on, updated_on = row
     print(metric)
     es.create(
-        index=INDEX,
+        index=INDEX_PREFIX + "metrics",
         doc_type="metric",
         id=uid,
-        body=document(metric, config, created_on, uid),
+        body=document(metric, config, created_on, updated_on, read_on, uid),
+        ignore=409,
+    )
+
+
+def create_directory(es, directory):
+    print(directory)
+    es.create(
+        index=INDEX_PREFIX + "directories",
+        doc_type="directory",
+        id=directory,
+        body=document_base(directory),
         ignore=409,
     )
 
@@ -135,10 +204,16 @@ def main():
     )
     print('Connected:', es.info())
     if opts.cleanup:
-        es.indices.delete(index=INDEX, ignore=[400, 404])
+        es.indices.delete(index=INDEX_PREFIX + "metrics", ignore=[400, 404])
+        es.indices.delete(index=INDEX_PREFIX + "directories", ignore=[400, 404])
     es.indices.create(
-        index=INDEX,
-        body=INDEX_BODY,
+        index=INDEX_PREFIX + "metrics",
+        body=INDEX_BODY_METRICS,
+        ignore=400
+    )
+    es.indices.create(
+        index=INDEX_PREFIX + "directories",
+        body=INDEX_BODY_DIRECTORIES,
         ignore=400
     )
 
