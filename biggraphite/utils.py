@@ -20,12 +20,14 @@ import distutils
 import prometheus_client
 
 from biggraphite.drivers import cassandra as bg_cassandra
+from biggraphite.drivers import elasticsearch as bg_elasticsearch
 from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache
 
 
 DRIVERS = frozenset([
     ("cassandra", bg_cassandra),
+    ("elasticsearch", bg_elasticsearch),
     ("memory", bg_memory),
 ])
 CACHES = frozenset([
@@ -176,6 +178,7 @@ def add_argparse_arguments(parser):
         help="Admin port with /metrics",
         default=DEFAULT_ADMIN_PORT)
     bg_cassandra.add_argparse_arguments(parser)
+    bg_elasticsearch.add_argparse_arguments(parser)
 
 
 def set_log_level(settings):
