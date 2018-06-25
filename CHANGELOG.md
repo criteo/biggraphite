@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2018-25-06
+
+### Added
+- bgutil clean new flag: --corrupted-metrics
+- Add non-zero timeout to event.wait()
+- Make sure we always create missing directories
+
+### Fixed
+- Non escaped char in the Lucene filter string
+- Fix disk cache and add unitests
+
 ## [0.11.0] - 2018-03-13
 
 ### Added
@@ -220,8 +231,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.11.0...HEAD
-[0.10.7]: https://github.com/criteo/biggraphite/compare/v0.10.7...v0.11.0
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/criteo/biggraphite/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/criteo/biggraphite/compare/v0.10.7...v0.11.0
 [0.10.7]: https://github.com/criteo/biggraphite/compare/v0.10.6...v0.10.7
 [0.10.6]: https://github.com/criteo/biggraphite/compare/v0.10.5...v0.10.6
 [0.10.5]: https://github.com/criteo/biggraphite/compare/v0.10.4...v0.10.5
