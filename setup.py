@@ -38,7 +38,7 @@ _INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
 
 setuptools.setup(
     name="biggraphite",
-    version="0.11.0",
+    version="0.12.0",
     maintainer="Criteo Graphite Team",
     maintainer_email="github@criteo.com",
     description="Simple Scalable Time Series Database.",
