@@ -10,11 +10,13 @@ import os
 import sys
 import threading
 import uuid
+import urllib.parse
 
 UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
 DIRECTORIES = set()
 INDEX_PREFIX = 'biggraphite_'
+
 INDEX_BODY_METRICS = {
     "settings": {
         "index": {
@@ -30,12 +32,11 @@ INDEX_BODY_METRICS = {
                 "read_on": {"type": "date"},
                 "updated_on": {"type": "date"},
                 "name": {
-                    "type": "text",
-                    "index": "not_analyzed",
+                    "type": "keyword",
+                    "ignore_above": 1024,
                 },
                 "uuid": {
-                    "type": "text",
-                    "index": "not_analyzed",
+                    "type": "keyword",
                 },
                 # TODO: Maybe make that non-analyzed
                 "config": {
@@ -43,6 +44,21 @@ INDEX_BODY_METRICS = {
                     "index": "no",
                 },
             },
+            # Additional properties (such as path components) or labels
+            # TODO: have a specific dynamic mapping for labels using "match"
+            # FIXME: this doesn't seem to work, maybe because of text <-> string.
+            "dynamic_templates": [
+                {
+                    "strings_as_keywords": {
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "keyword",
+                            "ignore_above": 256,
+                            # TODO: see if we can filter by name length.
+                        }
+                    }
+                }
+            ]
         },
     },
 }
@@ -58,23 +74,26 @@ INDEX_BODY_DIRECTORIES = {
             "properties": {
                 "length": {"type": "long"},
                 "name": {
-                    "type": "text",
-                    "index": "not_analyzed",
+                    "type": "keyword",
+                    "ignore_above": 1024,
                 },
             },
+            # Additional properties (such as path components) or labels
+            "dynamic_templates": [
+                {
+                    "strings_as_keywords": {
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "keyword",
+                            "ignore_above": 256,
+                        }
+                    }
+                }
+            ]
         },
     },
 }
 
-for i in range(64):
-    INDEX_BODY_METRICS["mappings"]["metric"]["properties"]["p%d" % i] = {
-        "type": "text",
-        "index": "not_analyzed",
-    }
-    INDEX_BODY_DIRECTORIES["mappings"]["directory"]["properties"]["p%d" % i] = {
-        "type": "text",
-        "index": "not_analyzed",
-    }
 
 def uuid_to_datetime(u):
     try:
@@ -98,7 +117,7 @@ def document_base(name):
     return data
 
 
-def document(metric, config, created_on, updated_on, read_on, uid):
+def document(metric, config, created_on, updated_on, read_on, uid, labels):
     """Creates a document."""
     try:
         config = config.replace("'", '"')
@@ -114,6 +133,10 @@ def document(metric, config, created_on, updated_on, read_on, uid):
         "read_on": uuid_to_datetime(read_on),
         "config": config,
     })
+    labels = labels or {}
+    for k, v in labels.items():
+        data['label_%s' % k] = v
+    print(data)
     return data
 
 
@@ -125,7 +148,26 @@ def read_metrics(filename):
         yield row
 
 
-def create(es, row):
+def guess_labels(metric, prefix):
+    """Consider prefix as metric name and the rest as label0.value0.label1.value1"""
+    labels = {}
+    metric = metric.replace(prefix, '')
+
+    # Split into components
+    components = metric.split(".")
+    components = list(filter(None, components))
+
+    # First part is metric name
+    metric = prefix + "." + components[0]
+    components = components[1:]
+
+    for i in range(0, len(components) - 1, 2):
+        # url decode because people will often have urlencoded the value.
+        labels[components[i]] = urllib.parse.unquote(components[i+1])
+    return metric, labels
+
+
+def create(opts, es, row):
     """Creates a metric."""
     metric = row[0]
     create_metric(es, row)
@@ -137,19 +179,31 @@ def create(es, row):
     for part in components[:-1]:
         path.append(part)
         directory = ".".join(path)
+        # Detect labelled metrics
+        if directory in opts.prefix_labelled:
+            metric, labels = guess_labels(metric, directory)
+            row[0] = metric
+            create_metric(es, row, labels=labels)
         if directory not in DIRECTORIES:
             DIRECTORIES.add(directory)
             create_directory(es, directory)
 
 
-def create_metric(es, row):
+def create_metric(es, row, labels=None):
     metric, config, created_on, uid, read_on, updated_on = row
-    print(metric)
+    print(metric, labels)
+
+    if labels:
+        # Make sure there are no collisions for labelled metrics
+        doc_id = chr((ord(uid[0]) + 1) % 254) + uid[1:]
+    else:
+        doc_id = uid
+    print(doc_id)
     es.create(
         index=INDEX_PREFIX + "metrics",
         doc_type="metric",
-        id=uid,
-        body=document(metric, config, created_on, updated_on, read_on, uid),
+        id=doc_id,
+        body=document(metric, config, created_on, updated_on, read_on, uid, labels),
         ignore=409,
     )
 
@@ -185,6 +239,8 @@ def parse_opts(args):
     parser.add_argument('--sniff', action='store_true', default=False)
     parser.add_argument('--port', default=9002, type=int)
     parser.add_argument('--cleanup', action='store_true', default=False)
+    # Prefix of metrics that will be stored with "labels"
+    parser.add_argument('--prefix_labelled', type=str)
     parser.add_argument('--input', required=True)
     return parser.parse_args(args[1:])
 
@@ -192,6 +248,8 @@ def parse_opts(args):
 def main():
     """Import .csv data from a metrics_metadata dump."""
     opts = parse_opts(sys.argv)
+    if opts.prefix_labelled:
+        opts.prefix_labelled = set(opts.prefix_labelled.split(','))
     max_workers = opts.max_workers
     sem = threading.Semaphore(max_workers * 2)
 
@@ -223,7 +281,7 @@ def main():
     for row in rows:
         # We use the semaphore to avoid reading *all* the file.
         sem.acquire()
-        future = executor.submit(create, es, row)
+        future = executor.submit(create, opts, es, row)
         future.add_done_callback(lambda f: callback(f, sem))
     executor.shutdown()
 
