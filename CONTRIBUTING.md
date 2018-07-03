@@ -19,7 +19,7 @@ See [README](README.md) for the code structure.
 ### Style guide
 
 By convention:
-- This project follows (PEP 8)[https://www.python.org/dev/peps/pep-0008/] and (PEP 257)[https://www.python.org/dev/peps/pep-0257/]
+- This project follows [PEP 8](https://www.python.org/dev/peps/pep-0008/) and [PEP 257](https://www.python.org/dev/peps/pep-0257/)
 - We indent by four space
 - We only import modules (`from os import path as os_path` not `from os.path import join`)
 
