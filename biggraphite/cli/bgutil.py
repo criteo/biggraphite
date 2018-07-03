@@ -82,6 +82,9 @@ def main(args=None, accessor=None):
         args = sys.argv[1:]
 
     opts = _parse_opts(args)
+    if not getattr(opts, "func", None):
+        opts.func = command_shell.CommandShell().run
+
     settings = bg_utils.settings_from_args(opts)
     bg_utils.set_log_level(settings)
     accessor = accessor or bg_utils.accessor_from_settings(settings)

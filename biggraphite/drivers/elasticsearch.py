@@ -21,7 +21,6 @@ import datetime
 import uuid
 import logging
 import elasticsearch
-
 # import elasticsearch_dsl
 
 import sortedcontainers
@@ -45,9 +44,76 @@ log = logging.getLogger(__name__)
 # * Implement repair
 # * Implement clean
 
+# TODO: Make that configurable (in a file), this will be particularly important
+# for the number of shards and replicas.
+INDEX_SETTINGS = {
+    "settings": {
+        "index": {
+            "number_of_shards": 3,
+            "number_of_replicas": 1,
+            "refresh_interval": 60,
+            "translog": {
+                "sync_interval": 120,
+                "durability": "async",
+            },
+            "search": {
+                "slowlog": {
+                    "level": "info",
+                    "threshold": {
+                        "query": {
+                            "debug": "2s",
+                            "info": "5s",
+                        },
+                        "fetch": {
+                            "debug": "200ms",
+                            "info": "500ms",
+                        },
+                    }
+                }
+            }
+        },
+    },
+    "mappings": {
+        "_doc": {
+            "properties": {
+                "length": {"type": "long"},
+                "created_on": {"type": "date"},
+                "read_on": {"type": "date"},
+                "updated_on": {"type": "date"},
+                "name": {
+                    "type": "keyword",
+                    "ignore_above": 1024,
+                },
+                "uuid": {
+                    "type": "keyword",
+                },
+                "config": {
+                    "type": "object",
+                    # TODO: describe existing fields with more details.
+                },
+            },
+            # Additional properties (such as path components) or labels
+            # TODO: have a specific dynamic mapping for labels using "match"
+            # FIXME: this doesn't seem to work, maybe because of text <-> string.
+            "dynamic_templates": [
+                {
+                    "text_as_keywords": {
+                        "match_mapping_type": "text",
+                        "mapping": {
+                            "type": "keyword",
+                            "ignore_above": 256,
+                            "ignore_malformed": True,
+                        }
+                    }
+                }
+            ]
+        },
+    },
+}
 
 DEFAULT_INDEX = "biggraphite_metrics"
 DEFAULT_INDEX_SUFFIX = "_%Y-%m-%d"
+INDEX_DOC_TYPE = "_doc"
 DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
@@ -105,6 +171,34 @@ def add_argparse_arguments(parser):
     )
 
 
+def _components_from_name(metric_name):
+    res = metric_name.split(".")
+    return list(filter(None, res))
+
+
+def document_from_metric(metric):
+    """Creates an ElasticSearch document from a Metric."""
+    config = metric.metadata.as_string_dict()
+    components = _components_from_name(metric.name)
+    name = ".".join(components)  # We do that to avoid double dots.
+
+    data = {
+        "length": len(components),
+        "name": name,
+    }
+
+    for i, component in enumerate(components):
+        data["p%d" % i] = component
+    data.update({
+        "uuid": metric.id,
+        "created_on": datetime.datetime.now(),
+        "updated_on": datetime.datetime.now(),
+        "read_on": None,
+        "config": config,
+    })
+    return data
+
+
 class Error(bg_accessor.Error):
     """Base class for all exceptions from this module."""
 
@@ -148,12 +242,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._username = username
         self._password = password
         self._timeout = timeout
+        self._known_indices = {}
         self.client = None
-
-    @staticmethod
-    def _components_from_name(metric_name):
-        res = metric_name.split(".")
-        return list(filter(None, res))
 
     @property
     def _metric_names(self):
@@ -220,6 +310,20 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 wait_if_ongoing=True,
             )
 
+    def get_index(self, metric):
+        """Get the index where a metric should be stored."""
+        # Here the index could be sharded further by looking at the
+        # metric metadata, for example, per owner.
+        index_name = self._index_prefix + datetime.datetime.now().strftime(self._index_suffix)
+        if index_name not in self._known_indices:
+            self.client.indices.create(
+                index=index_name,
+                body=INDEX_SETTINGS,
+                ignore=400
+            )
+            self._known_indices[index_name] = True
+        return index_name
+
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).insert_points_async(
@@ -259,7 +363,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def make_metric(self, name, metadata):
         """See bg_accessor.Accessor."""
         # Cleanup name (avoid double dots)
-        name = ".".join(self._components_from_name(name))
+        name = ".".join(_components_from_name(name))
         uid = uuid.uuid5(self._UUID_NAMESPACE, name)
         now = datetime.datetime.now()
         return bg_accessor.Metric(
@@ -269,18 +373,20 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def create_metric(self, metric):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).create_metric(metric)
-        self._name_to_metric[metric.name] = metric
-        components = self._components_from_name(metric.name)
-        path = []
-        for part in components[:-1]:
-            path.append(part)
-            self._directory_names.add(".".join(path))
+        index_name = self.get_index(metric)
+        self.client.create(
+            index=index_name,
+            doc_type=INDEX_DOC_TYPE,
+            id=metric.id,
+            body=document_from_metric(metric),
+            ignore=409,
+        )
 
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).update_metric(name, updated_metadata)
         # Cleanup name (avoid double dots)
-        name = ".".join(self._components_from_name(name))
+        name = ".".join(_components_from_name(name))
         metric = self._name_to_metric[name]
         if not metric:
             raise InvalidArgumentError("Unknown metric '%s'" % name)
@@ -317,7 +423,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def get_metric(self, metric_name, touch=False):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name, touch=touch)
-        metric_name = ".".join(self._components_from_name(metric_name))
+        metric_name = ".".join(_components_from_name(metric_name))
         return self._name_to_metric.get(metric_name)
 
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):

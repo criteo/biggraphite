@@ -1542,7 +1542,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """Flush any internal buffers."""
         if self.__delayed_writer:
             self.__delayed_writer.flush()
-        self.__lazy_statements.flush()
+        if self.__lazy_statements:
+            self.__lazy_statements.flush()
 
     def clear(self):
         """Clear all internal data."""
