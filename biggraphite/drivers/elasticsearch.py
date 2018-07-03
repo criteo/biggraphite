@@ -46,7 +46,8 @@ log = logging.getLogger(__name__)
 # * Implement clean
 
 
-DEFAULT_INDEX = "biggraphite"
+DEFAULT_INDEX = "biggraphite_metrics"
+DEFAULT_INDEX_SUFFIX = "_%Y-%m-%d"
 DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
@@ -69,6 +70,12 @@ def add_argparse_arguments(parser):
         metavar="NAME",
         help="elasticsearch index.",
         default=DEFAULT_INDEX,
+    )
+    parser.add_argument(
+        "--elasticsearch_index_suffix",
+        metavar="NAME",
+        help="elasticsearch index suffix. Supports strftime format.",
+        default=DEFAULT_INDEX_SUFFIX,
     )
     parser.add_argument(
         "--elasticsearch_username", help="elasticsearch username.", default=None
@@ -122,6 +129,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         hosts=DEFAULT_HOSTS,
         port=DEFAULT_PORT,
         index=DEFAULT_INDEX,
+        index_suffix=DEFAULT_INDEX_SUFFIX,
         username=None,
         password=None,
         timeout=DEFAULT_TIMEOUT,
@@ -135,8 +143,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__delayed_writer = _delayed_writer.DelayedWriter(self)
         self._hosts = list(hosts)
         self._port = port
-        # TODO: Have indices with date suffixes.
-        self._index = index
+        self._index_prefix = index
+        self._index_suffix = index_suffix
         self._username = username
         self._password = password
         self._timeout = timeout
@@ -206,7 +214,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             self.__delayed_writer.flush()
         if self.client:
             self.client.indices.flush(
-                index="%s*" % self._index,
+                index="%s*" % self._index_prefix,
                 allow_no_indices=True,
                 ignore_unavailable=True,
                 wait_if_ongoing=True,
