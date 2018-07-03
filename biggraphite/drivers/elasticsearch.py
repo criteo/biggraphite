@@ -20,8 +20,9 @@ import collections
 import datetime
 import uuid
 import logging
+import six
 import elasticsearch
-# import elasticsearch_dsl
+import elasticsearch_dsl
 
 import sortedcontainers
 
@@ -118,6 +119,7 @@ DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
 
+MAX_QUERY_SIZE = 10000
 
 OPTIONS = {
     "username": str,
@@ -207,6 +209,84 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
     """Callee did not follow requirements on the arguments."""
 
 
+# TODO (t.chataigner) Add unittest.
+def _parse_wildcard_component(component):
+    """Given a complex component, this builds a wildcard constraint."""
+    value = ""
+    for subcomponent in component:
+        if isinstance(subcomponent, bg_glob.AnySequence):
+            value += "*"
+        elif isinstance(subcomponent, six.string_types):
+            value += subcomponent
+        elif isinstance(subcomponent, bg_glob.AnyChar):
+            value += '?'
+        else:
+            raise Error("Unhandled type '%s'" % subcomponent)
+    return value
+
+
+# TODO (t.chataigner) Add unittest.
+def _parse_regexp_component(component):
+    """Given a complex component, this builds a regexp constraint."""
+    if isinstance(component, bg_glob.Globstar):
+        return ".*"
+
+    regex = ""
+    for subcomponent in component:
+        if isinstance(subcomponent, bg_glob.AnySequence):
+            regex += "[^.]*"
+        elif isinstance(subcomponent, six.string_types):
+            regex += subcomponent
+        elif isinstance(subcomponent, bg_glob.CharNotIn):
+            regex += '[^' + ''.join(subcomponent.values) + ']'
+        elif isinstance(subcomponent, bg_glob.CharIn):
+            regex += '[' + ''.join(subcomponent.values) + ']'
+        elif isinstance(subcomponent, bg_glob.SequenceIn):
+            if subcomponent.negated:
+                regex += '[^.]*'
+            else:
+                regex += '(' + '|'.join(subcomponent.values) + ')'
+        elif isinstance(subcomponent, bg_glob.AnyChar):
+            regex += '[^.]'
+        else:
+            raise Error("Unhandled type '%s'" % subcomponent)
+    return regex
+
+
+# TODO (t.chataigner) Add unittest.
+def parse_complex_component(component):
+    """Given a complex component, this builds a constraint."""
+    if all([
+            any([
+                 isinstance(sub_c, bg_glob.AnySequence),
+                 isinstance(sub_c, bg_glob.AnyChar),
+                 isinstance(sub_c, six.string_types),
+            ]) for sub_c in component
+            ]):
+        return 'wildcard', _parse_wildcard_component(component)
+    return 'regexp', _parse_regexp_component(component)
+
+
+# TODO (t.chataigner) Add unittest.
+def parse_simple_component(component):
+    """Given a component with a simple type, this builds a constraint."""
+    value = component[0]
+    if isinstance(value, bg_glob.AnySequence):
+        return None, None  # No constrain
+    elif isinstance(value, six.string_types):
+        return 'term', value
+    elif isinstance(value, bg_glob.CharNotIn):
+        return 'regexp', '[^' + ''.join(value.values) + ']'
+    elif isinstance(value, bg_glob.CharIn):
+        return 'regexp', '[' + ''.join(value.values) + ']'
+    elif isinstance(value, bg_glob.SequenceIn):
+        return 'terms', value.values
+    elif isinstance(value, bg_glob.AnyChar):
+        return 'wildcard', '?'
+    else:
+        raise Error("Unhandled type '%s'" % value)
+
+
 class _ElasticSearchAccessor(bg_accessor.Accessor):
     """A ElasticSearch acessor that doubles as a ElasticSearch MetadataCache."""
 
@@ -243,11 +323,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._password = password
         self._timeout = timeout
         self._known_indices = {}
+        self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.client = None
-
-    @property
-    def _metric_names(self):
-        return self._name_to_metric.keys()
 
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -399,21 +476,87 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def delete_directory(self, name):
         self._directory_names.remove(name)
 
-    @staticmethod
-    def __glob_names(names, glob):
-        results = bg_glob.glob(names, glob)
-        results.sort()
-        return results
+    # TODO (t.chataigner) Add unittest.
+    def _search_metrics_from_glob(self, glob):
+        search = elasticsearch_dsl.Search()
+        search = search.using(self.client).index("%s*" % self._index_prefix).source('name')
+
+        components = self.__glob_parser.parse(glob)
+
+        # Handle glob with globstar(s).
+        globstars = components.count(bg_glob.Globstar())
+        if globstars:
+            name_regexp = "\\.".join([_parse_regexp_component(c) for c in components])
+            return True, search.filter('regexp', **{"name": name_regexp})
+
+        # TODO (t.chataigner) Handle fully defined prefix (like a.b.c.*.*.*)
+        # with a wildcard on name.
+
+        # Handle fully defined glob.
+        if self.__glob_parser.is_fully_defined(components):
+            return False, search.filter(
+                'term', **{"name": ".".join(self._components_from_name(glob))})
+
+        # Handle all other use cases.
+        for i, c in enumerate(components):
+            if len(c) == 1:
+                filter_type, value = parse_simple_component(c)
+            else:
+                filter_type, value = parse_complex_component(c)
+
+            if filter_type:
+                search = search.filter(filter_type, **{"p%d.keyword" % i: value})
+        return False, search
 
     def glob_metric_names(self, glob):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).glob_metric_names(glob)
-        return iter(self.__glob_names(self._metric_names, glob))
+        if glob == "":
+            return []
+
+        has_globstar, search = self._search_metrics_from_glob(glob)
+        if has_globstar:
+            search = search.filter('range', depth={'gte': glob.count(".")})
+        else:
+            search = search.filter('term', depth=glob.count("."))
+        search = search.extra(from_=0, size=MAX_QUERY_SIZE)
+
+        # TODO (t.chataigner) try to move the sort in the ES search and return a generator.
+        log.debug(search.to_dict())
+        results = [h.name for h in search.execute()]
+        results.sort()
+        return iter(results)
 
     def glob_directory_names(self, glob):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).glob_directory_names(glob)
-        return iter(self.__glob_names(self._directory_names, glob))
+        if glob == "":
+            return []
+
+        has_globstar, search = self._search_metrics_from_glob(glob)
+        if has_globstar:
+            # TODO (t.chataigner) Add a log or raise exception.
+            return []
+
+        glob_depth = glob.count(".")
+        # Use (glob_depth + 1) to filter only directories and
+        # exclude metrics whose depth is glob_depth.
+        search = search.filter('range', depth={'gte': glob_depth + 1})
+        search = search.extra(from_=0, size=0)  # Do not return metrics.
+
+        search.aggs.bucket('distinct_dirs', 'terms', field="p%d.keyword" % glob_depth)
+
+        log.debug(search.to_dict())
+        response = search.execute()
+
+        # This may not be the same behavior as other drivers.
+        # It returns the glob with the list of possible last component for a directory.
+        # It doesn't return the list of fully defined directory names.
+        glob_base = glob.rsplit('.', 1)[0]
+        results = ["%s.%s" % (glob_base, b.key)
+                   for b in response.aggregations.distinct_dirs.buckets]
+        results.sort()
+        return iter(results)
 
     def has_metric(self, metric_name):
         """See bg_accessor.Accessor."""
@@ -424,7 +567,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name, touch=touch)
         metric_name = ".".join(_components_from_name(metric_name))
-        return self._name_to_metric.get(metric_name)
+        # FIXME This hack make it possible to use glob_metric_names with bgutil list
+        # This need to be really implemented.
+        return self.make_metric(metric_name, bg_accessor.MetricMetadata())
 
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See the real Accessor for a description."""
