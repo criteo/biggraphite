@@ -576,7 +576,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def get_metric(self, metric_name, touch=False):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name, touch=touch)
-        
+
         metric_name = ".".join(_components_from_name(metric_name))
 
         metric = self.__get_metric(metric_name)
@@ -594,10 +594,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         search = search.using(self.client) \
             .index("%s*" % self._index_prefix) \
             .source(['uuid', 'config', 'updated_on']) \
-            .filter('term', name=metric_name)
-        response = search.execute()
+            .filter('term', name=metric_name) \
+            .sort({'updated_on': {'order': 'desc'}})
 
-        if response is None or response.hits.total != 1:
+        response = search[:1].execute()
+
+        if response is None:
             return None
 
         return response.hits[0]
