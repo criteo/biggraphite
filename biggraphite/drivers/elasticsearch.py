@@ -76,7 +76,7 @@ INDEX_SETTINGS = {
     "mappings": {
         "_doc": {
             "properties": {
-                "length": {"type": "long"},
+                "depth": {"type": "long"},
                 "created_on": {"type": "date"},
                 "read_on": {"type": "date"},
                 "updated_on": {"type": "date"},
@@ -183,7 +183,7 @@ def document_from_metric(metric):
     name = ".".join(components)  # We do that to avoid double dots.
 
     data = {
-        "length": len(components),
+        "depth": len(components) - 1,
         "name": name,
     }
 

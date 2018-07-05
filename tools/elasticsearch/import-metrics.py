@@ -27,7 +27,7 @@ INDEX_BODY_METRICS = {
     "mappings": {
         "metric": {
             "properties": {
-                "length": {"type": "long"},
+                "depth": {"type": "long"},
                 "created_on": {"type": "date"},
                 "read_on": {"type": "date"},
                 "updated_on": {"type": "date"},
@@ -72,7 +72,7 @@ INDEX_BODY_DIRECTORIES = {
     "mappings": {
         "directory": {
             "properties": {
-                "length": {"type": "long"},
+                "depth": {"type": "long"},
                 "name": {
                     "type": "keyword",
                     "ignore_above": 1024,
@@ -107,7 +107,7 @@ def uuid_to_datetime(u):
 
 def document_base(name):
     data = {
-        "length": name.count("."),
+        "depth": name.count("."),
         "name": name,
     }
 
