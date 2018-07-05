@@ -18,11 +18,13 @@ from __future__ import print_function
 
 import collections
 import datetime
+import dateutil.parser
 import uuid
 import logging
 import six
 import elasticsearch
 import elasticsearch_dsl
+import time
 
 import sortedcontainers
 
@@ -118,6 +120,12 @@ INDEX_DOC_TYPE = "_doc"
 DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
+
+MINUTE = 60
+HOUR = 60 * MINUTE
+DAY = 24 * HOUR
+
+DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 
 MAX_QUERY_SIZE = 10000
 
@@ -307,6 +315,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         username=None,
         password=None,
         timeout=DEFAULT_TIMEOUT,
+        updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
@@ -324,6 +333,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._timeout = timeout
         self._known_indices = {}
         self.__glob_parser = bg_glob.GraphiteGlobParser()
+        self.__updated_on_ttl_sec = updated_on_ttl_sec
         self.client = None
 
     def connect(self, *args, **kwargs):
@@ -566,8 +576,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def get_metric(self, metric_name, touch=False):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name, touch=touch)
-        # TODO: handle touch=True correctly (see cassandra.py,
-        # it's the part that will update updated_on)
+        
         metric_name = ".".join(_components_from_name(metric_name))
 
         metric = self.__get_metric(metric_name)
@@ -681,8 +690,20 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             callback(metric, i, total)
 
     def __touch_metadata_on_need(self, metric, updated_on):
-        # TODO: add touch TTL to avoid too frequent touches
-        self.__touch_metric(metric.meta.index, metric.uuid)
+        if not updated_on:
+            delta = self.__updated_on_ttl_sec + 1
+        else:
+            updated_on_timestamp = self.__str_to_timestamp(updated_on)
+            delta = int(time.time()) - int(updated_on_timestamp)
+
+        if delta >= self.__updated_on_ttl_sec:
+            self.__touch_metric(metric.meta.index, metric.uuid)
+
+    @staticmethod
+    def __str_to_timestamp(str_repr):
+        datetime_tuple = dateutil.parser.parse(str_repr)
+        ts = time.mktime(datetime_tuple.timetuple())
+        return ts
 
 
 def build(*args, **kwargs):
