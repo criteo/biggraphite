@@ -566,10 +566,25 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def get_metric(self, metric_name, touch=False):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name, touch=touch)
+        # TODO: handle touch=True correctly (see cassandra.py,
+        # it's the part that will update updated_on)
         metric_name = ".".join(_components_from_name(metric_name))
-        # FIXME This hack make it possible to use glob_metric_names with bgutil list
-        # This need to be really implemented.
-        return self.make_metric(metric_name, bg_accessor.MetricMetadata())
+
+        search = elasticsearch_dsl.Search()
+        search = search.using(self.client) \
+            .index("%s*" % self._index_prefix) \
+            .source(['config']) \
+            .filter('term', name=metric_name)
+        response = search.execute()
+
+        if response is None or response.hits.total != 1:
+            return None
+
+        metric = response.hits[0]
+        return self.make_metric(
+            metric_name,
+            metric.config
+        )
 
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See the real Accessor for a description."""
