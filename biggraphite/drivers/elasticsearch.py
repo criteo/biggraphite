@@ -570,21 +570,28 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # it's the part that will update updated_on)
         metric_name = ".".join(_components_from_name(metric_name))
 
+        metric = self.__get_metric(metric_name)
+
+        if touch:
+            self.__touch_metadata_on_need(metric, metric.updated_on)
+
+        return self.make_metric(
+            metric_name,
+            metric.config
+        )
+
+    def __get_metric(self, metric_name):
         search = elasticsearch_dsl.Search()
         search = search.using(self.client) \
             .index("%s*" % self._index_prefix) \
-            .source(['config']) \
+            .source(['uuid', 'config', 'updated_on']) \
             .filter('term', name=metric_name)
         response = search.execute()
 
         if response is None or response.hits.total != 1:
             return None
 
-        metric = response.hits[0]
-        return self.make_metric(
-            metric_name,
-            metric.config
-        )
+        return response.hits[0]
 
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See the real Accessor for a description."""
@@ -616,10 +623,24 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).touch_metric(metric_name)
+        metric_name = ".".join(_components_from_name(metric_name))
+        metric = self.__get_metric(metric_name)
+        self.__touch_metric(metric.meta.index, metric.uuid)
 
-        # TODO Implements the function
-        log.warn("%s is not implemented" % self.touch_metric.__name__)
-        pass
+    def __touch_metric(self, index, document_id):
+        # TODO: state if we should move the document from its index to
+        # the current (today) index
+        data = {
+            "doc": {
+                "updated_on": datetime.datetime.now()
+            }
+        }
+        self.client.update(
+            index=index,
+            doc_type='_doc',
+            id=document_id,
+            body=data
+        )
 
     def repair(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -658,6 +679,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         total = len(metrics)
         for i, metric in enumerate(metrics.values()):
             callback(metric, i, total)
+
+    def __touch_metadata_on_need(self, metric, updated_on):
+        # TODO: add touch TTL to avoid too frequent touches
+        self.__touch_metric(metric.meta.index, metric.uuid)
 
 
 def build(*args, **kwargs):
