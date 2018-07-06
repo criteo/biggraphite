@@ -126,7 +126,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         self._name_to_metric.clear()
         self._directory_names.clear()
 
-    def make_metric(self, name, metadata):
+    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """See bg_accessor.Accessor."""
         # Cleanup name (avoid double dots)
         name = ".".join(self._components_from_name(name))
@@ -134,7 +134,9 @@ class _MemoryAccessor(bg_accessor.Accessor):
         now = datetime.datetime.now()
         return bg_accessor.Metric(
             name, uid, metadata,
-            created_on=now, updated_on=now, read_on=None,
+            created_on=created_on or now,
+            updated_on=updated_on or now,
+            read_on=None
         )
 
     def create_metric(self, metric):

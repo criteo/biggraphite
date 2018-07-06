@@ -1145,14 +1145,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _execute_concurrent_metadata(self, *args, **kwargs):
         return self._execute_concurrent(self.__session_metadata, *args, **kwargs)
 
-    def make_metric(self, name, metadata):
+    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """See bg_accessor.Accessor."""
-        # TODO: use created_on=None, updated_on=None, read_on=None
         # Cleanup name (avoid double dots)
         name = ".".join(self._components_from_name(name)[:-1])
         encoded_name = bg_accessor.encode_metric_name(name)
         id = uuid.uuid5(self._UUID_NAMESPACE, encoded_name)
-        return bg_accessor.Metric(name, id, metadata)
+        return bg_accessor.Metric(
+            name,
+            id,
+            metadata,
+            created_on=created_on,
+            updated_on=updated_on,
+            read_on=read_on
+        )
 
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""
