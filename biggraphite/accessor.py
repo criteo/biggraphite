@@ -846,6 +846,7 @@ class Accessor(object):
 
         Returns: a Metric object with a valid id.
         """
+        # TODO use created_on=None, updated_on=None, read_on=None
 
     @abc.abstractmethod
     def glob_metric_names(self, glob):

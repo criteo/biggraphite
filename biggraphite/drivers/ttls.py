@@ -24,7 +24,15 @@ DAY = 24 * HOUR
 DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 
 
+def str_to_datetime(str_repr):
+    if not str_repr:
+        return None
+    return dateutil.parser.parse(str_repr)
+
+
 def str_to_timestamp(str_repr):
-    datetime_tuple = dateutil.parser.parse(str_repr)
+    if not str_repr:
+        return None
+    datetime_tuple = str_to_datetime(str_repr)
     ts = time.mktime(datetime_tuple.timetuple())
     return ts
