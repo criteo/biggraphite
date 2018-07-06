@@ -18,7 +18,6 @@ from __future__ import print_function
 
 import collections
 import datetime
-import dateutil.parser
 import uuid
 import logging
 import six
@@ -33,6 +32,9 @@ from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
 from biggraphite.drivers import _delayed_writer
+
+from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
+from biggraphite.drivers.ttls import str_to_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -120,12 +122,6 @@ INDEX_DOC_TYPE = "_doc"
 DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
-
-MINUTE = 60
-HOUR = 60 * MINUTE
-DAY = 24 * HOUR
-
-DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 
 MAX_QUERY_SIZE = 10000
 
@@ -695,17 +691,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if not updated_on:
             delta = self.__updated_on_ttl_sec + 1
         else:
-            updated_on_timestamp = self.__str_to_timestamp(updated_on)
+            updated_on_timestamp = str_to_timestamp(updated_on)
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
             self.__touch_metric(metric.meta.index, metric.uuid)
-
-    @staticmethod
-    def __str_to_timestamp(str_repr):
-        datetime_tuple = dateutil.parser.parse(str_repr)
-        ts = time.mktime(datetime_tuple.timetuple())
-        return ts
 
 
 def build(*args, **kwargs):

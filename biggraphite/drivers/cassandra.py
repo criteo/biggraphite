@@ -47,6 +47,9 @@ from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _utils
 from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
 
+from biggraphite.drivers.ttls import DAY, HOUR, MINUTE
+from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
+
 import prometheus_client
 
 
@@ -70,10 +73,6 @@ READ_ON = prometheus_client.Summary(
 
 log = logging.getLogger(__name__)
 
-MINUTE = 60
-HOUR = 60 * MINUTE
-DAY = 24 * HOUR
-
 # Round the row size to 1000 seconds
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
 
@@ -96,7 +95,6 @@ DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN = 4
 DEFAULT_MAX_CONCURRENT_CONNECTIONS = 100
 DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
-DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 DEFAULT_READ_ON_SAMPLING_RATE = 0.1
 DEFAULT_USE_LUCENE = False
 
