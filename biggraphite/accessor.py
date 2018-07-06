@@ -837,16 +837,18 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def make_metric(self, name, metadata):
+    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """Create a Metric object from its definition as name and metadata.
 
         Args:
           name: metric name.
-          metadadata: metric metadata.
+          metadata: metric metadata.
+          created_on: metric creation date.
+          updated_on: metric last update date.
+          read_on: metric last read date.
 
         Returns: a Metric object with a valid id.
         """
-        # TODO use created_on=None, updated_on=None, read_on=None
 
     @abc.abstractmethod
     def glob_metric_names(self, glob):
