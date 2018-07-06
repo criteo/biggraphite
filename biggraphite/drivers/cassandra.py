@@ -1147,6 +1147,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def make_metric(self, name, metadata):
         """See bg_accessor.Accessor."""
+        # TODO: use created_on=None, updated_on=None, read_on=None
         # Cleanup name (avoid double dots)
         name = ".".join(self._components_from_name(name)[:-1])
         encoded_name = bg_accessor.encode_metric_name(name)

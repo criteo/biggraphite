@@ -34,7 +34,7 @@ from biggraphite.drivers import _utils
 from biggraphite.drivers import _delayed_writer
 
 from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
-from biggraphite.drivers.ttls import str_to_timestamp
+from biggraphite.drivers.ttls import str_to_datetime, str_to_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -443,14 +443,19 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._name_to_metric.clear()
         self._directory_names.clear()
 
-    def make_metric(self, name, metadata):
+    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """See bg_accessor.Accessor."""
         # Cleanup name (avoid double dots)
         name = ".".join(_components_from_name(name))
         uid = uuid.uuid5(self._UUID_NAMESPACE, name)
         now = datetime.datetime.now()
         return bg_accessor.Metric(
-            name, uid, metadata, created_on=now, updated_on=now, read_on=None
+            name,
+            uid,
+            metadata,
+            created_on=created_on or now,
+            updated_on=updated_on or now,
+            read_on=read_on
         )
 
     def create_metric(self, metric):
@@ -582,14 +587,17 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         return self.make_metric(
             metric_name,
-            metric.config
+            metric.config,
+            created_on=str_to_datetime(metric.created_on),
+            updated_on=str_to_datetime(metric.updated_on),
+            read_on=str_to_datetime(metric.read_on)
         )
 
     def __get_metric(self, metric_name):
         search = elasticsearch_dsl.Search()
         search = search.using(self.client) \
             .index("%s*" % self._index_prefix) \
-            .source(['uuid', 'config', 'updated_on']) \
+            .source(['uuid', 'config', 'created_on', 'updated_on', 'read_on']) \
             .filter('term', name=metric_name) \
             .sort({'updated_on': {'order': 'desc'}})
 
