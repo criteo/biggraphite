@@ -25,12 +25,14 @@ DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 
 
 def str_to_datetime(str_repr):
+    """Convert a string into a datetime."""
     if not str_repr:
         return None
     return dateutil.parser.parse(str_repr)
 
 
 def str_to_timestamp(str_repr):
+    """Convert a string into a timestamp."""
     if not str_repr:
         return None
     datetime_tuple = str_to_datetime(str_repr)
