@@ -644,7 +644,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         }
         self.client.update(
             index=index,
-            doc_type='_doc',
+            doc_type=INDEX_DOC_TYPE,
             id=document_id,
             body=data
         )
