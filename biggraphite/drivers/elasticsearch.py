@@ -581,6 +581,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         metric_name = ".".join(_components_from_name(metric_name))
 
         metric = self.__get_metric(metric_name)
+        if metric is None:
+            return None
 
         if touch:
             self.__touch_metadata_on_need(metric, metric.updated_on)
@@ -603,7 +605,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         response = search[:1].execute()
 
-        if response is None:
+        if response is None or response.hits.total == 0:
             return None
 
         return response.hits[0]
