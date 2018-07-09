@@ -13,7 +13,7 @@ from biggraphite.drivers import cassandra as bg_cassandra
 
 
 if bool(os.getenv("CASSANDRA_HOME")):
-    BASE_CLASS = bg_test_utils.TestCaseWithAccessor
+    BASE_CLASS = bg_test_utils.TestCaseWithCassandraAccessor
     ROUNDS = 100
     ROUNDS_LARGE = 10
     ITERATIONS = 10

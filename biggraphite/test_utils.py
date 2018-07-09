@@ -207,7 +207,7 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
 @unittest.skipUnless(
     HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
 )
-class TestCaseWithAccessor(TestCaseWithTempDir):
+class TestCaseWithCassandraAccessor(TestCaseWithTempDir):
     """A TestCase with an Accessor for an ephemeral Cassandra cluster."""
 
     KEYSPACE = "testkeyspace"
@@ -217,7 +217,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     @classmethod
     def setUpClass(cls):
         """Create the test Cassandra Cluster as cls.cassandra."""
-        super(TestCaseWithAccessor, cls).setUpClass()
+        super(TestCaseWithCassandraAccessor, cls).setUpClass()
 
         cls.cassandra = None
         if CASSANDRA_HOSTPORT:
@@ -270,7 +270,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     @classmethod
     def tearDownClass(cls):
         """Stop the test Cassandra Cluster."""
-        super(TestCaseWithAccessor, cls).tearDownClass()
+        super(TestCaseWithCassandraAccessor, cls).tearDownClass()
         cls.accessor.shutdown()
         cls.cluster.shutdown()
         cls.session = None
@@ -281,14 +281,14 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
 
     def setUp(self):
         """Create a new Accessor in self.acessor."""
-        super(TestCaseWithAccessor, self).setUp()
+        super(TestCaseWithCassandraAccessor, self).setUp()
         self.metadata_cache = self.CACHE_CLASS(
             self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
         self.metadata_cache.open()
 
     def tearDown(self):
         """Cleanup after tests."""
-        super(TestCaseWithAccessor, self).tearDown()
+        super(TestCaseWithCassandraAccessor, self).tearDown()
         self.metadata_cache.close()
         self.accessor.flush()
         self.accessor.clear()
