@@ -1,5 +1,12 @@
 #!/bin/sh
 
+# Provide base environment for test scripts.This is not meant
+# to be used directly: it is used by other scripts.
+#
+# Usage:
+#  $ source env.sh
+#
+
 export PROJECT_ROOT=$(git rev-parse --show-toplevel)
 
 cd ${PROJECT_ROOT}
