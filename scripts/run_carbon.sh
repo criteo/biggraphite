@@ -1,5 +1,13 @@
 #!/bin/sh
 
+# Run Carbon backend for test purpose.
+# This script does not ensure that dependencies are started. You should
+# start yourself Elasticsearch or Cassandra if you are using them.
+#
+# Usage:
+#  $ ./run_carbon.sh
+#
+
 cd $(git rev-parse --show-toplevel)
 source scripts/env.sh
 

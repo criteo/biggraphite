@@ -1,5 +1,12 @@
 #!/bin/sh
 
+# Provide base environment for Cassandra. This is not meant
+# to be used directly: it is used by other scripts.
+#
+# Usage:
+#  $ source cassandra_env.sh
+#
+
 cd $(git rev-parse --show-toplevel)
 
 source scripts/env.sh

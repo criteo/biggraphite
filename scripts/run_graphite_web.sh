@@ -1,5 +1,13 @@
 #!/bin/sh
 
+# Run Graphite Web for testing purpose.
+# This script does not ensure that dependencies are started. You should
+# start yourself Elasticsearch or Cassandra if you are using them.
+#
+# Usage:
+#  $ ./run_graphite_web.sh
+#
+
 cd $(git rev-parse --show-toplevel)
 source scripts/env.sh
 
