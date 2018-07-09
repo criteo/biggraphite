@@ -213,7 +213,6 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
     """Callee did not follow requirements on the arguments."""
 
 
-# TODO (t.chataigner) Add unittest.
 def _parse_wildcard_component(component):
     """Given a complex component, this builds a wildcard constraint."""
     value = ""
@@ -229,7 +228,6 @@ def _parse_wildcard_component(component):
     return value
 
 
-# TODO (t.chataigner) Add unittest.
 def _parse_regexp_component(component):
     """Given a complex component, this builds a regexp constraint."""
     if isinstance(component, bg_glob.Globstar):
@@ -257,7 +255,6 @@ def _parse_regexp_component(component):
     return regex
 
 
-# TODO (t.chataigner) Add unittest.
 def parse_complex_component(component):
     """Given a complex component, this builds a constraint."""
     if all([
@@ -271,7 +268,6 @@ def parse_complex_component(component):
     return 'regexp', _parse_regexp_component(component)
 
 
-# TODO (t.chataigner) Add unittest.
 def parse_simple_component(component):
     """Given a component with a simple type, this builds a constraint."""
     value = component[0]
