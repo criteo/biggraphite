@@ -402,16 +402,16 @@ class _BaseTestAccessorWithCassandraMetadata(object):
 
 
 class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,
-                                    bg_test_utils.TestCaseWithAccessor):
+                                    bg_test_utils.TestCaseWithCassandraAccessor):
     pass
 
 
 class TestAccessorWithCassandraLucene(_BaseTestAccessorWithCassandraMetadata,
-                                      bg_test_utils.TestCaseWithAccessor):
+                                      bg_test_utils.TestCaseWithCassandraAccessor):
     ACCESSOR_SETTINGS = {'use_lucene': True}
 
 
-class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
+class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithCassandraAccessor):
 
     def fetch(self, metric, *args, **kwargs):
         """Helper to fetch points as a list."""
