@@ -563,9 +563,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # This may not be the same behavior as other drivers.
         # It returns the glob with the list of possible last component for a directory.
         # It doesn't return the list of fully defined directory names.
-        glob_base = glob.rsplit('.', 1)[0]
-        results = ["%s.%s" % (glob_base, b.key)
-                   for b in response.aggregations.distinct_dirs.buckets]
+        buckets = response.aggregations.distinct_dirs.buckets
+        if glob_depth == 0:
+            results = [b.key for b in buckets]
+        else:
+            glob_base = glob.rsplit('.', 1)[0]
+            results = ["%s.%s" % (glob_base, b.key) for b in buckets]
         results.sort()
         return iter(results)
 
@@ -581,6 +584,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         metric_name = ".".join(_components_from_name(metric_name))
 
         metric = self.__get_metric(metric_name)
+        if metric is None:
+            return None
 
         if touch:
             self.__touch_metadata_on_need(metric, metric.updated_on)
@@ -603,7 +608,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         response = search[:1].execute()
 
-        if response is None:
+        if response is None or response.hits.total == 0:
             return None
 
         return response.hits[0]

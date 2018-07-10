@@ -118,3 +118,4 @@ ENV/
 # Misc
 apache-cassandra-*
 
+.pytest_cache/
