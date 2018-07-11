@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 Criteo
+# Copyright 2018 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,28 +15,18 @@
 from __future__ import print_function
 
 import unittest
-import argparse
 
-from biggraphite.cli import command_clean
-from biggraphite import utils as bg_utils
-from biggraphite import test_utils as bg_test_utils
+# pylama:ignore=W0611
+# No tests, at least check that the syntax is valid.
+# TODO: bundle a small pcap file and test that we can parse
+# it (also add a --dry_run).
+from biggraphite.cli import replay_traffic
 
 
-class TestCommandClean(bg_test_utils.TestCaseWithFakeAccessor):
+class TestReplayTraffic(unittest.TestCase):
 
-    def test_run(self):
-        cmd = command_clean.CommandClean()
-
-        parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
-        cmd.add_arguments(parser)
-        opts = parser.parse_args([
-            '--shard=0', '--nshards=5',
-            '--clean-cache',
-            '--clean-backend',
-            '--clean-corrupted',
-        ])
-        cmd.run(self.accessor, opts)
+    def test_import(self):
+        pass
 
 
 if __name__ == "__main__":

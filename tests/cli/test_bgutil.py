@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 Criteo
+# Copyright 2018 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,23 +15,26 @@
 from __future__ import print_function
 
 import unittest
-import argparse
+from mock import patch
+from six import StringIO
 
-from biggraphite.cli import command_repair
-from biggraphite import utils as bg_utils
+from biggraphite.cli import bgutil
 from biggraphite import test_utils as bg_test_utils
 
 
-class TestCommandRepair(bg_test_utils.TestCaseWithFakeAccessor):
+class TestBgutil(bg_test_utils.TestCaseWithFakeAccessor):
 
-    def test_run(self):
-        cmd = command_repair.CommandRepair()
+    metrics = ['metric1', 'metric2']
 
-        parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
-        cmd.add_arguments(parser)
-        opts = parser.parse_args(['--shard=0', '--nshards=5'])
-        cmd.run(self.accessor, opts)
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_run(self, mock_stdout):
+        self.accessor.drop_all_metrics()
+        for metric in self.metrics:
+            self.accessor.create_metric(self.make_metric(metric))
+        bgutil.main(['--driver=memory', 'read', '**'], self.accessor)
+        output = mock_stdout.getvalue()
+        for metric in self.metrics:
+            self.assertIn(metric, output)
 
 
 if __name__ == "__main__":

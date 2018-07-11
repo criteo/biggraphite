@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 Criteo
+# Copyright 2018 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,27 +17,25 @@ from __future__ import print_function
 import unittest
 import argparse
 
-from biggraphite.cli import command_graphite_web
+from biggraphite.cli import command_clean
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
-from biggraphite import accessor as bg_accessor
 
 
-class TestCommandGraphiteWeb(bg_test_utils.TestCaseWithFakeAccessor):
+class TestCommandClean(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_run(self):
-        name = 'foo.bar'
-        metadata = bg_accessor.MetricMetadata(
-            retention=bg_accessor.Retention.from_string('1440*60s'))
-        self.accessor.create_metric(self.make_metric(name, metadata))
-        self.accessor.flush()
-
-        cmd = command_graphite_web.CommandGraphiteWeb()
+        cmd = command_clean.CommandClean()
 
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(['foo.bar'])
+        opts = parser.parse_args([
+            '--shard=0', '--nshards=5',
+            '--clean-cache',
+            '--clean-backend',
+            '--clean-corrupted',
+        ])
         cmd.run(self.accessor, opts)
 
 
