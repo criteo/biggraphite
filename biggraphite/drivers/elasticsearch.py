@@ -346,9 +346,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             self._hosts,
             port=self._port,
             http_auth=http_auth,
-            # FIXME: set to true
-            sniff_on_start=False,
-            sniff_on_connection_fail=False,
+            sniff_on_start=True,
+            sniff_on_connection_fail=True,
             retry_on_timeout=True,
             max_retries=3,
             timeout=self._timeout,
