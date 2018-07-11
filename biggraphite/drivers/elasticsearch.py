@@ -517,7 +517,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 filter_type, value = parse_complex_component(c)
 
             if filter_type:
-                search = search.filter(filter_type, **{"p%d.keyword" % i: value})
+                search = search.filter(filter_type, **{"p%d" % i: value})
         return False, search
 
     def glob_metric_names(self, glob):
