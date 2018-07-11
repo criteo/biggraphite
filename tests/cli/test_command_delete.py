@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 Criteo
+# Copyright 2018 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,36 +17,35 @@ from __future__ import print_function
 import unittest
 import argparse
 
-from biggraphite.cli import command_test
+from biggraphite.cli import command_delete
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
+from biggraphite import accessor as bg_accessor
 
 
-class TestCommandTest(bg_test_utils.TestCaseWithFakeAccessor):
+class TestCommandDelete(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_run(self):
-        cmd = command_test.CommandTest()
+        self.accessor.drop_all_metrics()
+
+        cmd = command_delete.CommandDelete()
 
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args([])
+
+        name = 'foo.bar'
+        metadata = bg_accessor.MetricMetadata(
+            retention=bg_accessor.Retention.from_string('1440*60s'))
+
+        self.accessor.create_metric(self.make_metric(name, metadata))
+        opts = parser.parse_args(['foo', '--recursive', '--dry-run'])
         cmd.run(self.accessor, opts)
+        self.assertIn(name, self.accessor.glob_metric_names('*.*'))
 
-    def test_run_with_args(self):
-        cmd = command_test.CommandTest()
-
-        parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
-        cmd.add_arguments(parser)
-        opts = parser.parse_args(["--cassandra_contact_points=127.0.0.1,192.168.0.1",
-                                  "--cassandra_contact_points_metadata=127.0.0.1,192.168.1.1"])
-        settings = bg_utils.settings_from_args(opts)
-        self.assertIsInstance(settings['cassandra_contact_points'], list)
-        self.assertIsInstance(
-            settings['cassandra_contact_points_metadata'], list)
-
+        opts = parser.parse_args(['foo', '--recursive'])
         cmd.run(self.accessor, opts)
+        self.assertNotIn(name, self.accessor.glob_metric_names('*.*'))
 
 
 if __name__ == "__main__":
