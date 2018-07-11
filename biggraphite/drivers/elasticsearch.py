@@ -49,6 +49,8 @@ log = logging.getLogger(__name__)
 # * Implement repair
 # * Implement clean
 
+INDEX_DOC_TYPE = "_doc"
+
 # TODO: Make that configurable (in a file), this will be particularly important
 # for the number of shards and replicas.
 INDEX_SETTINGS = {
@@ -79,7 +81,7 @@ INDEX_SETTINGS = {
         },
     },
     "mappings": {
-        "_doc": {
+        INDEX_DOC_TYPE: {
             "properties": {
                 "depth": {"type": "long"},
                 "created_on": {"type": "date"},
@@ -99,11 +101,11 @@ INDEX_SETTINGS = {
             },
             # Additional properties (such as path components) or labels
             # TODO: have a specific dynamic mapping for labels using "match"
-            # FIXME: this doesn't seem to work, maybe because of text <-> string.
             "dynamic_templates": [
                 {
-                    "text_as_keywords": {
-                        "match_mapping_type": "text",
+                    "strings_as_keywords": {
+                        "match": "p*",
+                        "match_mapping_type": "string",
                         "mapping": {
                             "type": "keyword",
                             "ignore_above": 256,
@@ -118,7 +120,6 @@ INDEX_SETTINGS = {
 
 DEFAULT_INDEX = "biggraphite_metrics"
 DEFAULT_INDEX_SUFFIX = "_%Y-%m-%d"
-INDEX_DOC_TYPE = "_doc"
 DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
