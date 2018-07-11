@@ -290,6 +290,10 @@ def parse_simple_component(component):
         raise Error("Unhandled type '%s'" % value)
 
 
+def _get_depth_from_components(components):
+    return len(components) - 1
+
+
 class _ElasticSearchAccessor(bg_accessor.Accessor):
     """A ElasticSearch acessor that doubles as a ElasticSearch MetadataCache."""
 
@@ -489,11 +493,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._directory_names.remove(name)
 
     # TODO (t.chataigner) Add unittest.
-    def _search_metrics_from_glob(self, glob):
+    def _search_metrics_from_components(self, glob, components):
         search = elasticsearch_dsl.Search()
         search = search.using(self.client).index("%s*" % self._index_prefix).source('name')
-
-        components = self.__glob_parser.parse(glob)
 
         # Handle glob with globstar(s).
         globstars = components.count(bg_glob.Globstar())
@@ -526,11 +528,13 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if glob == "":
             return []
 
-        has_globstar, search = self._search_metrics_from_glob(glob)
+        components = self.__glob_parser.parse(glob)
+        glob_depth = _get_depth_from_components(components)
+        has_globstar, search = self._search_metrics_from_components(glob, components)
         if has_globstar:
-            search = search.filter('range', depth={'gte': glob.count(".")})
+            search = search.filter('range', depth={'gte': glob_depth})
         else:
-            search = search.filter('term', depth=glob.count("."))
+            search = search.filter('term', depth=glob_depth)
         search = search.extra(from_=0, size=MAX_QUERY_SIZE)
 
         # TODO (t.chataigner) try to move the sort in the ES search and return a generator.
@@ -545,12 +549,18 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if glob == "":
             return []
 
-        has_globstar, search = self._search_metrics_from_glob(glob)
+        components = self.__glob_parser.parse(glob)
+        # There are no "directory" documents, only "metric" documents. Hence appending the
+        # AnySequence after the provided glob: we search for metrics under that path.
+        has_globstar, search = self._search_metrics_from_components(
+            glob,
+            components + [[bg_glob.AnySequence()]]
+        )
         if has_globstar:
             # TODO (t.chataigner) Add a log or raise exception.
             return []
 
-        glob_depth = glob.count(".")
+        glob_depth = _get_depth_from_components(components)
         # Use (glob_depth + 1) to filter only directories and
         # exclude metrics whose depth is glob_depth.
         search = search.filter('range', depth={'gte': glob_depth + 1})
