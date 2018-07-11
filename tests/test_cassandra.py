@@ -25,6 +25,7 @@ from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import test_utils as bg_test_utils
 from biggraphite import glob_utils as bg_glob_utils
 from biggraphite.drivers import cassandra as bg_cassandra
+from biggraphite.test_utils_cassandra import HAS_CASSANDRA
 
 _METRIC = bg_test_utils.make_metric("test.metric")
 
@@ -45,7 +46,7 @@ assert _QUERY_RANGE == len(_USEFUL_POINTS)
 class _BaseTestAccessorWithCassandraMetadata(object):
 
     def test_glob_metrics(self):
-        IS_LUCENE = self.ACCESSOR_SETTINGS.get('use_lucene', False)
+        IS_LUCENE = self.ACCESSOR_SETTINGS.get('cassandra_use_lucene', False)
 
         metrics = [
             "a", "a.a", "a.b", "a.a.a", "a.b.c", "a.x.y",
@@ -401,16 +402,25 @@ class _BaseTestAccessorWithCassandraMetadata(object):
         self.accessor.map(_callback, errback=_errback)
 
 
+@unittest.skipUnless(
+    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
+)
 class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,
                                     bg_test_utils.TestCaseWithAccessor):
     pass
 
 
+@unittest.skipUnless(
+    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
+)
 class TestAccessorWithCassandraLucene(_BaseTestAccessorWithCassandraMetadata,
                                       bg_test_utils.TestCaseWithAccessor):
-    ACCESSOR_SETTINGS = {'use_lucene': True}
+    ACCESSOR_SETTINGS = {'cassandra_use_lucene': True}
 
 
+@unittest.skipUnless(
+    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
+)
 class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
 
     def fetch(self, metric, *args, **kwargs):
@@ -474,7 +484,7 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(_USEFUL_POINTS, fetched)
 
     def _get_version(self):
-        for host in self.cluster.metadata.all_hosts():
+        for host in self.cassandra_helper.cluster.metadata.all_hosts():
             return version.LooseVersion(host.release_version)
         return None
 
@@ -488,17 +498,18 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
             print('Skipping DTCS test, incompatible version')
             return
 
-        self._reset_keyspace(self.session, self.KEYSPACE)
+        self.cassandra_helper._reset_keyspace(
+            self.cassandra_helper.session, self.cassandra_helper.KEYSPACE)
 
         # We create a fake metric to create the table. This also validate
         # that breaking changes aren't introduced to the schema.
         self.accessor.create_metric(_METRIC)
         self.accessor.insert_points(_METRIC, _POINTS)
         self.flush()
-        self.cluster.refresh_schema_metadata()
+        self.cassandra_helper.cluster.refresh_schema_metadata()
 
         keyspace = None
-        for name, keyspace in self.cluster.metadata.keyspaces.items():
+        for name, keyspace in self.cassandra_helper.cluster.metadata.keyspaces.items():
             if name == self.accessor.keyspace:
                 break
 
@@ -534,17 +545,18 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         orig_cs = bg_cassandra._COMPACTION_STRATEGY
         bg_cassandra._COMPACTION_STRATEGY = "TimeWindowCompactionStrategy"
 
-        self._reset_keyspace(self.session, self.KEYSPACE)
+        self.cassandra_helper._reset_keyspace(
+            self.cassandra_helper.session, self.cassandra_helper.KEYSPACE)
 
         # We create a fake metric to create the table. This also validate
         # that breaking changes aren't introduced to the schema.
         self.accessor.create_metric(_METRIC)
         self.accessor.insert_points(_METRIC, _POINTS)
         self.flush()
-        self.cluster.refresh_schema_metadata()
+        self.cassandra_helper.cluster.refresh_schema_metadata()
 
         keyspace = None
-        for name, keyspace in self.cluster.metadata.keyspaces.items():
+        for name, keyspace in self.cassandra_helper.cluster.metadata.keyspaces.items():
             if name == self.accessor.keyspace:
                 break
 

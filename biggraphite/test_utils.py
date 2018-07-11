@@ -28,29 +28,13 @@ import unittest
 import logging
 import uuid
 
-from cassandra import cluster as c_cluster
 import mock
 
+from biggraphite import utils as bg_utils
 from biggraphite import accessor as bg_accessor
-from biggraphite.drivers import cassandra as bg_cassandra
+from biggraphite.test_utils_cassandra import CassandraHelper
 from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache as bg_metadata_cache
-
-
-HAS_CASSANDRA_HOME = bool(os.getenv("CASSANDRA_HOME"))
-CASSANDRA_HOSTPORT = os.getenv("CASSANDRA_HOSTPORT")
-HAS_CASSANDRA = HAS_CASSANDRA_HOME or CASSANDRA_HOSTPORT
-
-# Only try to import cassandra if we are going to use it. This is better
-# than using try/except because the failure case is easier to handle.
-if HAS_CASSANDRA_HOME:
-    from testing import cassandra3 as testing_cassandra
-
-    class _SlowerTestingCassandra(testing_cassandra.Cassandra):
-        """Just like testing_cassandra.Cassandra but waits 5 minutes for start."""
-
-        # For older versions.
-        BOOT_TIMEOUT = 5 * 60
 
 
 def setup_logging():
@@ -58,24 +42,6 @@ def setup_logging():
     logger = logging.getLogger()
     stream_handler = logging.StreamHandler(sys.stdout)
     logger.addHandler(stream_handler)
-
-
-def create_unreplicated_keyspace(session, keyspace):
-    """Create a keyspace, mostly used for tests."""
-    template = (
-        "CREATE KEYSPACE \"%s\" "
-        " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1}"
-        " AND durable_writes = false;"
-    )
-    session.execute(template % keyspace)
-
-
-def drop_keyspace(session, keyspace):
-    """Drop a keyspace, mostly used for tests."""
-    template = (
-        "DROP KEYSPACE IF EXISTS \"%s\";"
-    )
-    session.execute(template % keyspace)
 
 
 def prepare_graphite():
@@ -204,80 +170,35 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
         return make_metric(name, metadata=metadata, accessor=self.accessor, **kwargs)
 
 
-@unittest.skipUnless(
-    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
-)
 class TestCaseWithAccessor(TestCaseWithTempDir):
-    """A TestCase with an Accessor for an ephemeral Cassandra cluster."""
+    """A TestCase with an Accessor."""
 
-    KEYSPACE = "testkeyspace"
-    CACHE_CLASS = bg_metadata_cache.MemoryCache
     ACCESSOR_SETTINGS = {}
+    CACHE_CLASS = bg_metadata_cache.MemoryCache
+
+    cassandra_helper = None
 
     @classmethod
     def setUpClass(cls):
-        """Create the test Cassandra Cluster as cls.cassandra."""
-        super(TestCaseWithAccessor, cls).setUpClass()
+        """Create the test Accessor."""
+        driver_name = cls.ACCESSOR_SETTINGS.get('driver', bg_utils.DEFAULT_DRIVER)
+        if "cassandra" in driver_name:
+            cls.cassandra_helper = CassandraHelper()
+            cls.cassandra_helper.setUpClass()
+            cls.ACCESSOR_SETTINGS.update(
+                cls.cassandra_helper.get_accessor_settings())
 
-        cls.cassandra = None
-        if CASSANDRA_HOSTPORT:
-            host, cls.port = CASSANDRA_HOSTPORT.split(':')
-            cls.contact_points = [host]
-        else:
-            cls.setUpCassandra()
-
-        # Make it easy to do raw queries to Cassandra.
-        cls.cluster = c_cluster.Cluster(cls.contact_points, cls.port)
-        cls.session = cls.cluster.connect()
-        cls._reset_keyspace(cls.session, cls.KEYSPACE)
-        cls._reset_keyspace(cls.session, cls.KEYSPACE + "_metadata")
-        cls.accessor = bg_cassandra.build(
-            keyspace=cls.KEYSPACE,
-            contact_points=cls.contact_points,
-            port=cls.port,
-            timeout=60,
-            **cls.ACCESSOR_SETTINGS
-        )
+        cls.accessor = bg_utils.accessor_from_settings(cls.ACCESSOR_SETTINGS)
         cls.accessor.syncdb()
         cls.accessor.connect()
 
     @classmethod
-    def setUpCassandra(cls):
-        """Start Cassandra."""
-        cls.cassandra = _SlowerTestingCassandra(
-            auto_start=False,
-            boot_timeout=_SlowerTestingCassandra.BOOT_TIMEOUT
-        )
-        try:
-            cls.cassandra.setup()
-            cls.cassandra.start()
-        except Exception as e:
-            logging.exception(e)
-            print("fail to starting cassandra, logging potentially useful debug info",
-                  file=sys.stderr)
-            for attr in "cassandra_home", "cassandra_yaml", "cassandra_bin", "base_dir", "settings":
-                print(attr, ":", getattr(cls.cassandra,
-                                         attr, "Unknown"), file=sys.stderr)
-            cls.cassandra.cleanup()
-            raise
-
-        # testing.cassandra is meant to be used with the Thrift API, so we need to
-        # extract the IPs and native port for use with the native driver.
-        cls.contact_points = [s.split(":")[0]
-                              for s in cls.cassandra.server_list()]
-        cls.port = cls.cassandra.cassandra_yaml["native_transport_port"]
-
-    @classmethod
     def tearDownClass(cls):
-        """Stop the test Cassandra Cluster."""
+        """Stop the test Accessor."""
         super(TestCaseWithAccessor, cls).tearDownClass()
         cls.accessor.shutdown()
-        cls.cluster.shutdown()
-        cls.session = None
-        cls.cluster = None
-        if cls.cassandra:
-            cls.cassandra.stop()
-            cls.cassandra = None
+        if cls.cassandra_helper:
+            cls.cassandra_helper.tearDownClass()
 
     def setUp(self):
         """Create a new Accessor in self.acessor."""
@@ -294,24 +215,11 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.accessor.clear()
         self.__drop_all_metrics()
 
-    @classmethod
-    def _reset_keyspace(cls, session, keyspace):
-        drop_keyspace(session, keyspace)
-        create_unreplicated_keyspace(session, keyspace)
-
     def flush(self):
-        """Flush all kind of buffers related to Cassandra."""
+        """Flush all kind of buffers."""
         self.accessor.flush()
-
-        # When using Lucene, we need to force a refresh on the index as the default
-        # refresh period is 60s.
-        if self.accessor.use_lucene:
-            statements = self.accessor.metadata_query_generator.sync_queries()
-            for statement in statements:
-                self.session.execute(statement)
-
-        # Hope that after this all async calls will have been processed.
-        self.cluster.refresh_schema_metadata()
+        if self.cassandra_helper:
+            self.cassandra_helper.flush(self.accessor)
 
     def make_metric(self, name, metadata=None, **kwargs):
         """Create a bg_accessor.Metric with specified metadata."""
