@@ -130,7 +130,8 @@ MAX_QUERY_SIZE = 10000
 OPTIONS = {
     "username": str,
     "password": str,
-    "keyspace": str,
+    "index": str,
+    "index_suffix": str,
     "hosts": _utils.list_from_str,
     "port": int,
     "timeout": float,
@@ -350,15 +351,22 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             http_auth = (self._username, self._password or "")
         else:
             http_auth = None
+
+        kwargs = {
+            'sniff_on_start': True,
+            'sniff_on_connection_fail': True,
+            'retry_on_timeout': True,
+            'max_retries': 3,
+            'timeout': self._timeout,
+        }
+        if self._port:
+            kwargs['port'] = self._port
+        if http_auth:
+            kwargs['http_auth'] = http_auth
+
         es = elasticsearch.Elasticsearch(
             self._hosts,
-            port=self._port,
-            http_auth=http_auth,
-            sniff_on_start=True,
-            sniff_on_connection_fail=True,
-            retry_on_timeout=True,
-            max_retries=3,
-            timeout=self._timeout,
+            **kwargs
         )
 
         log.info("Connected: %s" % es.info())
