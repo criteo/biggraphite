@@ -218,15 +218,15 @@ class ParseComplexComponentTest(unittest.TestCase):
         _, result = bg_elasticsearch.parse_complex_component([bg_glob.SequenceIn(['a', 'b'])])
         self.assertEqual(result, "(a|b)")
 
-    def test_Globstar_should_raise_Error(self):
-        with self.assertRaises(bg_elasticsearch.Error) as context:
-            bg_elasticsearch.parse_complex_component([bg_glob.Globstar()])
-        self.assertTrue("Globstar" in context.exception.message)
+    def test_Globstar_should_be_translated_into_a_match_all_regexp(self):
+        _, result = bg_elasticsearch.parse_complex_component([bg_glob.Globstar()])
+        self.assertEqual(result, ".*")
 
     def test_combination_of_glob_expressions_should_be_concatenated(self):
         _, result = bg_elasticsearch.parse_complex_component([
             'foo',
             bg_glob.SequenceIn(['bar', 'baz']),
-            bg_glob.CharNotIn(['a', 'b'])
+            bg_glob.CharNotIn(['a', 'b']),
+            bg_glob.Globstar()
         ])
-        self.assertEqual(result, "foo(bar|baz)[^ab]")
+        self.assertEqual(result, "foo(bar|baz)[^ab].*")
