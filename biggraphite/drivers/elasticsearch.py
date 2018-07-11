@@ -58,9 +58,9 @@ INDEX_SETTINGS = {
         "index": {
             "number_of_shards": 3,
             "number_of_replicas": 1,
-            "refresh_interval": 60,
+            "refresh_interval": "60s",
             "translog": {
-                "sync_interval": 120,
+                "sync_interval": "120s",
                 "durability": "async",
             },
             "search": {
@@ -394,12 +394,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # metric metadata, for example, per owner.
         index_name = self._index_prefix + datetime.datetime.now().strftime(self._index_suffix)
         if index_name not in self._known_indices:
-            self.client.indices.create(
-                index=index_name,
-                body=INDEX_SETTINGS,
-                ignore=400
-            )
+            if not self.client.indices.exists(index=index_name):
+                self.client.indices.create(
+                    index=index_name,
+                    body=INDEX_SETTINGS,
+                    ignore=409
+                )
+                self.client.indices.flush()
             self._known_indices[index_name] = True
+
         return index_name
 
     def insert_points_async(self, metric, datapoints, on_done=None):
