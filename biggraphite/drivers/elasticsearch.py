@@ -19,6 +19,7 @@ from __future__ import print_function
 import collections
 import datetime
 import uuid
+import json
 import logging
 import six
 import elasticsearch
@@ -533,7 +534,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         search = search.extra(from_=0, size=MAX_QUERY_SIZE)
 
         # TODO (t.chataigner) try to move the sort in the ES search and return a generator.
-        log.debug(search.to_dict())
+        log.debug(json.dumps(search.to_dict()))
         results = [h.name for h in search.execute()]
         results.sort()
         return iter(results)
@@ -557,7 +558,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         search.aggs.bucket('distinct_dirs', 'terms', field="p%d.keyword" % glob_depth)
 
-        log.debug(search.to_dict())
+        log.debug(json.dumps(search.to_dict()))
         response = search.execute()
 
         # This may not be the same behavior as other drivers.
@@ -609,6 +610,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             .filter('term', name=metric_name) \
             .sort({'updated_on': {'order': 'desc'}})
 
+        log.debug(json.dumps(search.to_dict()))
         response = search[:1].execute()
 
         if response is None or response.hits.total == 0:
