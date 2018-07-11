@@ -79,7 +79,10 @@ class DocumentFromMetricTest(unittest.TestCase):
         document_config = document['config']
         self.__check_document_value(document_config, "aggregator", aggregator.name)
         self.__check_document_value(document_config, "retention", retention_str)
-        self.__check_document_value(document_config, "carbon_xfilesfactor", "%f" % carbon_xfilesfactor)
+        self.__check_document_value(
+            document_config,
+            "carbon_xfilesfactor", "%f" % carbon_xfilesfactor
+        )
 
         self.assertTrue("created_on" in document)
         self.assertTrue(isinstance(document['created_on'], datetime.datetime))
@@ -161,7 +164,10 @@ class ParseComplexComponentTest(unittest.TestCase):
     def test_combination_of_wildcard_components_should_be_parsed_as_wildcard(self):
         for wildcard_sample_1 in self._wildcard_samples:
             for wildcard_sample_2 in self._wildcard_samples:
-                parsed_type, _ = bg_elasticsearch.parse_complex_component([wildcard_sample_1, wildcard_sample_2])
+                parsed_type, _ = bg_elasticsearch.parse_complex_component([
+                    wildcard_sample_1,
+                    wildcard_sample_2
+                ])
                 self.assertEqual(parsed_type, "wildcard",
                                  "[%s, %s] should be parsed as a wildcard" % (
                                      type(wildcard_sample_1).__name__,
@@ -177,7 +183,10 @@ class ParseComplexComponentTest(unittest.TestCase):
     def test_combination_of_regexp_components_should_be_parsed_as_regexp(self):
         for regexp_sample_1 in self._regexp_samples:
             for regexp_sample_2 in self._regexp_samples:
-                parsed_type, _ = bg_elasticsearch.parse_complex_component([regexp_sample_1, regexp_sample_2])
+                parsed_type, _ = bg_elasticsearch.parse_complex_component([
+                    regexp_sample_1,
+                    regexp_sample_2
+                ])
                 self.assertEqual(parsed_type, "regexp",
                                  "[%s, %s] should be parsed as a regexp" % (
                                      type(regexp_sample_1).__name__,
@@ -187,7 +196,10 @@ class ParseComplexComponentTest(unittest.TestCase):
     def test_combination_of_regexp_and_wildcard_components_should_be_parsed_as_regexp(self):
         for regexp_sample in self._regexp_samples:
             for wildcard_sample in self._wildcard_samples:
-                parsed_type, _ = bg_elasticsearch.parse_complex_component([regexp_sample, wildcard_sample])
+                parsed_type, _ = bg_elasticsearch.parse_complex_component([
+                    regexp_sample,
+                    wildcard_sample
+                ])
                 self.assertEqual(parsed_type, "regexp",
                                  "[%s, %s] should be parsed as a regexp" % (
                                      type(regexp_sample).__name__,
