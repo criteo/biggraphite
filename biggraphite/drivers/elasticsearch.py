@@ -593,9 +593,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if touch:
             self.__touch_metadata_on_need(metric, metric.updated_on)
 
+        metadata = bg_accessor.MetricMetadata.from_string_dict(
+            metric.config.to_dict()
+        )
         return self.make_metric(
             metric_name,
-            metric.config,
+            metadata,
             created_on=str_to_datetime(metric.created_on),
             updated_on=str_to_datetime(metric.updated_on),
             read_on=str_to_datetime(metric.read_on)
