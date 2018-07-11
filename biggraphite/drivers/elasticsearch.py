@@ -231,6 +231,8 @@ def _parse_wildcard_component(component):
 
 def _parse_regexp_component(component):
     """Given a complex component, this builds a regexp constraint."""
+    if isinstance(component, bg_glob.Globstar):
+        return ".*"
     regex = ""
     for subcomponent in component:
         if isinstance(subcomponent, bg_glob.Globstar):
