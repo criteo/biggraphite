@@ -127,11 +127,18 @@ class ParseSimpleComponentTest(unittest.TestCase):
             ('regexp', "[ab]")
         )
 
-    def test_SequenceIn_should_have_terms_constraint(self):
+    def test_SequenceIn_should_have_terms_constraint_when_there_are_no_regexp_in_terms(self):
         values = ["a", "b"]
         self.assertEqual(
             bg_elasticsearch.parse_simple_component([bg_glob.SequenceIn(values)]),
             ('terms', values)
+        )
+
+    def test_SequenceIn_should_have_regexp_constraint_when_there_are_regexp_in_terms(self):
+        values = ["a", "b*"]
+        self.assertEqual(
+            bg_elasticsearch.parse_simple_component([bg_glob.SequenceIn(values)]),
+            ('regexp', "(a|b*)")
         )
 
     def test_AnyChar_should_have_wildcard_constraint(self):

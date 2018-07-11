@@ -272,6 +272,10 @@ def parse_complex_component(component):
     return 'regexp', _parse_regexp_component(component)
 
 
+def _contains_regexp_wildcard(values):
+    return any("*" in value for value in values)
+
+
 def parse_simple_component(component):
     """Given a component with a simple type, this builds a constraint."""
     value = component[0]
@@ -284,7 +288,10 @@ def parse_simple_component(component):
     elif isinstance(value, bg_glob.CharIn):
         return 'regexp', '[' + ''.join(value.values) + ']'
     elif isinstance(value, bg_glob.SequenceIn):
-        return 'terms', value.values
+        if _contains_regexp_wildcard(value.values):
+            return 'regexp', '(' + '|'.join(value.values) + ')'
+        else:
+            return 'terms', value.values
     elif isinstance(value, bg_glob.AnyChar):
         return 'wildcard', '?'
     else:
