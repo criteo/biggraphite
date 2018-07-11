@@ -504,7 +504,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # Handle fully defined glob.
         if self.__glob_parser.is_fully_defined(components):
             return False, search.filter(
-                'term', **{"name": ".".join(self._components_from_name(glob))})
+                'term', **{"name": ".".join(_components_from_name(glob))})
 
         # Handle all other use cases.
         for i, c in enumerate(components):
