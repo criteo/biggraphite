@@ -21,6 +21,7 @@ import datetime
 import uuid
 import json
 import logging
+import os
 import six
 import elasticsearch
 import elasticsearch_dsl
@@ -120,6 +121,8 @@ DEFAULT_INDEX_SUFFIX = "_%Y-%m-%d"
 DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
+DEFAULT_USERNAME = os.getenv("BG_ELASTICSEARCH_USERNAME")
+DEFAULT_PASSWORD = os.getenv("BG_ELASTICSEARCH_PASSWORD")
 
 MAX_QUERY_SIZE = 10000
 
@@ -319,8 +322,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         port=DEFAULT_PORT,
         index=DEFAULT_INDEX,
         index_suffix=DEFAULT_INDEX_SUFFIX,
-        username=None,
-        password=None,
+        username=DEFAULT_USERNAME,
+        password=DEFAULT_PASSWORD,
         timeout=DEFAULT_TIMEOUT,
         updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC
     ):
