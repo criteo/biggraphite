@@ -33,6 +33,7 @@ import mock
 from biggraphite import utils as bg_utils
 from biggraphite import accessor as bg_accessor
 from biggraphite.test_utils_cassandra import CassandraHelper
+from biggraphite.test_utils_elasticsearch import ElasticsearchHelper
 from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache as bg_metadata_cache
 
@@ -177,16 +178,23 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     CACHE_CLASS = bg_metadata_cache.MemoryCache
 
     cassandra_helper = None
+    elasticsearch_helper = None
 
     @classmethod
     def setUpClass(cls):
         """Create the test Accessor."""
+        # TODO (t.chataigner) Handle hybrid accessor here.
         driver_name = cls.ACCESSOR_SETTINGS.get('driver', bg_utils.DEFAULT_DRIVER)
         if "cassandra" in driver_name:
             cls.cassandra_helper = CassandraHelper()
             cls.cassandra_helper.setUpClass()
             cls.ACCESSOR_SETTINGS.update(
                 cls.cassandra_helper.get_accessor_settings())
+        if "elasticsearch" in driver_name:
+            cls.elasticsearch_helper = ElasticsearchHelper()
+            cls.elasticsearch_helper.setUpClass()
+            cls.ACCESSOR_SETTINGS.update(
+                cls.elasticsearch_helper.get_accessor_settings())
 
         cls.accessor = bg_utils.accessor_from_settings(cls.ACCESSOR_SETTINGS)
         cls.accessor.syncdb()
@@ -199,6 +207,8 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         cls.accessor.shutdown()
         if cls.cassandra_helper:
             cls.cassandra_helper.tearDownClass()
+        if cls.elasticsearch_helper:
+            cls.elasticsearch_helper.tearDownClass()
 
     def setUp(self):
         """Create a new Accessor in self.acessor."""

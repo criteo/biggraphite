@@ -10,6 +10,9 @@ unittest2
 # Cassandra
 testing.cassandra3
 
+# Elasticsearch
+testing.elasticsearch6
+
 # For bg-replay-traffic
 dpkt
 
