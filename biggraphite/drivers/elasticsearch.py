@@ -446,7 +446,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def drop_all_metrics(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).drop_all_metrics(*args, **kwargs)
-        pass
+        # Drop indices.
+        self.client.indices.delete("%s*" % self._index_prefix)
 
     def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """See bg_accessor.Accessor."""
