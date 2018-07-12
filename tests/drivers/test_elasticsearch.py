@@ -19,10 +19,15 @@ from __future__ import print_function
 import datetime
 import unittest
 import uuid
+import time
 
 from biggraphite import glob_utils as bg_glob
+from biggraphite import test_utils as bg_test_utils
 from biggraphite.accessor import Aggregator, Metric, MetricMetadata, Retention
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
+from biggraphite.test_utils_elasticsearch import HAS_ELASTICSEARCH
+
+from tests.drivers.base_test_metadata import BaseTestAccessorMetadata
 
 
 class ComponentFromNameTest(unittest.TestCase):
@@ -249,3 +254,45 @@ class ParseComplexComponentTest(unittest.TestCase):
             bg_glob.Globstar()
         ])
         self.assertEqual(result, "foo(bar|baz)[^ab].*")
+
+
+class ElasticsearchTestAccessorMetadata(BaseTestAccessorMetadata):
+
+    # FIXME (t.chataigner) some duplication with CassandraTestAccessorMetadata.
+    def test_metrics_ttl_correctly_refreshed(self):
+        metric1 = self.make_metric("a.b.c.d.e.f")
+        self.accessor.create_metric(metric1)
+        self.flush()
+
+        # Setting up the moc function
+        isUpdated = [False]
+
+        def touch_metric_moc(*args, **kwargs):
+            isUpdated[0] = True
+
+        old_touch_fn = self.accessor._ElasticSearchAccessor__touch_metric
+        self.accessor._ElasticSearchAccessor__touch_metric = touch_metric_moc
+
+        time.sleep(2)
+        self.accessor.get_metric(metric1.name, touch=True)
+        self.assertEqual(isUpdated[0], False)
+
+        old_ttl = self.accessor._ElasticSearchAccessor__updated_on_ttl_sec
+        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
+        self.accessor.get_metric(metric1.name, touch=True)
+        self.assertEqual(isUpdated[0], True)
+
+        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
+        self.accessor._ElasticSearchAccessor__touch_metric = old_touch_fn
+
+
+@unittest.skipUnless(
+    HAS_ELASTICSEARCH, "ES_HOME must be set.",
+)
+class TestAccessorWithElasticsearch(ElasticsearchTestAccessorMetadata,
+                                    bg_test_utils.TestCaseWithAccessor):
+    ACCESSOR_SETTINGS = {'driver': 'elasticsearch'}
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -16,16 +16,15 @@ from __future__ import print_function
 
 import unittest
 import time
-import re
 
 from distutils import version
 
 from biggraphite import accessor as bg_accessor
-from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import test_utils as bg_test_utils
-from biggraphite import glob_utils as bg_glob_utils
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.test_utils_cassandra import HAS_CASSANDRA
+
+from tests.drivers.base_test_metadata import BaseTestAccessorMetadata
 
 _METRIC = bg_test_utils.make_metric("test.metric")
 
@@ -43,176 +42,7 @@ _USEFUL_POINTS = _POINTS[_EXTRA_POINTS:-_EXTRA_POINTS]
 assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 
-class _BaseTestAccessorWithCassandraMetadata(object):
-
-    def test_glob_metrics(self):
-        IS_LUCENE = self.ACCESSOR_SETTINGS.get('cassandra_use_lucene', False)
-
-        metrics = [
-            "a", "a.a", "a.b", "a.a.a", "a.b.c", "a.x.y",
-            "x.y.z", "x.y.y.z", "x.y.y.y.z",
-            "super", "superb", "supercomputer", "superconductivity", "superman",
-            "supper", "suppose",
-            "ad.o.g", "af.o.g", "ap.o.g", "az.o.g",
-            "b.o.g", "m.o.g",
-            "zd.o.g", "zf.o.g", "zp.o.g", "zz.o.g",
-            "-b-.a.t", "-c-.a.t", "-d-.a.t", "-e-.a.t",
-        ]
-        metrics.sort()
-
-        for name in metrics:
-            metric = bg_test_utils.make_metric(name)
-            self.accessor.create_metric(metric)
-        self.flush()
-
-        def assert_find(glob, expected_matches):
-            # Check we can find the matches of a glob
-            matches = sorted(list(self.accessor.glob_metric_names(glob)))
-
-            # Lucene is supposed to give perfect results, so filter wrongly expected matches.
-            if IS_LUCENE:
-                glob_re = re.compile(bg_glob_utils.glob_to_regex(glob))
-                expected_matches = list(filter(glob_re.match, expected_matches))
-
-            self.assertEqual(expected_matches, matches)
-
-        # Empty query
-        assert_find("", [])
-
-        # Exact matches
-        assert_find("a.a", ["a.a"])
-        assert_find("A", [])
-
-        # Character wildcard
-        assert_find("?",
-                    [x for x in metrics if x.count('.') == 0])
-        assert_find("sup?er",
-                    [x for x in metrics if x.startswith("sup")])
-
-        # Character selector
-        for pattern in [
-                "a[!dfp].o.g",
-                u"a[!dfp].o.g",
-                "a[!dfp]suffix.o.g",
-                "a[nope].o.g",
-                "a[nope]suffix.o.g",
-        ]:
-            assert_find(pattern,
-                        ["a{0}.o.g".format(x) for x in "dfpz"])
-
-        # Sequence wildcard
-        assert_find("*",
-                    [x for x in metrics if x.count('.') == 0])
-        assert_find("*.*",
-                    [x for x in metrics if x.count('.') == 1])
-        assert_find("*.*.*",
-                    [x for x in metrics if x.count('.') == 2])
-        assert_find("super*",
-                    [x for x in metrics if x.startswith("super")])
-
-        # Sequence selector
-        assert_find("a.{b,x}.{c,y}",
-                    ["a.b.c", "a.x.y"])
-        assert_find("a{d,f,p}.o.g",
-                    ["a{0}.o.g".format(c) for c in "dfp"])
-        assert_find("{a,z}{d,f,p}.o.g",
-                    ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"])
-        assert_find("{a{d,f,p},z{d,f,p}}.o.g",
-                    ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"])
-        for pattern in [
-                "-{b,c,d}-.a.t",
-                u"-{b,c,d}-.a.t",
-                "-{b,c,d}?.a.t",
-                "-{b,c,d}?suffix.a.t",
-                "-{b,c,d}[ha].a.t",
-                "-{b,c,d}[ha]suffix.a.t",
-                "-{b,c,d}[!ha].a.t",
-                "-{b,c,d}[!ha]suffix.a.t",
-                "-{b,c,d}*.a.t",
-                "-{b,c,d}*suffix.a.t",
-                u"-{b,c,d}*suffix.a.t",
-        ]:
-            assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
-
-        # Ensure the query optimizer works as expected by having a high
-        # combinatorial pattern.
-        assert_find(
-            "-{b,c,d}*suffix.a.t{,u}{,v}{,w}{,x}{,y}{,z}",
-            ["-{0}-.a.t".format(c) for c in "bcde"],
-        )
-
-        # Globstars
-        assert_find("**",
-                    metrics)
-        assert_find("x.**",
-                    [x for x in metrics if x.startswith("x.")])
-
-        if not IS_LUCENE:
-            # FIXME: Lucene doesn't support globstars here yet.
-            assert_find("**.z",
-                        [x for x in metrics if x.endswith(".z")])
-            assert_find("x.**.z",
-                        [x for x in metrics
-                         if x.startswith("x.") and x.endswith(".z")])
-
-        self.accessor.drop_all_metrics()
-        assert_find("*", [])
-        assert_find("**", [])
-
-    def test_glob_directories(self):
-        for name in "a", "a.b", "x.y.z":
-            metric = bg_test_utils.make_metric(name)
-            self.accessor.create_metric(metric)
-        self.flush()
-
-        def assert_find(glob, expected_matches):
-            # Check we can find the matches of a glob
-            self.assertEqual(expected_matches, list(
-                self.accessor.glob_directory_names(glob)))
-
-        assert_find("x.y", ["x.y"])  # Test exact match
-        assert_find("A", [])  # Test case mismatch
-
-        # Test various depths
-        assert_find("*", ["a", "x"])
-        assert_find("*.*", ["x.y"])
-        assert_find("*.*.*", [])
-
-        self.accessor.drop_all_metrics()
-        assert_find("*", [])
-
-    def test_glob_metrics_cached(self):
-        metrics = ["a", "a.b", "x.y.z"]
-        for name in metrics:
-            metric = bg_test_utils.make_metric(name)
-            self.accessor.create_metric(metric)
-        self.flush()
-
-        cache = bg_accessor_cache.MemoryCache(10, 60)
-        original_cache = self.accessor.cache
-        self.accessor.cache = cache
-
-        def assert_find(glob, results):
-            res = self.accessor.glob_metric_names(glob)
-            self.assertEqual(set(results), set(res))
-
-        # Nothing should be cached here.
-        assert_find('**', metrics)
-        assert_find('a', ['a'])
-        assert_find('{x,y}.*y.[z]', ['x.y.z'])
-
-        # Things should be cached here.
-        assert_find('**', metrics)
-        assert_find('a', ['a'])
-        assert_find('{x,y}.*y.[z]', ['x.y.z'])
-
-        # Make sure we use the cache.
-        self.accessor.cache.get = lambda _, version: ['fake']
-        assert_find('a', ['fake'])
-        assert_find('**', ['fake'])
-        assert_find('{x,y}.*y.[z]', ['fake'])
-
-        self.accessor.cache = original_cache
+class CassandraTestAccessorMetadata(BaseTestAccessorMetadata):
 
     def test_glob_too_many_directories(self):
         for name in "a", "a.b", "x.y.z":
@@ -226,97 +56,7 @@ class _BaseTestAccessorWithCassandraMetadata(object):
             list(self.accessor.glob_directory_names('**'))
         self.accessor.max_metrics_per_pattern = old_value
 
-    def test_create_metrics(self):
-        meta_dict = {
-            "aggregator": bg_accessor.Aggregator.last,
-            "retention": bg_accessor.Retention.from_string("60*1s:60*60s"),
-            "carbon_xfilesfactor": 0.3,
-        }
-        metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
-
-        self.assertEqual(self.accessor.has_metric(metric.name), False)
-        self.accessor.create_metric(metric)
-        self.assertEqual(self.accessor.has_metric(metric.name), True)
-        metric_again = self.accessor.get_metric(metric.name)
-        self.assertEqual(metric.name, metric_again.name)
-        for k, v in meta_dict.items():
-            self.assertEqual(v, getattr(metric_again.metadata, k))
-
-    def test_update_metrics(self):
-        # prepare test
-        meta_dict = {
-            "aggregator": bg_accessor.Aggregator.last,
-            "retention": bg_accessor.Retention.from_string("60*1s:60*60s"),
-            "carbon_xfilesfactor": 0.3,
-        }
-        metadata = bg_accessor.MetricMetadata(**meta_dict)
-        metric_name = "a.b.c.d.e.f"
-        self.accessor.create_metric(
-            self.accessor.make_metric(metric_name, metadata))
-        metric = self.accessor.get_metric(metric_name)
-        for k, v in meta_dict.items():
-            self.assertEqual(v, getattr(metric.metadata, k))
-
-        # test
-        updated_meta_dict = {
-            "aggregator": bg_accessor.Aggregator.maximum,
-            "retention": bg_accessor.Retention.from_string("30*1s:120*30s"),
-            "carbon_xfilesfactor": 0.5,
-        }
-        updated_metadata = bg_accessor.MetricMetadata(**updated_meta_dict)
-        # Setting a known metric name should work
-        self.accessor.update_metric(metric_name, updated_metadata)
-        updated_metric = self.accessor.get_metric(metric_name)
-        for k, v in updated_meta_dict.items():
-            self.assertEqual(v, getattr(updated_metric.metadata, k))
-        # Setting an unknown metric name should fail
-        self.assertRaises(
-            bg_cassandra.InvalidArgumentError,
-            self.accessor.update_metric, "fake.metric.name", updated_metadata)
-
-    def test_has_metric(self):
-        metric = self.make_metric("a.b.c.d.e.f")
-
-        self.assertEqual(self.accessor.has_metric(metric.name), False)
-        self.accessor.create_metric(metric)
-        self.assertEqual(self.accessor.has_metric(metric.name), True)
-
-    def test_delete_metric(self):
-        metric = self.make_metric("a.b.c.d.e.f")
-
-        self.accessor.create_metric(metric)
-        self.assertEqual(self.accessor.has_metric(metric.name), True)
-
-        self.accessor.delete_metric(metric.name)
-        self.flush()
-        self.assertEqual(self.accessor.has_metric(metric.name), False)
-
-    def test_repair(self):
-        # TODO(c.chary): Add better test for repair()
-        self.accessor.repair()
-
-    def test_doubledots(self):
-        metric = self.make_metric("a.b..c")
-        metric_1 = self.make_metric("a.b.c")
-        points = [(1, 42)]
-        self.accessor.create_metric(metric)
-        self.accessor.create_metric(metric_1)
-        self.flush()
-
-        self.assertEqual(['a.b.c'],
-                         list(self.accessor.glob_metric_names("a.b.*")))
-        self.assertEqual(True, self.accessor.has_metric("a.b..c"))
-        self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))
-
-        self.accessor.insert_points(metric, points)
-        self.flush()
-        actual_points = self.accessor.fetch_points(
-            metric, 1, 2, stage=metric.retention[0])
-        self.assertEqual(points, list(actual_points))
-        actual_points = self.accessor.fetch_points(
-            metric_1, 1, 2, stage=metric.retention[0])
-        self.assertEqual(points, list(actual_points))
-
+    # FIXME (t.chataigner) some duplication with ElasticsearchTestAccessorMetadata.
     def test_metrics_ttl_correctly_refreshed(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
@@ -342,70 +82,11 @@ class _BaseTestAccessorWithCassandraMetadata(object):
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = old_ttl
         self.accessor.touch_metric = old_touch_fn
 
-    def test_clean_expired(self):
-        metric1 = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric1)
-
-        metric2 = self.make_metric("g.h.i.j.k.l")
-        self.accessor.create_metric(metric2)
-        self.flush()
-
-        # Check that the metrics exist before the cleanup
-        self.assertEqual(self.accessor.has_metric(metric1.name), True)
-        self.assertEqual(self.accessor.has_metric(metric2.name), True)
-
-        # set cutoff time in the future to delete all created metrics
-        cutoff = -3600
-        self.accessor.clean(cutoff)
-
-        # Check that the metrics are correctly deleted
-        self.assertEqual(self.accessor.has_metric(metric1.name), False)
-        self.assertEqual(self.accessor.has_metric(metric2.name), False)
-        self.addCleanup(self.accessor.drop_all_metrics)
-
-    def test_clean_not_expired(self):
-        metric1 = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric1)
-
-        metric2 = self.make_metric("g.h.i.j.k.l")
-        self.accessor.create_metric(metric2)
-        self.flush()
-
-        # Check that the metrics exist before the cleanup
-        self.assertEqual(self.accessor.has_metric(metric1.name), True)
-        self.assertEqual(self.accessor.has_metric(metric2.name), True)
-
-        # set cutoff time in the past to delete nothing
-        cutoff = 3600
-        self.accessor.clean(cutoff)
-
-        # Check that the metrics still exist after the cleanup
-        self.assertEqual(self.accessor.has_metric(metric1.name), True)
-        self.assertEqual(self.accessor.has_metric(metric2.name), True)
-        self.addCleanup(self.accessor.drop_all_metrics)
-
-    def test_map(self):
-        metric1 = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric1)
-
-        metric2 = self.make_metric("g.h.i.j.k.l")
-        self.accessor.create_metric(metric2)
-        self.flush()
-
-        def _callback(metric, done, total):
-            self.assertIsNotNone(metric)
-            self.assertTrue(done <= total)
-
-        def _errback(name):
-            self.assertIsNotNone(name)
-
-        self.accessor.map(_callback, errback=_errback)
-
 
 @unittest.skipUnless(
     HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
 )
-class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,
+class TestAccessorWithCassandraSASI(CassandraTestAccessorMetadata,
                                     bg_test_utils.TestCaseWithAccessor):
     pass
 
@@ -413,7 +94,7 @@ class TestAccessorWithCassandraSASI(_BaseTestAccessorWithCassandraMetadata,
 @unittest.skipUnless(
     HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
 )
-class TestAccessorWithCassandraLucene(_BaseTestAccessorWithCassandraMetadata,
+class TestAccessorWithCassandraLucene(CassandraTestAccessorMetadata,
                                       bg_test_utils.TestCaseWithAccessor):
     ACCESSOR_SETTINGS = {'cassandra_use_lucene': True}
 
@@ -482,6 +163,23 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(_USEFUL_POINTS[:10], fetched[:10])
         self.assertEqual(_USEFUL_POINTS[-10:], fetched[-10:])
         self.assertEqual(_USEFUL_POINTS, fetched)
+
+    def test_fetch_doubledots(self):
+        metric = self.make_metric("a.b..c")
+        metric_1 = self.make_metric("a.b.c")
+        points = [(1, 42)]
+        self.accessor.create_metric(metric)
+        self.accessor.create_metric(metric_1)
+        self.flush()
+
+        self.accessor.insert_points(metric, points)
+        self.flush()
+        actual_points = self.accessor.fetch_points(
+            metric, 1, 2, stage=metric.retention[0])
+        self.assertEqual(points, list(actual_points))
+        actual_points = self.accessor.fetch_points(
+            metric_1, 1, 2, stage=metric.retention[0])
+        self.assertEqual(points, list(actual_points))
 
     def _get_version(self):
         for host in self.cassandra_helper.cluster.metadata.all_hosts():
