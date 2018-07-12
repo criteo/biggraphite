@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# This scripts require CASSANDRA_VERSION, CASSANDRA_STRATIO_LUCENE_VERSION
-# to be set.
+# This scripts require CASSANDRA_VERSION, CASSANDRA_STRATIO_LUCENE_VERSION,
+# ES_VERSION to be set.
 # Example:
 # export CASSANDRA_VERSION=3.11.1
 # export CASSANDRA_STRATIO_LUCENE_VERSION=${CASSANDRA_VERSION}.0
+# export ES_VERSION=6.3.1
 
 CASSANDRA_HOME=$(pwd)"/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
 
@@ -33,4 +34,12 @@ if [ -n "${CASSANDRA_STRATIO_LUCENE_VERSION}" ]; then
         wget --content-disposition https://search.maven.org/remotecontent?filepath=com/stratio/cassandra/cassandra-lucene-index-plugin/${CASSANDRA_STRATIO_LUCENE_VERSION}/cassandra-lucene-index-plugin-${CASSANDRA_STRATIO_LUCENE_VERSION}.jar
         cp -v cassandra-lucene-index-plugin-*.jar ${CASSANDRA_HOME}/lib/
     fi
+fi
+
+
+if [ -n "${ES_VERSION}" ]; then
+    cd .deps
+    wget "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-${ES_VERSION}.tar.gz"
+    tar -xzf "elasticsearch-${ES_VERSION}.tar.gz"
+    cd -
 fi
