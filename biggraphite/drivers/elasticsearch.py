@@ -402,6 +402,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 ignore_unavailable=True,
                 wait_if_ongoing=True,
             )
+            self.client.indices.refresh(
+                index="%s*" % self._index_prefix,
+                allow_no_indices=True,
+                ignore_unavailable=True,
+            )
 
     def clear(self):
         """Clear all internal data."""
@@ -571,6 +576,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # This may not be the same behavior as other drivers.
         # It returns the glob with the list of possible last component for a directory.
         # It doesn't return the list of fully defined directory names.
+        if "distinct_dirs" not in response.aggregations:
+            # This happend when there is no index to search for the query.
+            return []
         buckets = response.aggregations.distinct_dirs.buckets
         if glob_depth == 0:
             results = [b.key for b in buckets]
