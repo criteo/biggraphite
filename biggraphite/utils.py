@@ -24,6 +24,7 @@ from biggraphite.drivers import elasticsearch as bg_elasticsearch
 from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache
 
+log = logging.getLogger(__name__)
 
 DRIVERS = frozenset([
     ("cassandra", bg_cassandra),
