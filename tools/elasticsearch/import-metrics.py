@@ -12,18 +12,13 @@ import threading
 import uuid
 import urllib.parse
 
-UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
+UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
 
 DIRECTORIES = set()
-INDEX_PREFIX = 'biggraphite_'
+INDEX_PREFIX = "biggraphite_"
 
 INDEX_BODY_METRICS = {
-    "settings": {
-        "index": {
-            "number_of_shards": 3,
-            "number_of_replicas": 1,
-        },
-    },
+    "settings": {"index": {"number_of_shards": 6, "number_of_replicas": 1}},
     "mappings": {
         "metric": {
             "properties": {
@@ -31,66 +26,51 @@ INDEX_BODY_METRICS = {
                 "created_on": {"type": "date"},
                 "read_on": {"type": "date"},
                 "updated_on": {"type": "date"},
-                "name": {
-                    "type": "keyword",
-                    "ignore_above": 1024,
-                },
-                "uuid": {
-                    "type": "keyword",
-                },
+                "name": {"type": "keyword", "ignore_above": 1024},
+                "uuid": {"type": "keyword"},
                 # TODO: Maybe make that non-analyzed
-                "config": {
-                    "type": "object",
-                    "index": "no",
-                },
+                "config": {"type": "object"},
             },
             # Additional properties (such as path components) or labels
-            # TODO: have a specific dynamic mapping for labels using "match"
-            # FIXME: this doesn't seem to work, maybe because of text <-> string.
             "dynamic_templates": [
                 {
                     "strings_as_keywords": {
+                        "match": "p*",
                         "match_mapping_type": "string",
                         "mapping": {
                             "type": "keyword",
                             "ignore_above": 256,
-                            # TODO: see if we can filter by name length.
-                        }
+                            "ignore_malformed": True,
+                        },
                     }
                 }
-            ]
-        },
+            ],
+        }
     },
 }
 INDEX_BODY_DIRECTORIES = {
-    "settings": {
-        "index": {
-            "number_of_shards": 3,
-            "number_of_replicas": 1,
-        },
-    },
+    "settings": {"index": {"number_of_shards": 3, "number_of_replicas": 1}},
     "mappings": {
         "directory": {
             "properties": {
                 "depth": {"type": "long"},
-                "name": {
-                    "type": "keyword",
-                    "ignore_above": 1024,
-                },
+                "name": {"type": "keyword", "ignore_above": 1024},
             },
             # Additional properties (such as path components) or labels
             "dynamic_templates": [
                 {
                     "strings_as_keywords": {
+                        "match": "p*",
                         "match_mapping_type": "string",
                         "mapping": {
                             "type": "keyword",
                             "ignore_above": 256,
-                        }
+                            "ignore_malformed": True,
+                        },
                     }
                 }
-            ]
-        },
+            ],
+        }
     },
 }
 
@@ -106,10 +86,7 @@ def uuid_to_datetime(u):
 
 
 def document_base(name):
-    data = {
-        "depth": name.count("."),
-        "name": name,
-    }
+    data = {"depth": name.count("."), "name": name}
 
     for i, component in enumerate(name.split(".")):
         data["p%d" % i] = component
@@ -126,16 +103,18 @@ def document(metric, config, created_on, updated_on, read_on, uid, labels):
         config = {}
 
     data = document_base(metric)
-    data.update({
-        "uuid": uid,
-        "created_on": uuid_to_datetime(created_on),
-        "updated_on": uuid_to_datetime(updated_on),
-        "read_on": uuid_to_datetime(read_on),
-        "config": config,
-    })
+    data.update(
+        {
+            "uuid": uid,
+            "created_on": uuid_to_datetime(created_on),
+            "updated_on": uuid_to_datetime(updated_on),
+            "read_on": uuid_to_datetime(read_on),
+            "config": config,
+        }
+    )
     labels = labels or {}
     for k, v in labels.items():
-        data['label_%s' % k] = v
+        data["label_%s" % k] = v
     print(data)
     return data
 
@@ -151,7 +130,7 @@ def read_metrics(filename):
 def guess_labels(metric, prefix):
     """Consider prefix as metric name and the rest as label0.value0.label1.value1"""
     labels = {}
-    metric = metric.replace(prefix, '')
+    metric = metric.replace(prefix, "")
 
     # Split into components
     components = metric.split(".")
@@ -163,7 +142,7 @@ def guess_labels(metric, prefix):
 
     for i in range(0, len(components) - 1, 2):
         # url decode because people will often have urlencoded the value.
-        labels[components[i]] = urllib.parse.unquote(components[i+1])
+        labels[components[i]] = urllib.parse.unquote(components[i + 1])
     return metric, labels
 
 
@@ -198,7 +177,7 @@ def create_metric(es, row, labels=None):
         doc_id = chr((ord(uid[0]) + 1) % 254) + uid[1:]
     else:
         doc_id = uid
-    print(doc_id)
+
     es.create(
         index=INDEX_PREFIX + "metrics",
         doc_type="metric",
@@ -230,18 +209,17 @@ def callback(future, sem):
 
 def parse_opts(args):
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description='Import data to ElasticSearch.')
-    parser.add_argument('--max_workers', default=75, type=int)
-    parser.add_argument('--username', default=os.getenv('ES_USERNAME'))
-    parser.add_argument('--password', default=os.getenv('ES_PASSWORD'))
-    parser.add_argument('--cluster', default='127.0.0.1')
-    parser.add_argument('--sniff', action='store_true', default=False)
-    parser.add_argument('--port', default=9002, type=int)
-    parser.add_argument('--cleanup', action='store_true', default=False)
+    parser = argparse.ArgumentParser(description="Import data to ElasticSearch.")
+    parser.add_argument("--max_workers", default=75, type=int)
+    parser.add_argument("--username", default=os.getenv("ES_USERNAME"))
+    parser.add_argument("--password", default=os.getenv("ES_PASSWORD"))
+    parser.add_argument("--cluster", default="127.0.0.1")
+    parser.add_argument("--sniff", action="store_true", default=False)
+    parser.add_argument("--port", default=9002, type=int)
+    parser.add_argument("--cleanup", action="store_true", default=False)
     # Prefix of metrics that will be stored with "labels"
-    parser.add_argument('--prefix_labelled', type=str)
-    parser.add_argument('--input', required=True)
+    parser.add_argument("--prefix_labelled", type=str)
+    parser.add_argument("--input", required=True)
     return parser.parse_args(args[1:])
 
 
@@ -249,7 +227,7 @@ def main():
     """Import .csv data from a metrics_metadata dump."""
     opts = parse_opts(sys.argv)
     if opts.prefix_labelled:
-        opts.prefix_labelled = set(opts.prefix_labelled.split(','))
+        opts.prefix_labelled = set(opts.prefix_labelled.split(","))
     max_workers = opts.max_workers
     sem = threading.Semaphore(max_workers * 2)
 
@@ -260,20 +238,18 @@ def main():
         sniff_on_start=opts.sniff,
         sniff_on_connection_fail=opts.sniff,
     )
-    print('Connected:', es.info())
+    print("Connected:", es.info())
     if opts.cleanup:
         es.indices.delete(index=INDEX_PREFIX + "metrics", ignore=[400, 404])
         es.indices.delete(index=INDEX_PREFIX + "directories", ignore=[400, 404])
-    es.indices.create(
-        index=INDEX_PREFIX + "metrics",
-        body=INDEX_BODY_METRICS,
-        ignore=400
-    )
-    es.indices.create(
-        index=INDEX_PREFIX + "directories",
-        body=INDEX_BODY_DIRECTORIES,
-        ignore=400
-    )
+    if not es.indices.exists(INDEX_PREFIX + "metrics"):
+        es.indices.create(
+            index=INDEX_PREFIX + "metrics", body=INDEX_BODY_METRICS, ignore=409
+        )
+    if not es.indices.exists(INDEX_PREFIX + "directories"):
+        es.indices.create(
+            index=INDEX_PREFIX + "directories", body=INDEX_BODY_DIRECTORIES, ignore=409
+        )
 
     # TODO: Also create directories.
     rows = read_metrics(opts.input)
@@ -285,9 +261,9 @@ def main():
         future.add_done_callback(lambda f: callback(f, sem))
     executor.shutdown()
 
-    print(es.cluster.health(wait_for_status='yellow', request_timeout=1))
+    print(es.cluster.health(wait_for_status="yellow", request_timeout=1))
     # print(es.search(index=INDEX))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
