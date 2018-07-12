@@ -26,8 +26,6 @@ import elasticsearch
 import elasticsearch_dsl
 import time
 
-import sortedcontainers
-
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _utils
@@ -328,8 +326,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
-        self._name_to_metric = {}
-        self._directory_names = sortedcontainers.SortedSet()
         self._hosts = list(hosts)
         self._port = port
         self._index_prefix = index
@@ -438,9 +434,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def drop_all_metrics(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).drop_all_metrics(*args, **kwargs)
-        # Drop indices.
-        self._name_to_metric.clear()
-        self._directory_names.clear()
+        pass
 
     def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """See bg_accessor.Accessor."""
@@ -474,17 +468,19 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).update_metric(name, updated_metadata)
         # Cleanup name (avoid double dots)
         name = ".".join(_components_from_name(name))
-        metric = self._name_to_metric[name]
-        if not metric:
-            raise InvalidArgumentError("Unknown metric '%s'" % name)
-        metric.metadata = updated_metadata
-        self._name_to_metric[name] = metric
+        # TODO: implement
+        log.warn("update_metric is not implemented")
+        pass
 
     def delete_metric(self, name):
-        del self._name_to_metric[name]
+        # TODO: Implement
+        log.warn("update_metric is not implemented")
+        pass
 
     def delete_directory(self, name):
-        self._directory_names.remove(name)
+        # TODO: Implement
+        log.warn("delete_metric is not implemented")
+        pass
 
     # TODO (t.chataigner) Add unittest.
     def _search_metrics_from_components(self, glob, components):
@@ -684,9 +680,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             callback, start_key, end_key, shard, nshards, errback
         )
 
-        metrics = self._name_to_metric
+        # TODO: implement
+        log.warn("map is not implemented")
+        metrics = []
         total = len(metrics)
-        for i, metric in enumerate(metrics.values()):
+        for i, metric in enumerate(metrics):
             callback(metric, i, total)
 
     def __touch_metadata_on_need(self, metric, updated_on):
