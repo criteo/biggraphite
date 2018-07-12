@@ -26,8 +26,7 @@ import sys
 import time
 import progressbar
 import re
-import json
-from urllib import parse
+from six.moves.urllib import parse
 
 import multiprocessing
 from multiprocessing import dummy as multiprocessing_dummy
