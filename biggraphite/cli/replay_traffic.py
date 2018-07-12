@@ -26,6 +26,8 @@ import sys
 import time
 import progressbar
 import re
+import json
+from urllib import parse
 
 import multiprocessing
 from multiprocessing import dummy as multiprocessing_dummy
@@ -116,7 +118,15 @@ class _Worker(object):
                 return
             if self._exclude.match(str(data)):
                 return
-        logging.debug("%s: %s", url, data)
+
+        if data:
+            query = data.decode()
+        else:
+            query = parse.urlparse(url).query
+        query = parse.parse_qs(query)
+
+        logging.debug("%s: %s (%s)", url, data, query['target'])
+
         request = clusters_diff.Request(url, auth_key, timeout_s, data)
         request.execute()
 
