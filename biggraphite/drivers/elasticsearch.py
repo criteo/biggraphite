@@ -403,6 +403,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 wait_if_ongoing=True,
             )
 
+    def clear(self):
+        """Clear all internal data."""
+        self._known_indices = {}
+
     def get_index(self, metric):
         """Get the index where a metric should be stored."""
         # Here the index could be sharded further by looking at the
