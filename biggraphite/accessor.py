@@ -17,11 +17,14 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import uuid
+
 from builtins import zip
 
 import abc
 import array
 import codecs
+import datetime
 import enum
 import json
 import math
@@ -58,6 +61,8 @@ SHARD_REPLICA_BITS = bin(SHARD_REPLICA_MASK).count('1')
 SHARD_WRITER_BITS = 16 - SHARD_REPLICA_BITS
 SHARD_REPLICA_SHIFT = SHARD_WRITER_BITS
 SHARD_MAX_REPLICAS = 2**SHARD_REPLICA_BITS
+
+_UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
 
 def pack_shard(replica, writer):
@@ -680,6 +685,11 @@ class Metric(object):
         return not (self == other)
 
 
+def _components_from_name(metric_name):
+    res = metric_name.split(".")
+    return list(filter(None, res))
+
+
 class Accessor(object):
     """Provides Read/Write accessors to BigGraphite.
 
@@ -836,7 +846,6 @@ class Accessor(object):
         """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
 
-    @abc.abstractmethod
     def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """Create a Metric object from its definition as name and metadata.
 
@@ -849,6 +858,18 @@ class Accessor(object):
 
         Returns: a Metric object with a valid id.
         """
+        # Cleanup name (avoid double dots)
+        name = ".".join(_components_from_name(name))
+        uid = uuid.uuid5(_UUID_NAMESPACE, name)
+        now = datetime.datetime.now()
+        return Metric(
+            name,
+            uid,
+            metadata,
+            created_on=created_on or now,
+            updated_on=updated_on or now,
+            read_on=read_on
+        )
 
     @abc.abstractmethod
     def glob_metric_names(self, glob):

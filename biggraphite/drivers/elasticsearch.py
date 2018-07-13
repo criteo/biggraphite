@@ -18,7 +18,6 @@ from __future__ import print_function
 
 import collections
 import datetime
-import uuid
 import json
 import logging
 import os
@@ -316,8 +315,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     Row0 = collections.namedtuple("Row", ["time_start_ms", "offset", "value"])
 
-    _UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
-
     def __init__(
         self,
         hosts=DEFAULT_HOSTS,
@@ -454,21 +451,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).drop_all_metrics(*args, **kwargs)
         # Drop indices.
         self.client.indices.delete("%s*" % self._index_prefix)
-
-    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
-        """See bg_accessor.Accessor."""
-        # Cleanup name (avoid double dots)
-        name = ".".join(_components_from_name(name))
-        uid = uuid.uuid5(self._UUID_NAMESPACE, name)
-        now = datetime.datetime.now()
-        return bg_accessor.Metric(
-            name,
-            uid,
-            metadata,
-            created_on=created_on or now,
-            updated_on=updated_on or now,
-            read_on=read_on
-        )
 
     def create_metric(self, metric):
         """See the real Accessor for a description."""

@@ -23,7 +23,6 @@ import multiprocessing
 import os
 import random
 import time
-import uuid
 import six
 from os import path as os_path
 from distutils import version
@@ -799,8 +798,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
     Please refer to bg_accessor.Accessor.
     """
 
-    _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
-
     def __init__(self,
                  keyspace=DEFAULT_KEYSPACE,
                  username=None,
@@ -1144,21 +1141,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _execute_concurrent_metadata(self, *args, **kwargs):
         return self._execute_concurrent(self.__session_metadata, *args, **kwargs)
-
-    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
-        """See bg_accessor.Accessor."""
-        # Cleanup name (avoid double dots)
-        name = ".".join(self._components_from_name(name)[:-1])
-        encoded_name = bg_accessor.encode_metric_name(name)
-        id = uuid.uuid5(self._UUID_NAMESPACE, encoded_name)
-        return bg_accessor.Metric(
-            name,
-            id,
-            metadata,
-            created_on=created_on,
-            updated_on=updated_on,
-            read_on=read_on
-        )
 
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""
