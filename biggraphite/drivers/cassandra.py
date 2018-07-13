@@ -802,7 +802,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     _UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
     def __init__(self,
-                 keyspace='biggraphite',
+                 keyspace=DEFAULT_KEYSPACE,
                  username=None,
                  password=None,
                  contact_points=DEFAULT_CONTACT_POINTS,
