@@ -21,6 +21,7 @@ import prometheus_client
 
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
+from biggraphite.drivers import hybrid as bg_hybrid
 from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache
 
@@ -53,12 +54,21 @@ def strtobool(value):
     return distutils.util.strtobool(value)
 
 
+def strvalidator(value):
+    """Cast a value to string."""
+    if value is None:
+        return None
+    return str(value)
+
+
 DEFAULT_DRIVER = "cassandra"
 DEFAULT_CACHE = "memory"
 DEFAULT_LOG_LEVEL = "WARNING"
 DEFAULT_ADMIN_PORT = None
 OPTIONS = {
     "driver": str,
+    "metadata_driver": strvalidator,
+    "data_driver": strvalidator,
     "cache": str,
     "cache_size": strtoint,
     "cache_ttl": strtoint,
@@ -106,6 +116,28 @@ def accessor_from_settings(settings):
       Accessor (not connected).
     """
     driver_name = settings.get('driver', DEFAULT_DRIVER)
+    metadata_driver = settings.get('metadata_driver', None)
+    data_driver = settings.get('data_driver', None)
+
+    if metadata_driver is None and data_driver is None:
+        return _build_simple_accessor(driver_name, settings)
+    else:
+        if metadata_driver is None:
+            raise ConfigError("Metadata driver is not provided. Please specify --metadata_driver")
+        if data_driver is None:
+            raise ConfigError("Data driver is not provided. Please specify --data_driver")
+
+        metadata_accessor = _build_simple_accessor(metadata_driver, settings)
+        data_accessor = _build_simple_accessor(data_driver, settings)
+
+        return bg_hybrid.HybridAccessor(
+            "%s_%s" % (metadata_driver, data_driver),
+            metadata_accessor,
+            data_accessor
+        )
+
+
+def _build_simple_accessor(driver_name, settings):
     driver_settings = {}
 
     # Get driver specific settings.
@@ -119,7 +151,7 @@ def accessor_from_settings(settings):
         if name == driver_name:
             return driver.build(**driver_settings)
 
-    raise ConfigError("Invalid value '%s' for BG_DRIVER." % driver_name)
+    raise ConfigError("Invalid driver '%s'." % driver_name)
 
 
 def cache_from_settings(accessor, settings, cname=None):
@@ -157,6 +189,12 @@ def add_argparse_arguments(parser):
         "--driver",
         help="BigGraphite driver (%s)" % ', '.join([v[0] for v in DRIVERS]),
         default=DEFAULT_DRIVER)
+    parser.add_argument(
+        "--metadata_driver",
+        help="BigGraphite metadata driver (%s)" % ', '.join([v[0] for v in DRIVERS]))
+    parser.add_argument(
+        "--data_driver",
+        help="BigGraphite data driver (%s)" % ', '.join([v[0] for v in DRIVERS]))
     parser.add_argument(
         "--cache",
         help="BigGraphite cache (%s))" % ', '.join([v[0] for v in CACHES]),
