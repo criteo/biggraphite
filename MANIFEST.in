@@ -6,3 +6,4 @@ include README.md
 include requirements.txt tests-requirements.txt
 recursive-include biggraphite/cli/web/templates *
 recursive-include biggraphite/cli/web/static *
+include share/es_schema.json
