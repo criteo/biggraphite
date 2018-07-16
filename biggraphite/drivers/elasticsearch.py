@@ -136,6 +136,8 @@ OPTIONS = {
     "timeout": float,
 }
 
+UNDEFINED_RESULT = None
+
 
 def add_argparse_arguments(parser):
     """Add ElasticSearch arguments to an argparse parser."""
@@ -643,7 +645,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).fetch_points(
             metric, time_start, time_end, stage
         )
-        _raise_unsupported()
+        return UNDEFINED_RESULT
 
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""
