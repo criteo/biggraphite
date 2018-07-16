@@ -340,6 +340,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__updated_on_ttl_sec = updated_on_ttl_sec
         self.client = None
+        log.debug(
+            "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'" %
+            (self._index_prefix, self._index_suffix)
+        )
 
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
