@@ -15,7 +15,7 @@ import urllib.parse
 UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
 
 DIRECTORIES = set()
-INDEX_PREFIX = "biggraphite_"
+INDEX_PREFIX = 'biggraphite_metrics_'
 
 INDEX_BODY_METRICS = {
     "settings": {"index": {"number_of_shards": 6, "number_of_replicas": 1}},
