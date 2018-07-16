@@ -402,6 +402,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 ignore_unavailable=True,
                 wait_if_ongoing=True,
             )
+            self.client.indices.refresh(
+                index="%s*" % self._index_prefix,
+                allow_no_indices=True,
+                ignore_unavailable=True,
+            )
+
+    def clear(self):
+        """Clear all internal data."""
+        self._known_indices = {}
 
     def get_index(self, metric):
         """Get the index where a metric should be stored."""
@@ -437,7 +446,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def drop_all_metrics(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).drop_all_metrics(*args, **kwargs)
-        pass
+        # Drop indices.
+        self.client.indices.delete("%s*" % self._index_prefix)
 
     def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """See bg_accessor.Accessor."""
@@ -567,6 +577,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # This may not be the same behavior as other drivers.
         # It returns the glob with the list of possible last component for a directory.
         # It doesn't return the list of fully defined directory names.
+        if "distinct_dirs" not in response.aggregations:
+            # This happend when there is no index to search for the query.
+            return []
         buckets = response.aggregations.distinct_dirs.buckets
         if glob_depth == 0:
             results = [b.key for b in buckets]

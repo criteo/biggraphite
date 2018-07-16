@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Utilities factoring code across tests.
+"""Cassandra utilities factoring code across tests.
 
 The dependencies for this module are not included in requirements.txt or in the package
 dependencies, instead one needs the elements of tests-requirements.txt .
@@ -128,8 +128,6 @@ class CassandraHelper():
 
     def flush(self, accessor):
         """Flush all kind of buffers related to Cassandra."""
-        accessor.flush()
-
         # When using Lucene, we need to force a refresh on the index as the default
         # refresh period is 60s.
         if accessor.use_lucene:

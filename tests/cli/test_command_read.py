@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 Criteo
+# Copyright 2018 Criteo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,40 +14,30 @@
 # limitations under the License.
 from __future__ import print_function
 
-import multiprocessing
-import time
 import unittest
 import argparse
 
+from biggraphite.cli import command_read
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
-from biggraphite.cli import command_daemon
+from biggraphite import accessor as bg_accessor
 
 
-class TestCommandDaemon(bg_test_utils.TestCaseWithFakeAccessor):
+class TestCommandRead(bg_test_utils.TestCaseWithFakeAccessor):
 
-    def test_run_daemon(self):
-        self.accessor.drop_all_metrics()
+    def test_run(self):
+        name = 'foo.bar'
+        metadata = bg_accessor.MetricMetadata(
+            retention=bg_accessor.Retention.from_string('1440*60s'))
+        self.accessor.create_metric(self.make_metric(name, metadata))
 
-        cmd = command_daemon.CommandDaemon()
-        command_daemon._run_webserver = lambda x, y, z: time.sleep(666)
+        cmd = command_read.CommandRead()
 
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(
-            ['--clean-backend', '--clean-cache', '--max-age=12']
-        )
-
-        def run():
-            cmd.run(self.accessor, opts)
-
-        p = multiprocessing.Process(target=run)
-
-        p.start()
-        time.sleep(1)
-        assert(p.is_alive())
-        p.terminate()
+        opts = parser.parse_args([name])
+        cmd.run(self.accessor, opts)
 
 
 if __name__ == "__main__":
