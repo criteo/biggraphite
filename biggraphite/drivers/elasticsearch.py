@@ -593,7 +593,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             return None
 
         if touch:
-            self.__touch_metadata_on_need(metric, metric.updated_on)
+            self.__touch_metadata_on_need(metric)
 
         metadata = bg_accessor.MetricMetadata.from_string_dict(
             metric.config.to_dict()
@@ -691,11 +691,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         for i, metric in enumerate(metrics):
             callback(metric, i, total)
 
-    def __touch_metadata_on_need(self, metric, updated_on):
-        if not updated_on:
+    def __touch_metadata_on_need(self, metric):
+        if not metric.updated_on:
             delta = self.__updated_on_ttl_sec + 1
         else:
-            updated_on_timestamp = str_to_timestamp(updated_on)
+            updated_on_timestamp = str_to_timestamp(metric.updated_on)
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
