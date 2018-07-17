@@ -39,3 +39,8 @@ def str_to_timestamp(str_repr):
     datetime_tuple = str_to_datetime(str_repr)
     ts = time.mktime(datetime_tuple.timetuple())
     return ts
+
+
+def datetime_to_str(dt):
+    """Converts a datetime to ISO representation without microseconds."""
+    return dt.replace(microsecond=0).isoformat()
