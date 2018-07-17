@@ -189,7 +189,7 @@ def document_from_metric(metric):
     """Creates an ElasticSearch document from a Metric."""
     config = metric.metadata.as_string_dict()
     components = _components_from_name(metric.name)
-    name = ".".join(components)  # We do that to avoid double dots.
+    name = bg_accessor.sanitize_metric_name(metric.name)
 
     data = {
         "depth": len(components) - 1,
@@ -470,8 +470,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).update_metric(name, updated_metadata)
 
-        # Cleanup name (avoid double dots)
-        name = ".".join(_components_from_name(name))
+        name = bg_accessor.sanitize_metric_name(name)
         metric = self.get_metric(name)
 
         if metric is None:
@@ -513,7 +512,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # Handle fully defined glob.
         if self.__glob_parser.is_fully_defined(components):
             return False, search.filter(
-                'term', **{"name": ".".join(_components_from_name(glob))})
+                'term', **{"name": bg_accessor.sanitize_metric_name(glob)})
 
         # Handle all other use cases.
         for i, c in enumerate(components):
@@ -599,7 +598,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name, touch=touch)
 
-        metric_name = ".".join(_components_from_name(metric_name))
+        metric_name = bg_accessor.sanitize_metric_name(metric_name)
 
         metric = self.__get_metric(metric_name)
         if metric is None:
@@ -646,7 +645,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).touch_metric(metric_name)
-        metric_name = ".".join(_components_from_name(metric_name))
+        metric_name = bg_accessor.sanitize_metric_name(metric_name)
         metric = self.__get_metric(metric_name)
         self.__touch_metric(metric.meta.index, metric.uuid)
 

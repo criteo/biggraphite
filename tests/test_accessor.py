@@ -240,6 +240,30 @@ class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.map(_callback, errback=_errback)
 
 
+class TestAccessorFunctions(unittest.TestCase):
+
+    def test_sanitize_metric_name_should_remove_multiple_dots(self):
+        self.assertEqual("foo.bar.baz", bg_accessor.sanitize_metric_name("foo.bar..baz"))
+        self.assertEqual("foo.bar.baz", bg_accessor.sanitize_metric_name("foo.bar...baz"))
+        self.assertEqual("foo.bar.baz", bg_accessor.sanitize_metric_name("foo..bar..baz"))
+
+    def test_sanitize_metric_name_should_trim_trailing_dots(self):
+        self.assertEqual("foo.bar", bg_accessor.sanitize_metric_name("foo.bar."))
+        self.assertEqual("foo.bar", bg_accessor.sanitize_metric_name("foo.bar.."))
+
+    def test_sanitize_metric_name_should_trim_heading_dots(self):
+        self.assertEqual("foo.bar", bg_accessor.sanitize_metric_name(".foo.bar"))
+        self.assertEqual("foo.bar", bg_accessor.sanitize_metric_name("..foo.bar"))
+
+    def test_sanitize_metric_name_should_handle_None_value(self):
+        self.assertEqual(None, bg_accessor.sanitize_metric_name(None))
+
+    def test_sanitize_metric_name_should_handle_empty_value(self):
+        self.assertEqual("", bg_accessor.sanitize_metric_name(""))
+        self.assertEqual("", bg_accessor.sanitize_metric_name("."))
+        self.assertEqual("", bg_accessor.sanitize_metric_name(".."))
+
+
 class TestPointGrouper(unittest.TestCase):
 
     def test_basic(self):

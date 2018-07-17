@@ -690,6 +690,17 @@ def _components_from_name(metric_name):
     return list(filter(None, res))
 
 
+def sanitize_metric_name(name):
+    """Sanitize a metric name by removing double dots.
+
+    :param name: Metric name
+    :return: Sanitized metric name
+    """
+    if name is None:
+        return None
+    return ".".join(_components_from_name(name))
+
+
 class Accessor(object):
     """Provides Read/Write accessors to BigGraphite.
 
@@ -858,8 +869,7 @@ class Accessor(object):
 
         Returns: a Metric object with a valid id.
         """
-        # Cleanup name (avoid double dots)
-        name = ".".join(_components_from_name(name))
+        name = sanitize_metric_name(name)
         uid = uuid.uuid5(_UUID_NAMESPACE, name)
         now = datetime.datetime.now()
         return Metric(
