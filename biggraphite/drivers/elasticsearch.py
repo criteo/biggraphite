@@ -469,11 +469,22 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).update_metric(name, updated_metadata)
+
         # Cleanup name (avoid double dots)
         name = ".".join(_components_from_name(name))
-        # TODO: implement
-        log.warn("update_metric is not implemented")
-        pass
+        metric = self.get_metric(name)
+
+        if metric is None:
+            raise InvalidArgumentError("Unknown metric '%s'" % name)
+
+        updated_metric = self.make_metric(
+            name,
+            updated_metadata,
+            created_on=metric.created_on,
+            updated_on=datetime.datetime.now(),
+            read_on=metric.read_on
+        )
+        self.create_metric(updated_metric)
 
     def delete_metric(self, name):
         # TODO: Implement
