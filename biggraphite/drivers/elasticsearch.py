@@ -30,7 +30,7 @@ from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _utils
 
-from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
+from biggraphite.drivers.ttls import DEFAULT_READ_ON_TTL_SEC, DEFAULT_UPDATED_ON_TTL_SEC
 from biggraphite.drivers.ttls import str_to_datetime, str_to_timestamp
 
 log = logging.getLogger(__name__)
@@ -324,7 +324,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         username=DEFAULT_USERNAME,
         password=DEFAULT_PASSWORD,
         timeout=DEFAULT_TIMEOUT,
-        updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC
+        updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
+        read_on_ttl_sec=DEFAULT_READ_ON_TTL_SEC,
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
@@ -338,6 +339,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._known_indices = {}
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__updated_on_ttl_sec = updated_on_ttl_sec
+        self.__read_on_ttl_sec = read_on_ttl_sec
         self.client = None
         log.debug(
             "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'" %
@@ -627,6 +629,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).fetch_points(
             metric, time_start, time_end, stage
         )
+        self.__update_read_on_on_need(metric)
         return UNDEFINED_RESULT
 
     def touch_metric(self, metric_name):
@@ -644,12 +647,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 "updated_on": datetime.datetime.now()
             }
         }
-        self.client.update(
-            index=index,
-            doc_type=INDEX_DOC_TYPE,
-            id=document_id,
-            body=data
-        )
+        self.__update_document(data, index, document_id)
 
     def repair(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -700,6 +698,36 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         if delta >= self.__updated_on_ttl_sec:
             self.__touch_metric(metric.meta.index, metric.uuid)
+
+    def __update_read_on_on_need(self, metric):
+        if not metric.read_on:
+            delta = self.__read_on_ttl_sec + 1
+        else:
+            read_on_timestamp = str_to_timestamp(metric.read_on)
+            delta = int(time.time()) - int(read_on_timestamp)
+
+        if delta >= self.__read_on_ttl_sec:
+            # TODO: execute asynchronously
+            self.__update_read_on(metric)
+
+    def __update_read_on(self, metric):
+        # TODO: state if we should move the document from its index to
+        # the current (today) index
+        data = {
+            "doc": {
+                "read_on": datetime.datetime.now()
+            }
+        }
+        index = self.get_index(metric.name)
+        self.__update_document(data, index, metric.uuid)
+
+    def __update_document(self, data, index, document_id):
+        self.client.update(
+            index=index,
+            doc_type=INDEX_DOC_TYPE,
+            id=document_id,
+            body=data
+        )
 
 
 def build(*args, **kwargs):
