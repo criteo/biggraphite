@@ -569,7 +569,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         search = search.filter('range', depth={'gte': glob_depth + 1})
         search = search.extra(from_=0, size=0)  # Do not return metrics.
 
-        search.aggs.bucket('distinct_dirs', 'terms', field="p%d" % glob_depth)
+        search.aggs.bucket('distinct_dirs', 'terms', field="p%d" % glob_depth, size=MAX_QUERY_SIZE)
 
         log.debug(json.dumps(search.to_dict()))
         response = search.execute()
