@@ -781,7 +781,27 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             .using(self.client) \
             .index("%s*" % self._index_prefix)
         if start_time is not None:
-            search = search.filter('range', updated_on={"gte": start_time})
+            # `updated_on` field has a delay before it is updated, so a metric can still be active
+            # without having this value up to date.
+            #
+            # Example:
+            #
+            #      current `updated_on`         future `updated_on` (if exists)
+            #         |                          |
+            #         < ---- updated_on_ttl ---- >
+            #         |                          |
+            # ---------------------------------------------> t
+            #                   |              |
+            #             query start_time     |
+            #                                 now
+            #
+            # To find metrics in this case, we need to take into account that TTL in the query:
+            #
+            #   updated_on >= start_time - ttl
+            #
+            updated_on_lower_bound = \
+                start_time - datetime.timedelta(seconds=self.__updated_on_ttl_sec)
+            search = search.filter('range', updated_on={"gte": updated_on_lower_bound})
         if end_time is not None:
             search = search.filter('range', created_on={"lte", end_time})
         return search
