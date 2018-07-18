@@ -771,10 +771,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             ignore=[404, 409]
         )
 
-    def _create_search_query(self):
-        return elasticsearch_dsl.Search() \
+    def _create_search_query(self, start_time=None, end_time=None):
+        search = elasticsearch_dsl.Search() \
             .using(self.client) \
             .index("%s*" % self._index_prefix)
+        if start_time is not None:
+            search = search.filter('range', updated_on={"gte": start_time})
+        if end_time is not None:
+            search = search.filter('range', created_on={"lte", end_time})
+        return search
 
 
 def build(*args, **kwargs):
