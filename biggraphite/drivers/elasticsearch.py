@@ -512,8 +512,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         query.delete()
 
     # TODO (t.chataigner) Add unittest.
-    def _search_metrics_from_components(self, glob, components):
-        search = self._create_search_query().source('name')
+    def _search_metrics_from_components(self, glob, components, start_time=None, end_time=None):
+        search = self._create_search_query(start_time, end_time).source('name')
 
         # Handle glob with globstar(s).
         globstars = components.count(bg_glob.Globstar())
@@ -542,13 +542,18 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
-        super(_ElasticSearchAccessor, self).glob_metric_names(glob)
+        super(_ElasticSearchAccessor, self).glob_metric_names(glob, start_time, end_time)
         if glob == "":
             return []
 
         components = self.__glob_parser.parse(glob)
         glob_depth = _get_depth_from_components(components)
-        has_globstar, search = self._search_metrics_from_components(glob, components)
+        has_globstar, search = self._search_metrics_from_components(
+            glob,
+            components,
+            start_time,
+            end_time
+        )
         if has_globstar:
             search = search.filter('range', depth={'gte': glob_depth})
         else:
@@ -563,7 +568,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     def glob_directory_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
-        super(_ElasticSearchAccessor, self).glob_directory_names(glob)
+        super(_ElasticSearchAccessor, self).glob_directory_names(glob, start_time, end_time)
         if glob == "":
             return []
 
@@ -572,7 +577,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # AnySequence after the provided glob: we search for metrics under that path.
         has_globstar, search = self._search_metrics_from_components(
             glob,
-            components + [[bg_glob.AnySequence()]]
+            components + [[bg_glob.AnySequence()]],
+            start_time,
+            end_time
         )
         if has_globstar:
             # TODO (t.chataigner) Add a log or raise exception.

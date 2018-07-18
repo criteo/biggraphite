@@ -17,6 +17,8 @@ from __future__ import absolute_import  # Otherwise graphite is this module.
 import time
 import threading
 
+from datetime import datetime
+
 from graphite import intervals
 from graphite import node
 from graphite import readers
@@ -328,9 +330,12 @@ class Finder(BaseFinder):
         else:
             find_start = time.time()
             try:
+                start_time = None if query.startTime is None else datetime.fromtimestamp(query.startTime)
+                end_time = None if query.endTime is None else datetime.fromtimestamp(query.endTime)
                 results = glob_utils.graphite_glob(
                     self.accessor(), query.pattern,
-                    metrics=True, directories=not leaves_only
+                    metrics=True, directories=not leaves_only,
+                    start_time=start_time, end_time=end_time
                 )
                 success = True
             except bg_accessor.Error as e:

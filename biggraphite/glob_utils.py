@@ -254,7 +254,9 @@ def glob(metric_names, glob_pattern):
     return list(filter(maybe_matched_prefilter, metric_names))
 
 
-def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
+def graphite_glob(accessor, graphite_glob,
+                  metrics=True, directories=True,
+                  start_time=None, end_time=None):
     """Get metrics and directories matching a Graphite glob.
 
     Args:
@@ -262,6 +264,8 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
       graphite_glob: Graphite glob expression
       metrics: True if metrics should be fetched
       directories: True if directories should be fetched
+      start_time: Lower bound of search time range (use None for no bound)
+      end_time: Upper bound of search time range (use None for no bound)
 
     Returns:
       A tuple:
