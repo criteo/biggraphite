@@ -11,12 +11,8 @@ matrix:
     - python: 'pypy'
       env: TOXENV=pylama
     - language: java
-      jdk: oraclejdk8
+      jdk: openjdk8
       env: JAVA=true
-      addons:
-        apt:
-          packages:
-            - oracle-java8-installer
 
 env:
   global:
