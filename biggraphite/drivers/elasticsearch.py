@@ -488,9 +488,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def delete_metric(self, name):
         name = bg_accessor.sanitize_metric_name(name)
 
-        query = elasticsearch_dsl.Search() \
-            .using(self.client) \
-            .index("%s*" % self._index_prefix) \
+        query = self._create_search_query() \
             .filter('term', name=name)
 
         log.debug(json.dumps(query.to_dict()))
@@ -500,9 +498,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         components = _components_from_name(name)
         depth = _get_depth_from_components(components)
 
-        query = elasticsearch_dsl.Search() \
-            .using(self.client) \
-            .index("%s*" % self._index_prefix)
+        query = self._create_search_query()
         for index, component in enumerate(components):
             query = query.filter('term', **{"p%d" % index: component})
         query = query.filter('range', depth={'gte': depth})
@@ -512,8 +508,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     # TODO (t.chataigner) Add unittest.
     def _search_metrics_from_components(self, glob, components):
-        search = elasticsearch_dsl.Search()
-        search = search.using(self.client).index("%s*" % self._index_prefix).source('name')
+        search = self._create_search_query().source('name')
 
         # Handle glob with globstar(s).
         globstars = components.count(bg_glob.Globstar())
@@ -639,9 +634,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         )
 
     def __get_document(self, metric_name):
-        search = elasticsearch_dsl.Search()
-        search = search.using(self.client) \
-            .index("%s*" % self._index_prefix) \
+        search = self._create_search_query() \
             .source(['uuid', 'name', 'config', 'created_on', 'updated_on', 'read_on']) \
             .filter('term', name=metric_name) \
             .sort({'updated_on': {'order': 'desc'}})
@@ -768,6 +761,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             id=document_id,
             body=data
         )
+
+    def _create_search_query(self):
+        return elasticsearch_dsl.Search() \
+            .using(self.client) \
+            .index("%s*" % self._index_prefix)
 
 
 def build(*args, **kwargs):
