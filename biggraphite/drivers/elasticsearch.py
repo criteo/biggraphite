@@ -486,14 +486,29 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.create_metric(updated_metric)
 
     def delete_metric(self, name):
-        # TODO: Implement
-        log.warn("update_metric is not implemented")
-        pass
+        name = bg_accessor.sanitize_metric_name(name)
+
+        query = elasticsearch_dsl.Search() \
+            .using(self.client) \
+            .index("%s*" % self._index_prefix) \
+            .filter('term', name=name)
+
+        log.debug(json.dumps(query.to_dict()))
+        query.delete()
 
     def delete_directory(self, name):
-        # TODO: Implement
-        log.warn("delete_metric is not implemented")
-        pass
+        components = _components_from_name(name)
+        depth = _get_depth_from_components(components)
+
+        query = elasticsearch_dsl.Search() \
+            .using(self.client) \
+            .index("%s*" % self._index_prefix)
+        for index, component in enumerate(components):
+            query = query.filter('term', **{"p%d" % index: component})
+        query = query.filter('range', depth={'gte': depth})
+
+        log.debug(json.dumps(query.to_dict()))
+        query.delete()
 
     # TODO (t.chataigner) Add unittest.
     def _search_metrics_from_components(self, glob, components):
