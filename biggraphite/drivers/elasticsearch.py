@@ -752,7 +752,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             }
         }
         index = self.get_index(metric.name)
-        self.__update_document(data, index, metric.uuid)
+        self.__update_document(data, index, metric.id)
 
     def __update_document(self, data, index, document_id):
         self.client.update(
