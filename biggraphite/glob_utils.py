@@ -277,12 +277,12 @@ def graphite_glob(accessor, graphite_glob,
         return ([], [])
 
     if metrics:
-        metrics = accessor.glob_metric_names(graphite_glob)
+        metrics = accessor.glob_metric_names(graphite_glob, start_time, end_time)
     else:
         metrics = []
 
     if directories:
-        directories = accessor.glob_directory_names(graphite_glob)
+        directories = accessor.glob_directory_names(graphite_glob, start_time, end_time)
     else:
         directories = []
 
