@@ -140,9 +140,11 @@ class FakeFindQuery(object):
     We don't use the Graphite Query because it imports too many things from Django.
     """
 
-    def __init__(self, pattern, leaves_only=None):
+    def __init__(self, pattern, start_time=None, end_time=None, leaves_only=None):
         """Create a fake find query."""
         self.pattern = pattern
+        self.startTime = start_time
+        self.endTime = end_time
         self.leaves_only = leaves_only or False
 
 
