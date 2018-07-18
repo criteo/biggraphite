@@ -853,7 +853,7 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def get_metric(self, metric_name, touch=False):
+    def get_metric(self, metric_name):
         """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
 
@@ -929,6 +929,7 @@ class Accessor(object):
         if not isinstance(metric, Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
+        self.touch_metric(metric)
 
     def insert_downsampled_points(self, metric, datapoints):
         """Insert points for a given metric.
@@ -1010,7 +1011,7 @@ class Accessor(object):
         pass
 
     @abc.abstractmethod
-    def touch_metric(self, metric_name):
+    def touch_metric(self, metric):
         """Update a metric to refresh its last write timestamp."""
         self._check_connected()
 

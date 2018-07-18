@@ -600,18 +600,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).has_metric(metric_name)
         return self.get_metric(metric_name) is not None
 
-    def get_metric(self, metric_name, touch=False):
+    def get_metric(self, metric_name):
         """See the real Accessor for a description."""
-        super(_ElasticSearchAccessor, self).get_metric(metric_name, touch=touch)
+        super(_ElasticSearchAccessor, self).get_metric(metric_name)
 
         metric_name = bg_accessor.sanitize_metric_name(metric_name)
 
         document = self.__get_document(metric_name)
         if document is None:
             return None
-
-        if touch:
-            self.__touch_metadata_on_need(document)
 
         return self._document_to_metric(document)
 
@@ -651,12 +648,19 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__update_read_on_on_need(metric)
         return []
 
-    def touch_metric(self, metric_name):
+    def touch_metric(self, metric):
         """See the real Accessor for a description."""
-        super(_ElasticSearchAccessor, self).touch_metric(metric_name)
-        metric_name = bg_accessor.sanitize_metric_name(metric_name)
-        metric = self.__get_document(metric_name)
-        self.__touch_document(metric.meta.index, metric.uuid)
+        super(_ElasticSearchAccessor, self).touch_metric(metric)
+        metric_name = bg_accessor.sanitize_metric_name(metric.name)
+        document = self.__get_document(metric_name)
+        if not document.updated_on:
+            delta = self.__updated_on_ttl_sec + 1
+        else:
+            updated_on_timestamp = ttls.str_to_timestamp(document.updated_on)
+            delta = int(time.time()) - int(updated_on_timestamp)
+
+        if delta >= self.__updated_on_ttl_sec:
+            self.__touch_document(document)
 
     def __touch_document(self, document):
         metric = self._document_to_metric(document)
@@ -717,16 +721,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         total = len(metrics)
         for i, metric in enumerate(metrics):
             callback(metric, i, total)
-
-    def __touch_metadata_on_need(self, document):
-        if not document.updated_on:
-            delta = self.__updated_on_ttl_sec + 1
-        else:
-            updated_on_timestamp = ttls.str_to_timestamp(document.updated_on)
-            delta = int(time.time()) - int(updated_on_timestamp)
-
-        if delta >= self.__updated_on_ttl_sec:
-            self.__touch_document(document)
 
     def __update_read_on_on_need(self, metric):
         if not metric.read_on:

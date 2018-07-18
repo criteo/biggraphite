@@ -1364,15 +1364,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__select_directory_statement, (encoded_directory, )))
         return bool(result)
 
-    def __touch_metadata_on_need(self, metric_name, updated_on):
-        if not updated_on:
-            delta = self.__metadata_touch_ttl_sec + 1
-        else:
-            delta = int(time.time()) - int(updated_on / 1000)
-
-        if delta >= self.__metadata_touch_ttl_sec:
-            self.touch_metric(metric_name)
-
     def __query_key(self, statement, params):
         if isinstance(statement, six.string_types):
             return statement
@@ -1382,9 +1373,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             else:
                 return str(statement) + str(params)
 
-    def get_metric(self, metric_name, touch=False):
+    def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).get_metric(metric_name, touch=touch)
+        super(_CassandraAccessor, self).get_metric(metric_name)
         metric_name = ".".join(self._components_from_name(metric_name)[:-1])
         metric_name = bg_accessor.encode_metric_name(metric_name)
         result = self._select_metric(metric_name)
@@ -1398,21 +1389,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not uid or not config:
             return None
 
-        if touch:
-            # Small trick here: we also check that the parent directory
-            # exists because that's what we check to create the directory
-            # hierarchy.
-            # We do it only on 'touch==True' because we know that the caller
-            # accepts a small performance penalty already.
-            parent_dir = metric_name.rpartition(".")[0]
-            if parent_dir and not self.has_directory(parent_dir):
-                return None
-
-            # Set 'updated_on' if needed
-            self.__touch_metadata_on_need(metric_name, updated_on)
+        parent_dir = metric_name.rpartition(".")[0]
+        if parent_dir and not self.has_directory(parent_dir):
+            return None
 
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-        return bg_accessor.Metric(metric_name, uid, metadata)
+        return bg_accessor.Metric(metric_name, uid, metadata, updated_on=updated_on)
 
     def glob_directory_names(self, glob):
         """Return a sorted list of metric directories matching this glob."""
@@ -1690,17 +1672,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return schema
 
     @UPDATED_ON.time()
-    def touch_metric(self, metric_name):
+    def touch_metric(self, metric):
         """See the real Accessor for a description."""
-        super(_CassandraAccessor, self).touch_metric(metric_name)
+        super(_CassandraAccessor, self).touch_metric(metric)
 
         if self.__bulkimport:
             return
 
-        self._execute_async_metadata(
-            self.__touch_metrics_metadata_statement,
-            (metric_name,)
-        )
+        if not metric.updated_on:
+            delta = self.__metadata_touch_ttl_sec + 1
+        else:
+            delta = int(time.time()) - int(time.mktime(metric.updated_on.timetuple()) / 1000)
+        if delta >= self.__metadata_touch_ttl_sec:
+            self._execute_async_metadata(
+                self.__touch_metrics_metadata_statement,
+                (metric.name,)
+            )
 
     def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0, errback=None):
         """See bg_accessor.Accessor.
