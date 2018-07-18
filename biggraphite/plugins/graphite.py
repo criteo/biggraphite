@@ -319,8 +319,6 @@ class Finder(BaseFinder):
 
     def find_nodes(self, query):
         """Find nodes matching a query."""
-        # TODO: we should probably consider query.startTime and query.endTime
-        #  to filter out metrics that had no points in this interval.
         leaves_only = hasattr(query, 'leaves_only') and query.leaves_only
         cache_key = "find_nodes:%s" % self._hash(query)
         cached = self.django_cache().get(cache_key)
