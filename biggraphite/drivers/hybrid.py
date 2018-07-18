@@ -74,12 +74,12 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).get_metric(metric_name)
         return self._metadata_accessor.get_metric(metric_name)
 
-    def glob_metric_names(self, glob):
+    def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).glob_metric_names(glob)
         return self._metadata_accessor.glob_metric_names(glob)
 
-    def glob_directory_names(self, glob):
+    def glob_directory_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).glob_directory_names(glob)
         return self._metadata_accessor.glob_directory_names(glob)

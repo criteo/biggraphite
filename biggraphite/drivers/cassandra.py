@@ -1397,13 +1397,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
         return bg_accessor.Metric(metric_name, uid, metadata, updated_on=updated_on)
 
-    def glob_directory_names(self, glob):
+    def glob_directory_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric directories matching this glob."""
         super(_CassandraAccessor, self).glob_directory_names(glob)
         directory_names = self.__glob_names("directories", glob)
         return bg_glob.filter_from_glob(directory_names, glob)
 
-    def glob_metric_names(self, glob):
+    def glob_metric_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric names matching this glob."""
         super(_CassandraAccessor, self).glob_metric_names(glob)
         metric_names = self.__glob_names("metrics", glob)

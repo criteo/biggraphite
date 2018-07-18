@@ -893,12 +893,12 @@ class Accessor(object):
         )
 
     @abc.abstractmethod
-    def glob_metric_names(self, glob):
+    def glob_metric_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric names matching this glob."""
         self._check_connected()
 
     @abc.abstractmethod
-    def glob_directory_names(self, glob):
+    def glob_directory_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric directories matching this glob."""
         self._check_connected()
 
