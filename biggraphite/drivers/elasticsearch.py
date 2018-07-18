@@ -31,7 +31,7 @@ from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _utils
 
 from biggraphite.drivers.ttls import DEFAULT_READ_ON_TTL_SEC, DEFAULT_UPDATED_ON_TTL_SEC
-from biggraphite.drivers.ttls import str_to_datetime, str_to_timestamp
+from biggraphite.drivers.ttls import str_to_datetime, str_to_timestamp, datetime_to_str
 
 log = logging.getLogger(__name__)
 
@@ -615,29 +615,34 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         metric_name = bg_accessor.sanitize_metric_name(metric_name)
 
-        metric = self.__get_metric(metric_name)
-        if metric is None:
+        document = self.__get_document(metric_name)
+        if document is None:
             return None
 
         if touch:
-            self.__touch_metadata_on_need(metric)
+            self.__touch_metadata_on_need(document)
 
+        return self._document_to_metric(document)
+
+    def _document_to_metric(self, document):
         metadata = bg_accessor.MetricMetadata.from_string_dict(
-            metric.config.to_dict()
+            document.config.to_dict()
         )
+        # TODO: Have a look at dsl doc to avoid parsing strings to dates
+        # https://github.com/elastic/elasticsearch-dsl-py/blob/master/docs/persistence.rst
         return self.make_metric(
-            metric_name,
+            document.name,
             metadata,
-            created_on=str_to_datetime(metric.created_on),
-            updated_on=str_to_datetime(metric.updated_on),
-            read_on=str_to_datetime(metric.read_on)
+            created_on=str_to_datetime(document.created_on),
+            updated_on=str_to_datetime(document.updated_on),
+            read_on=str_to_datetime(document.read_on)
         )
 
-    def __get_metric(self, metric_name):
+    def __get_document(self, metric_name):
         search = elasticsearch_dsl.Search()
         search = search.using(self.client) \
             .index("%s*" % self._index_prefix) \
-            .source(['uuid', 'config', 'created_on', 'updated_on', 'read_on']) \
+            .source(['uuid', 'name', 'config', 'created_on', 'updated_on', 'read_on']) \
             .filter('term', name=metric_name) \
             .sort({'updated_on': {'order': 'desc'}})
 
@@ -661,18 +666,28 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).touch_metric(metric_name)
         metric_name = bg_accessor.sanitize_metric_name(metric_name)
-        metric = self.__get_metric(metric_name)
-        self.__touch_metric(metric.meta.index, metric.uuid)
+        metric = self.__get_document(metric_name)
+        self.__touch_document(metric.meta.index, metric.uuid)
 
-    def __touch_metric(self, index, document_id):
-        # TODO: state if we should move the document from its index to
-        # the current (today) index
+    def __touch_document(self, document):
+        metric = self._document_to_metric(document)
+        new_index = self.get_index(metric)
+        if new_index == document.meta.index:
+            self.__update_existing_document(document)
+        else:
+            self.create_metric(metric)
+
+    def __update_existing_document(self, document):
+        index = document.meta.index
+        document_id = document.uuid
+        updated_on = datetime.datetime.now()
         data = {
             "doc": {
-                "updated_on": datetime.datetime.now()
+                "updated_on": updated_on
             }
         }
         self.__update_document(data, index, document_id)
+        document.updated_on = datetime_to_str(updated_on)
 
     def repair(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -714,15 +729,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         for i, metric in enumerate(metrics):
             callback(metric, i, total)
 
-    def __touch_metadata_on_need(self, metric):
-        if not metric.updated_on:
+    def __touch_metadata_on_need(self, document):
+        if not document.updated_on:
             delta = self.__updated_on_ttl_sec + 1
         else:
-            updated_on_timestamp = str_to_timestamp(metric.updated_on)
+            updated_on_timestamp = str_to_timestamp(document.updated_on)
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
-            self.__touch_metric(metric.meta.index, metric.uuid)
+            self.__touch_document(document)
 
     def __update_read_on_on_need(self, metric):
         if not metric.read_on:

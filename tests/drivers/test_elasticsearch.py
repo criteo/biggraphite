@@ -21,6 +21,8 @@ import unittest
 import uuid
 import time
 
+import elasticsearch_dsl
+
 from biggraphite import glob_utils as bg_glob
 from biggraphite import test_utils as bg_test_utils
 from biggraphite.accessor import Aggregator, Metric, MetricMetadata, Retention
@@ -267,11 +269,11 @@ class ElasticsearchTestAccessorMetadata(BaseTestAccessorMetadata):
         # Setting up the moc function
         isUpdated = [False]
 
-        def touch_metric_moc(*args, **kwargs):
+        def touch_document_moc(*args, **kwargs):
             isUpdated[0] = True
 
-        old_touch_fn = self.accessor._ElasticSearchAccessor__touch_metric
-        self.accessor._ElasticSearchAccessor__touch_metric = touch_metric_moc
+        old_touch_fn = self.accessor._ElasticSearchAccessor__touch_document
+        self.accessor._ElasticSearchAccessor__touch_document = touch_document_moc
 
         time.sleep(2)
         self.accessor.get_metric(metric1.name, touch=True)
@@ -283,7 +285,61 @@ class ElasticsearchTestAccessorMetadata(BaseTestAccessorMetadata):
         self.assertEqual(isUpdated[0], True)
 
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
-        self.accessor._ElasticSearchAccessor__touch_metric = old_touch_fn
+        self.accessor._ElasticSearchAccessor__touch_document = old_touch_fn
+
+    def test_metric_is_updated_after_ttl(self):
+        metric = self.make_metric("foo")
+        self.accessor.create_metric(metric)
+        self.flush()
+
+        created_metric = self.accessor.get_metric(metric.name)
+        time.sleep(2)
+
+        old_ttl = self.accessor._ElasticSearchAccessor__updated_on_ttl_sec
+        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
+
+        updated_metric = self.accessor.get_metric(metric.name, touch=True)
+
+        self.assertNotEquals(created_metric.updated_on, updated_metric.updated_on)
+
+        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
+
+    def test_metric_is_recreated_if_index_has_changed(self):
+        old_get_index_fn = self.accessor.get_index
+
+        def get_index_mock(metric):
+            return "testindex_2017-07-21"
+
+        self.accessor.get_index = get_index_mock
+
+        metric = self.make_metric("elasticsearch.test_metric_is_recreated_if_index_has_changed")
+        self.accessor.create_metric(metric)
+        self.flush()
+
+        self.accessor.get_metric(metric.name)
+
+        self.accessor.get_index = old_get_index_fn
+
+        old_ttl = self.accessor._ElasticSearchAccessor__updated_on_ttl_sec
+        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
+        time.sleep(2)
+
+        self.accessor.get_metric(metric.name, touch=True)
+        self.flush()
+
+        search = elasticsearch_dsl.Search()
+        search = search.using(self.accessor.client) \
+            .index("testindex*") \
+            .source(['uuid', 'config', 'created_on', 'updated_on', 'read_on']) \
+            .filter('term', name=metric.name) \
+            .sort({'updated_on': {'order': 'desc'}})
+
+        responses = search.execute()
+        self.assertEquals(2, responses.hits.total)
+        self.assertEquals(self.accessor.get_index(metric), responses.hits[0].meta.index)
+        self.assertEquals(get_index_mock(None), responses.hits[1].meta.index)
+
+        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
 
 
 @unittest.skipUnless(
