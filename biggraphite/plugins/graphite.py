@@ -330,8 +330,16 @@ class Finder(BaseFinder):
         else:
             find_start = time.time()
             try:
-                start_time = None if query.startTime is None else datetime.fromtimestamp(query.startTime)
-                end_time = None if query.endTime is None else datetime.fromtimestamp(query.endTime)
+                if query.startTime is None:
+                    start_time = None
+                else:
+                    start_time = datetime.fromtimestamp(query.startTime)
+
+                if query.endTime is None:
+                    end_time = None
+                else:
+                    end_time = datetime.fromtimestamp(query.endTime)
+
                 results = glob_utils.graphite_glob(
                     self.accessor(), query.pattern,
                     metrics=True, directories=not leaves_only,
