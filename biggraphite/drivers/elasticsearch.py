@@ -419,9 +419,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     def get_index(self, metric):
         """Get the index where a metric should be stored."""
-        # Here the index could be sharded further by looking at the
-        # metric metadata, for example, per owner.
-        index_name = self._index_prefix + datetime.datetime.now().strftime(self._index_suffix)
+        indexed_metric = self.__get_metric(metric.name)
+        if indexed_metric is None:
+            index_name = self._index_prefix + datetime.datetime.now().strftime(self._index_suffix)
+        else:
+            index_name = metric.meta.index
+
         if index_name not in self._known_indices:
             if not self.client.indices.exists(index=index_name):
                 self.client.indices.create(
