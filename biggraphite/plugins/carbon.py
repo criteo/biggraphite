@@ -146,7 +146,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         metric_name = self.encode(metric_name)
 
         # Get a Metric object from metric name.
-        metric = self.cache.get_metric(metric_name=metric_name, touch=True)
+        metric = self.cache.get_metric(metric_name=metric_name)
         if not metric:
             raise Exception('Could not find %s' % (metric_name))
 
@@ -191,7 +191,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     def getMetadata(self, metric_name, key):
         metric_name = self.encode(metric_name)
-        metadata = self.cache.get_metric(metric_name=metric_name, touch=True)
+        metadata = self.cache.get_metric(metric_name=metric_name)
 
         if not metadata:
             raise ValueError("%s: No such metric" % metric_name)
@@ -211,7 +211,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         old_value = self.getMetadata(metric_name, key)
         if old_value != value:
             metadata = self.cache.get_metric(
-                metric_name=metric_name, touch=True)
+                metric_name=metric_name)
             if not metadata:
                 raise ValueError("%s: No such metric" % metric_name)
 
@@ -287,7 +287,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         except queue.Empty:
             return
 
-        existing_metric = self.accessor.get_metric(metric.name, touch=True)
+        existing_metric = self.accessor.get_metric(metric.name)
 
         if metric == existing_metric:
             return

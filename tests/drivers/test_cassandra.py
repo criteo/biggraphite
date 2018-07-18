@@ -60,38 +60,29 @@ class TestAccessorWithCassandraSASI(BaseTestAccessorMetadata, bg_test_utils.Test
         self.accessor.max_metrics_per_pattern = old_value
 
     # FIXME (t.chataigner) some duplication with ElasticsearchTestAccessorMetadata.
-    def test_metrics_ttl_correctly_refreshed(self):
-        metric1 = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric1)
+    def test_metric_is_updated_after_ttl(self):
+        metric = self.make_metric("foo")
+        self.accessor.create_metric(metric)
         self.flush()
 
+        created_metric = self.accessor.get_metric(metric.name)
+
         now = datetime.datetime.now()
-
-        # Setting up the moc function
-        isUpdated = [False]
-
-        def touch_metric_moc(*args, **kwargs):
-            isUpdated[0] = True
-
-        old_touch_fn = self.accessor.touch_metric
-        self.accessor.touch_metric = touch_metric_moc
-
         with freezegun.freeze_time(now + datetime.timedelta(seconds=2)):
-            metric = self.accessor.get_metric(metric1.name, touch=True)
-
-        self.assertIsNotNone(metric)
-        self.assertEqual(isUpdated[0], False)
+            self.accessor.touch_metric(metric)
 
         old_ttl = self.accessor._CassandraAccessor__metadata_touch_ttl_sec
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
 
         with freezegun.freeze_time(now + datetime.timedelta(seconds=2)):
-            metric = self.accessor.get_metric(metric1.name, touch=True)
-        self.assertIsNotNone(metric)
-        self.assertEqual(isUpdated[0], True)
+            self.accessor.touch_metric(metric)
+        self.flush()
+
+        updated_metric = self.accessor.get_metric(metric.name)
+
+        self.assertNotEquals(created_metric.updated_on, updated_metric.updated_on)
 
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = old_ttl
-        self.accessor.touch_metric = old_touch_fn
 
 
 @unittest.skipUnless(

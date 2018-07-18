@@ -69,10 +69,10 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).has_metric(metric_name)
         return self._metadata_accessor.has_metric(metric_name)
 
-    def get_metric(self, metric_name, touch=False):
+    def get_metric(self, metric_name):
         """See the real Accessor for a description."""
-        super(HybridAccessor, self).get_metric(metric_name, touch)
-        return self._metadata_accessor.get_metric(metric_name, touch)
+        super(HybridAccessor, self).get_metric(metric_name)
+        return self._metadata_accessor.get_metric(metric_name)
 
     def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
         """See the real Accessor for a description."""
@@ -137,10 +137,10 @@ class HybridAccessor(bg_accessor.Accessor):
         self._metadata_accessor.shutdown()
         self._data_accessor.shutdown()
 
-    def touch_metric(self, metric_name):
+    def touch_metric(self, metric):
         """See the real Accessor for a description."""
-        super(HybridAccessor, self).touch_metric(metric_name)
-        self._metadata_accessor.touch_metric(metric_name)
+        super(HybridAccessor, self).touch_metric(metric)
+        self._metadata_accessor.touch_metric(metric)
 
     def clean(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
               callback_on_progress=None):

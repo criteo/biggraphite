@@ -265,35 +265,6 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
                                     bg_test_utils.TestCaseWithAccessor):
     ACCESSOR_SETTINGS = {'driver': 'elasticsearch'}
 
-    # FIXME (t.chataigner) some duplication with CassandraTestAccessorMetadata.
-    def test_metrics_ttl_correctly_refreshed(self):
-        metric1 = self.make_metric("a.b.c.d.e.f")
-        with freezegun.freeze_time("2014-01-01 00:00:00"):
-            self.accessor.create_metric(metric1)
-        self.flush()
-
-        # Setting up the moc function
-        isUpdated = [False]
-
-        def touch_document_moc(*args, **kwargs):
-            isUpdated[0] = True
-
-        old_touch_fn = self.accessor._ElasticSearchAccessor__touch_document
-        self.accessor._ElasticSearchAccessor__touch_document = touch_document_moc
-
-        with freezegun.freeze_time("2014-01-01 00:00:02"):
-            self.accessor.get_metric(metric1.name, touch=True)
-        self.assertEqual(isUpdated[0], False)
-
-        old_ttl = self.accessor._ElasticSearchAccessor__updated_on_ttl_sec
-        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
-        with freezegun.freeze_time("2014-01-01 00:00:02"):
-            self.accessor.get_metric(metric1.name, touch=True)
-        self.assertEqual(isUpdated[0], True)
-
-        self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
-        self.accessor._ElasticSearchAccessor__touch_document = old_touch_fn
-
     def test_metric_is_updated_after_ttl(self):
         metric = self.make_metric("foo")
         with freezegun.freeze_time("2014-01-01 00:00:00"):
@@ -306,7 +277,10 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
 
         with freezegun.freeze_time("2014-01-01 00:00:02"):
-            updated_metric = self.accessor.get_metric(metric.name, touch=True)
+            self.accessor.touch_metric(metric)
+        self.flush()
+
+        updated_metric = self.accessor.get_metric(metric.name)
 
         self.assertNotEquals(created_metric.updated_on, updated_metric.updated_on)
 
@@ -334,7 +308,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
 
         with freezegun.freeze_time("2014-01-01 00:00:02"):
-            self.accessor.get_metric(metric.name, touch=True)
+            self.accessor.touch_metric(metric)
         self.flush()
 
         search = elasticsearch_dsl.Search()

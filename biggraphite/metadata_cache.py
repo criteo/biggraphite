@@ -172,7 +172,7 @@ class MetadataCache(object):
                 self._cache_set(metric_name, metric)
         return found
 
-    def get_metric(self, metric_name, touch=False):
+    def get_metric(self, metric_name):
         """Return a Metric for this metric_name, None if no such metric."""
         metric, hit = self._cache_get(metric_name)
         if hit:
@@ -182,7 +182,7 @@ class MetadataCache(object):
         # Check that is still doesn't exists.
         if not metric:
             with self._accessor_lock:
-                metric = self._accessor.get_metric(metric_name, touch=touch)
+                metric = self._accessor.get_metric(metric_name)
                 self._cache_set(metric_name, metric)
 
         return metric
