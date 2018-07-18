@@ -512,8 +512,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         query.delete()
 
     # TODO (t.chataigner) Add unittest.
-    def _search_metrics_from_components(self, glob, components, start_time=None, end_time=None):
-        search = self._create_search_query(start_time, end_time).source('name')
+    def _search_metrics_from_components(self, glob, components, search=None):
+        search = self._create_search_query() if search is None else search
+        search = search.source('name')
 
         # Handle glob with globstar(s).
         globstars = components.count(bg_glob.Globstar())
@@ -548,12 +549,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         components = self.__glob_parser.parse(glob)
         glob_depth = _get_depth_from_components(components)
-        has_globstar, search = self._search_metrics_from_components(
-            glob,
-            components,
-            start_time,
-            end_time
-        )
+        search = self._create_search_query(start_time, end_time)
+
+        has_globstar, search = self._search_metrics_from_components(glob, components, search)
         if has_globstar:
             search = search.filter('range', depth={'gte': glob_depth})
         else:
@@ -573,13 +571,13 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             return []
 
         components = self.__glob_parser.parse(glob)
+        search = self._create_search_query(start_time, end_time)
         # There are no "directory" documents, only "metric" documents. Hence appending the
         # AnySequence after the provided glob: we search for metrics under that path.
         has_globstar, search = self._search_metrics_from_components(
             glob,
             components + [[bg_glob.AnySequence()]],
-            start_time,
-            end_time
+            search
         )
         if has_globstar:
             # TODO (t.chataigner) Add a log or raise exception.
