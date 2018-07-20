@@ -7,6 +7,9 @@ pytest
 pytest-benchmark
 unittest2
 
+# Linting
+pylama
+
 # Cassandra
 testing.cassandra3
 
