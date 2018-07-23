@@ -117,5 +117,6 @@ ENV/
 
 # Misc
 apache-cassandra-*
+.deps
 
 .pytest_cache/
