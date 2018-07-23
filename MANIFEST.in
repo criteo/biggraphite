@@ -4,3 +4,5 @@ include MANIFEST.in
 # of including them in the source distribution.
 include README.md
 include requirements.txt tests-requirements.txt
+include-recursive biggraphite/cli/web/template *
+include-recursive biggraphite/cli/web/static *

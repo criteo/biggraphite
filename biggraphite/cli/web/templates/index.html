@@ -1,0 +1,26 @@
+{% extends "gourde/base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<h1>BigGraphite</h1>
+<div class="card">
+    <div class="card-header">Accessor</div>
+    <div class="card-body">
+        <ul>
+            <li>Backend: {{ accessor.backend_name }}</li>
+            <li>Connected: {{ accessor.is_connected }}</li>
+            <li>Cache: {{ accessor.cache }}</li>
+        </ul>
+    </div>
+</div>
+<div class="card">
+    <div class="card-header">Configuration</div>
+    <div class="card-body">
+        <pre>{% for k, v in args.items() %}{{ k }}: {% if 'password' in k %}****{% else %}{{ v}}{% endif %}
+{% endfor %}
+        </pre>
+    </div>
+</div>
+{# Custom Accessor Stuff #}
+{% endblock %}

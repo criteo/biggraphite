@@ -1,0 +1,20 @@
+{# Extend gourde/_base.html to have some default goodies. #}
+{% extends "gourde/_base.html" %}
+
+{# Set the application name #}
+{% block brand %}<a class="navbar-brand" href="/">BigGraphite</a>{% endblock %}
+
+{# Add links to the navbar #}
+{% block navbar_left %}
+    {{ super() }}
+    <li class="nav-item">
+        <a class="nav-link" href="/workers">Workers</a>
+    </li>
+{% endblock %}
+
+{%  block navbar_right %}
+    {{ super() }}
+    <li class="nav-item">
+        <a class="nav-link" href="/api">API</a>
+    </li>
+{%  endblock %}

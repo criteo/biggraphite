@@ -663,6 +663,17 @@ class Metric(object):
         self.updated_on = updated_on
         self.read_on = read_on
 
+    def as_string_dict(self):
+        """Turn an instance into a dict of string to string."""
+        return {
+            "id": str(self.id),
+            "name": self.name,
+            "created_on": self.created_on,
+            "updated_on": self.updated_on,
+            "read_on": self.read_on,
+            "metadata": self.metadata.as_string_dict(),
+        }
+
     def __getattr__(self, name):
         return getattr(self.metadata, name)
 
