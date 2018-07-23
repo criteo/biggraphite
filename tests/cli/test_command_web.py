@@ -14,40 +14,32 @@
 # limitations under the License.
 from __future__ import print_function
 
-import multiprocessing
-import time
 import unittest
 import argparse
+import prometheus_client
 
+from biggraphite.cli import command_web
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
-from biggraphite.cli import command_web
 
 
-class TestCommandDaemon(bg_test_utils.TestCaseWithFakeAccessor):
+class TestCommandWeb(bg_test_utils.TestCaseWithFakeAccessor):
+    def tearDown(self):
+        super(TestCommandWeb, self).tearDown()
+        # Reset the registry to make sure we can instantiate the app again.
+        # TODO: Try to use mock instead to do that.
+        prometheus_client.REGISTRY = prometheus_client.core.CollectorRegistry(
+            auto_describe=True
+        )
 
-    def test_run_daemon(self):
-        self.accessor.drop_all_metrics()
-
-        cmd = command_web.CommandDaemon()
-        command_web._run_webserver = lambda x, y, z: time.sleep(666)
+    def test_run(self):
+        cmd = command_web.CommandWeb()
 
         parser = argparse.ArgumentParser()
         bg_utils.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(
-            ['--clean-backend', '--clean-cache', '--max-age=12']
-        )
-
-        def run():
-            cmd.run(self.accessor, opts)
-
-        p = multiprocessing.Process(target=run)
-
-        p.start()
-        time.sleep(1)
-        assert(p.is_alive())
-        p.terminate()
+        opts = parser.parse_args(["--dry-run"])
+        cmd.run(self.accessor, opts)
 
 
 if __name__ == "__main__":
