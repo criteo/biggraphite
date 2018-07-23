@@ -388,6 +388,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         # Try again, we read_on != None now
         self.accessor.fetch_points(metric, 0, 1, metric.retention[0])
 
+
     def test_update_metric_should_raise_InvalidArgumentError_for_unknown_metric(self):
         with self.assertRaises(bg_elasticsearch.InvalidArgumentError):
             self.accessor.update_metric("whatever", None)
@@ -472,6 +473,58 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         metric = self.make_metric("foo")
         with self.assertRaises(Exception):
             self.accessor.insert_downsampled_points_async(metric, [])
+
+    def test_metric_out_of_search_bounds_should_not_be_found(self):
+        metric_name = "test_metric_out_of_search_bounds_should_not_be_found.a.b.c"
+        metric = self.make_metric(metric_name)
+        self.accessor.create_metric(metric)
+        self.accessor.flush()
+
+        now = datetime.datetime.now()
+        one_week = datetime.timedelta(weeks=1)
+        bounds = [
+            (now - 2 * one_week, now - one_week),
+            (now + one_week, now + 2 * one_week),
+            (None, now - one_week),
+            (now + one_week, None)
+        ]
+
+        for start_time, end_time in bounds:
+            # Without bounds, metric should be found (1 element in the iterator)
+            should_be_found_metrics = self.accessor.glob_metric_names(metric_name)
+            self.assert_iter_not_empty(should_be_found_metrics)
+
+            # With bounds, metric should not be found (0 element in the iterator)
+            should_not_be_found_metric = self.accessor.glob_metric_names(
+                metric_name, start_time, end_time
+            )
+            self.assert_iter_empty(should_not_be_found_metric)
+
+    def test_metric_in_search_bounds_should_be_found(self):
+        metric_name = "test_metric_in_search_bounds_should_be_found.a.b.c"
+        metric = self.make_metric(metric_name)
+        self.accessor.create_metric(metric)
+        self.accessor.flush()
+
+        now = datetime.datetime.now()
+        one_week = datetime.timedelta(weeks=1)
+        bounds = [
+            (now - one_week, now + one_week),
+            (None, now + one_week),
+            (now - one_week, None)
+        ]
+
+        for start_time, end_time in bounds:
+            should_be_found_metric = self.accessor.glob_metric_names(
+                metric_name, start_time, end_time
+            )
+            self.assert_iter_not_empty(should_be_found_metric)
+
+    def assert_iter_empty(self, it):
+        self.assertEqual(sum(1 for _ in it), 0, "Expected no result, got '%s'" % list(it))
+
+    def assert_iter_not_empty(self, it):
+        self.assertTrue(sum(1 for _ in it) > 0, "Expected results, got empty")
 
 
 if __name__ == "__main__":
