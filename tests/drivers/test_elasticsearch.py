@@ -17,6 +17,7 @@
 from __future__ import print_function
 
 import datetime
+import mock
 import unittest
 import uuid
 import time
@@ -256,6 +257,68 @@ class ParseComplexComponentTest(unittest.TestCase):
             bg_glob.Globstar()
         ])
         self.assertEqual(result, "foo(bar|baz)[^ab].*")
+
+
+class ElasticSearchTestAccessor(unittest.TestCase):
+
+    def setUp(self):
+        self._accessor = bg_elasticsearch._ElasticSearchAccessor()
+        self._old_connect_method = self._accessor.connect
+        self._accessor.is_connected = True
+        self._accessor.client = mock.Mock()
+
+        meta_dict = {
+            "aggregator": Aggregator.last,
+            "retention": Retention.from_string("60*1s:60*60s"),
+            "carbon_xfilesfactor": 0.3,
+        }
+        metadata = MetricMetadata(**meta_dict)
+        self._metric = self._accessor.make_metric("a.b", metadata)
+
+        def response_mock(index, doc_type, body):
+            return {"hits": {"total": 1, "max_score": 0, "hits": [{
+                "_index": "biggraphite_metrics_2018-07-11",
+                "_type": "_doc",
+                "_id": "907aee4c-c193-54e2-9eaa-5bc588b8dcce",
+                "_score": 1,
+                "_source": {
+                    "depth": 0,
+                    "name": "a.b",
+                    "p0": "a",
+                    "p1": "b",
+                    "uuid": "907aee4c-c193-54e2-9eaa-5bc588b8dcce",
+                    "created_on": "2018-07-11T09:50:47.407077",
+                    "updated_on": "2018-07-11T09:50:47.407082",
+                    "read_on": None,
+                    "config": {
+                        "aggregator": "last",
+                        "retention": "60*1s:60*60s",
+                        "carbon_xfilesfactor": 0.3,
+                    }
+                }
+            }]}}
+
+        self._accessor.client.search = response_mock
+
+    def test_shutdown_properly_closes_es_connection(self):
+        client = self._accessor.client
+        self._accessor.shutdown()
+        client.transport.close.assert_called_once()
+
+    def test_get_index_creates_index_only_if_unknown(self):
+        self._accessor.client.indices.exists = mock.Mock(return_value=False)
+        self._accessor.get_index(self._metric)
+
+        self._accessor.client.indices.create.assert_called_once()
+        self._accessor.get_index(self._metric)
+        self._accessor.client.indices.create.assert_called_once()  # No more calls
+
+    def test_create_metric_calls_es(self):
+        self._accessor.create_metric(self._metric)
+        self._accessor.client.create.assert_called_once()
+
+    def test_metric_correctly_parsed(self):
+        self.assertEquals(self._metric, self._accessor.get_metric(self._metric.name))
 
 
 class ElasticsearchTestAccessorMetadata(BaseTestAccessorMetadata):
