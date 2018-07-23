@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2018-23-07
+
+### Added
+- Elasticsearch driver (supports metadata only), see [ELASTICSEARCH_DESIGN.md](ELASTICSEARCH_DESIGN.md)
+- Ability to declare distinct data and metadata drivers: use `--data_driver` and `--metadata-driver` instead of
+  `--driver` (`--driver` option is still supported)
+
 ## [0.12.0] - 2018-25-06
 
 ### Added
@@ -231,7 +238,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/criteo/biggraphite/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/criteo/biggraphite/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/criteo/biggraphite/compare/v0.10.7...v0.11.0
 [0.10.7]: https://github.com/criteo/biggraphite/compare/v0.10.6...v0.10.7
