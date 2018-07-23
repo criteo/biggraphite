@@ -84,6 +84,18 @@ You can also simply use `unittest.discover` if you have a working dev environmen
 $ BG_COMPONENTS_MAX_LEN=12 python -m unittest discover --failfast --verbose --catch
 ```
 
+### Running tests faster
+
+By default, integration tests will start and stop a database instance for every test (Cassandra or
+Elasticsearch). To make them run faster, you can run your own instance and provide the connection
+information using environment variable. 
+
+Example:
+
+```
+ES_HOSTPORT=127.0.0.1:9200 CASSANDRA_HOSTPORT=127.0.0.1:9042 tox
+```
+
 ### Running Benchmarks
 
 The simpliest way is to use tox. The command below will run all the tests inside benchmarks/ directory.
