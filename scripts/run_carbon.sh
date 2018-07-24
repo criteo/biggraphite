@@ -9,7 +9,11 @@
 #
 
 cd $(git rev-parse --show-toplevel)
-source scripts/env.sh
+. scripts/env.sh
+
+# Initialize the database
+${CASSANDRA_HOME}/bin/cqlsh < share/schema.cql
+bgutil syncdb
 
 cd ${BG_VENV}/conf
 
@@ -24,6 +28,7 @@ BG_DRIVER = cassandra
 BG_CACHE = memory
 DATABASE = biggraphite
 STORAGE_DIR = /tmp
+CARBON_METRIC_INTERVAL=2
 
 ## Elasticsearch configuration
 # BG_DRIVER = elasticsearch
@@ -38,4 +43,5 @@ END
 fi
 
 touch storage-schemas.conf
+
 bg-carbon-cache --debug --nodaemon --conf=carbon.conf start

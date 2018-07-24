@@ -6,7 +6,8 @@ Those scripts are provided to help you start locally test instances of BigGraphi
 The following one are currently available:
 
 1. Cassandra
-2. Carbon
-3. Graphite Web
+2. Elasticsearch
+3. Carbon
+4. Graphite Web
 
 Run then in this order.

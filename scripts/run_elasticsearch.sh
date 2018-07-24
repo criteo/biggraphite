@@ -7,6 +7,6 @@
 #
 
 cd $(git rev-parse --show-toplevel)
-. ./scripts/env.sh
+. scripts/env.sh
 
-${CASSANDRA_HOME}/bin/cassandra
+${ES_HOME}/bin/elasticsearch

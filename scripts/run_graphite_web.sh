@@ -9,7 +9,7 @@
 #
 
 cd $(git rev-parse --show-toplevel)
-source scripts/env.sh
+. scripts/env.sh
 
 SITE_PACKAGES=$(find ${BG_VENV} -name "site-packages")
 GRAPHITE_WEB_CONF="${SITE_PACKAGES}/graphite/local_settings.py"
