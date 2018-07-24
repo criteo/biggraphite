@@ -1399,12 +1399,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def glob_directory_names(self, glob):
         """Return a sorted list of metric directories matching this glob."""
         super(_CassandraAccessor, self).glob_directory_names(glob)
-        return self.__glob_names("directories", glob)
+        directory_names = self.__glob_names("directories", glob)
+        return bg_glob.filter_from_glob(directory_names, glob)
 
     def glob_metric_names(self, glob):
         """Return a sorted list of metric names matching this glob."""
         super(_CassandraAccessor, self).glob_metric_names(glob)
-        return self.__glob_names("metrics", glob)
+        metric_names = self.__glob_names("metrics", glob)
+        return bg_glob.filter_from_glob(metric_names, glob)
 
     def __glob_names(self, table, glob):
         if glob == "":
