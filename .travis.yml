@@ -42,3 +42,4 @@ sudo: required
 
 before_install:
    - ./tools/install-deps.sh
+   - ./tools/mount-tmpfs.sh
