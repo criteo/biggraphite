@@ -258,7 +258,12 @@ class ParseComplexComponentTest(unittest.TestCase):
         self.assertEqual(result, "foo(bar|baz)[^ab].*")
 
 
-class ElasticsearchTestAccessorMetadata(BaseTestAccessorMetadata):
+@unittest.skipUnless(
+    HAS_ELASTICSEARCH, "ES_HOME must be set.",
+)
+class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
+                                    bg_test_utils.TestCaseWithAccessor):
+    ACCESSOR_SETTINGS = {'driver': 'elasticsearch'}
 
     # FIXME (t.chataigner) some duplication with CassandraTestAccessorMetadata.
     def test_metrics_ttl_correctly_refreshed(self):
@@ -341,13 +346,23 @@ class ElasticsearchTestAccessorMetadata(BaseTestAccessorMetadata):
 
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
 
+    def test_fetch_points_updates_read_on(self):
+        metric = self.make_metric("foo")
+        self.accessor.create_metric(metric)
+        self.flush()
 
-@unittest.skipUnless(
-    HAS_ELASTICSEARCH, "ES_HOME must be set.",
-)
-class TestAccessorWithElasticsearch(ElasticsearchTestAccessorMetadata,
-                                    bg_test_utils.TestCaseWithAccessor):
-    ACCESSOR_SETTINGS = {'driver': 'elasticsearch'}
+        metric = self.accessor.get_metric(metric.name)
+        self.assertIsNone(metric.read_on)
+
+        points = self.accessor.fetch_points(metric, 0, 1, metric.retention[0])
+        self.assertListEqual(list(points), [])
+        self.flush()
+
+        metric = self.accessor.get_metric(metric.name)
+        self.assertIsNotNone(metric.read_on)
+
+        # Try again, we read_on != None now
+        self.accessor.fetch_points(metric, 0, 1, metric.retention[0])
 
 
 if __name__ == "__main__":
