@@ -47,6 +47,13 @@ source scripts/env.sh
 ```
 
 Cassandra tests generate a lot of I/O, so if you are planning to run tests you will also need to mount `/tmp` as tmpfs unless you have a fast SSD.
+You can run this script to do it quickly:
+
+```bash
+./tools/mount-tmpfs.sh
+```
+
+It will mount the `data` directories (for Cassandra and Elasticsearch) into `/dev/shm`
 
 
 ### Running tests
