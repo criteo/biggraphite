@@ -16,7 +16,7 @@ from __future__ import print_function
 
 import freezegun
 import unittest
-import time
+import datetime
 
 from distutils import version
 
@@ -43,8 +43,10 @@ _USEFUL_POINTS = _POINTS[_EXTRA_POINTS:-_EXTRA_POINTS]
 assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 
-class CassandraTestAccessorMetadata(BaseTestAccessorMetadata):
-
+@unittest.skipUnless(
+    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
+)
+class TestAccessorWithCassandraSASI(BaseTestAccessorMetadata, bg_test_utils.TestCaseWithAccessor):
     def test_glob_too_many_directories(self):
         for name in "a", "a.b", "x.y.z":
             metric = bg_test_utils.make_metric(name)
@@ -60,8 +62,10 @@ class CassandraTestAccessorMetadata(BaseTestAccessorMetadata):
     # FIXME (t.chataigner) some duplication with ElasticsearchTestAccessorMetadata.
     def test_metrics_ttl_correctly_refreshed(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
-        with freezegun.freeze_time("2014-01-01 00:00:00"):
-            self.accessor.create_metric(metric1)
+        self.accessor.create_metric(metric1)
+        self.flush()
+
+        now = datetime.datetime.now()
 
         # Setting up the moc function
         isUpdated = [False]
@@ -72,14 +76,18 @@ class CassandraTestAccessorMetadata(BaseTestAccessorMetadata):
         old_touch_fn = self.accessor.touch_metric
         self.accessor.touch_metric = touch_metric_moc
 
-        with freezegun.freeze_time("2014-01-01 00:00:02"):
-            self.accessor.get_metric(metric1.name, touch=True)
+        with freezegun.freeze_time(now + datetime.timedelta(seconds=2)):
+            metric = self.accessor.get_metric(metric1.name, touch=True)
+
+        self.assertIsNotNone(metric)
         self.assertEqual(isUpdated[0], False)
 
         old_ttl = self.accessor._CassandraAccessor__metadata_touch_ttl_sec
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
-        with freezegun.freeze_time("2014-01-01 00:00:02"):
-            self.accessor.get_metric(metric1.name, touch=True)
+
+        with freezegun.freeze_time(now + datetime.timedelta(seconds=2)):
+            metric = self.accessor.get_metric(metric1.name, touch=True)
+        self.assertIsNotNone(metric)
         self.assertEqual(isUpdated[0], True)
 
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = old_ttl
@@ -89,15 +97,7 @@ class CassandraTestAccessorMetadata(BaseTestAccessorMetadata):
 @unittest.skipUnless(
     HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
 )
-class TestAccessorWithCassandraSASI(CassandraTestAccessorMetadata,
-                                    bg_test_utils.TestCaseWithAccessor):
-    pass
-
-
-@unittest.skipUnless(
-    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
-)
-class TestAccessorWithCassandraLucene(CassandraTestAccessorMetadata,
+class TestAccessorWithCassandraLucene(TestAccessorWithCassandraSASI,
                                       bg_test_utils.TestCaseWithAccessor):
     ACCESSOR_SETTINGS = {'cassandra_use_lucene': True}
 
