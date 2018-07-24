@@ -99,6 +99,12 @@ ES_HOSTPORT=127.0.0.1:9200 CASSANDRA_HOSTPORT=127.0.0.1:9042 tox
 To make the tests go even faster, move the `data` directories of Elasticsearch and Cassandra
 to /dev/shm.
 
+```
+rm -rf .deps/elasticsearch-${ES_VERSION}/data
+mkdir /dev/shm/es-bg-data
+ln -s /dev/shm/es-bg-data .deps/elasticsearch-${ES_VERSION}/data
+```
+
 ### Running Benchmarks
 
 The simpliest way is to use tox. The command below will run all the tests inside benchmarks/ directory.
