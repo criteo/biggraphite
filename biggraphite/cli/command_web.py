@@ -14,11 +14,18 @@
 # limitations under the License.
 """Web Command."""
 
-import gourde
-
 from biggraphite.cli import command
-from biggraphite.cli.web import app
 from biggraphite import utils
+
+try:
+    import gourde
+except ImportError:
+    gourde = None
+
+try:
+    from biggraphite.cli.web import app
+except ImportError:
+    app = None
 
 
 class CommandWeb(command.BaseCommand):
@@ -29,12 +36,16 @@ class CommandWeb(command.BaseCommand):
 
     def add_arguments(self, parser):
         """Add custom arguments."""
-        parser.add_argument('--dry-run', action="store_true")
-        gourde.Gourde.get_argparser(parser)
+        if gourde:
+            parser.add_argument('--dry-run', action="store_true")
+            gourde.Gourde.get_argparser(parser)
 
     def run(self, accessor, opts):
         """Run the command."""
         # TODO: accessor.connect() could be called asynchronously later.
+        if not app:
+            raise NotImplementedError("gourde is not installed.")
+
         accessor.connect()
 
         webapp = app.WebApp()

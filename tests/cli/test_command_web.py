@@ -17,12 +17,17 @@ from __future__ import print_function
 import unittest
 import argparse
 import prometheus_client
+try:
+    import gourde
+except ImportError:
+    gourde = None
 
 from biggraphite.cli import command_web
 from biggraphite import utils as bg_utils
 from biggraphite import test_utils as bg_test_utils
 
 
+@unittest.skipUnless(gourde, "Gourde is required.")
 class TestCommandWeb(bg_test_utils.TestCaseWithFakeAccessor):
     def tearDown(self):
         super(TestCommandWeb, self).tearDown()
