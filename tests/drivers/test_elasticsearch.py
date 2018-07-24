@@ -20,7 +20,6 @@ import freezegun
 import datetime
 import unittest
 import uuid
-import time
 
 import elasticsearch_dsl
 
