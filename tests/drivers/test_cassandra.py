@@ -14,6 +14,7 @@
 # limitations under the License.
 from __future__ import print_function
 
+import freezegun
 import unittest
 import time
 
@@ -59,7 +60,8 @@ class CassandraTestAccessorMetadata(BaseTestAccessorMetadata):
     # FIXME (t.chataigner) some duplication with ElasticsearchTestAccessorMetadata.
     def test_metrics_ttl_correctly_refreshed(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric1)
+        with freezegun.freeze_time("2014-01-01 00:00:00"):
+            self.accessor.create_metric(metric1)
 
         # Setting up the moc function
         isUpdated = [False]
@@ -70,13 +72,14 @@ class CassandraTestAccessorMetadata(BaseTestAccessorMetadata):
         old_touch_fn = self.accessor.touch_metric
         self.accessor.touch_metric = touch_metric_moc
 
-        time.sleep(2)
-        self.accessor.get_metric(metric1.name, touch=True)
+        with freezegun.freeze_time("2014-01-01 00:00:02"):
+            self.accessor.get_metric(metric1.name, touch=True)
         self.assertEqual(isUpdated[0], False)
 
         old_ttl = self.accessor._CassandraAccessor__metadata_touch_ttl_sec
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
-        self.accessor.get_metric(metric1.name, touch=True)
+        with freezegun.freeze_time("2014-01-01 00:00:02"):
+            self.accessor.get_metric(metric1.name, touch=True)
         self.assertEqual(isUpdated[0], True)
 
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = old_ttl

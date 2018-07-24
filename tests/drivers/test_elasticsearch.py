@@ -16,6 +16,7 @@
 
 from __future__ import print_function
 
+import freezegun
 import datetime
 import unittest
 import uuid
@@ -268,7 +269,8 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
     # FIXME (t.chataigner) some duplication with CassandraTestAccessorMetadata.
     def test_metrics_ttl_correctly_refreshed(self):
         metric1 = self.make_metric("a.b.c.d.e.f")
-        self.accessor.create_metric(metric1)
+        with freezegun.freeze_time("2014-01-01 00:00:00"):
+            self.accessor.create_metric(metric1)
         self.flush()
 
         # Setting up the moc function
@@ -280,13 +282,14 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         old_touch_fn = self.accessor._ElasticSearchAccessor__touch_document
         self.accessor._ElasticSearchAccessor__touch_document = touch_document_moc
 
-        time.sleep(2)
-        self.accessor.get_metric(metric1.name, touch=True)
+        with freezegun.freeze_time("2014-01-01 00:00:02"):
+            self.accessor.get_metric(metric1.name, touch=True)
         self.assertEqual(isUpdated[0], False)
 
         old_ttl = self.accessor._ElasticSearchAccessor__updated_on_ttl_sec
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
-        self.accessor.get_metric(metric1.name, touch=True)
+        with freezegun.freeze_time("2014-01-01 00:00:02"):
+            self.accessor.get_metric(metric1.name, touch=True)
         self.assertEqual(isUpdated[0], True)
 
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
@@ -294,16 +297,17 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
 
     def test_metric_is_updated_after_ttl(self):
         metric = self.make_metric("foo")
-        self.accessor.create_metric(metric)
+        with freezegun.freeze_time("2014-01-01 00:00:00"):
+            self.accessor.create_metric(metric)
         self.flush()
 
         created_metric = self.accessor.get_metric(metric.name)
-        time.sleep(2)
 
         old_ttl = self.accessor._ElasticSearchAccessor__updated_on_ttl_sec
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
 
-        updated_metric = self.accessor.get_metric(metric.name, touch=True)
+        with freezegun.freeze_time("2014-01-01 00:00:02"):
+            updated_metric = self.accessor.get_metric(metric.name, touch=True)
 
         self.assertNotEquals(created_metric.updated_on, updated_metric.updated_on)
 
@@ -313,23 +317,25 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         old_get_index_fn = self.accessor.get_index
 
         def get_index_mock(metric):
-            return "testindex_2017-07-21"
+            return "testindex_2013-07-21"
 
         self.accessor.get_index = get_index_mock
 
         metric = self.make_metric("elasticsearch.test_metric_is_recreated_if_index_has_changed")
-        self.accessor.create_metric(metric)
+        with freezegun.freeze_time("2014-01-01 00:00:00"):
+            self.accessor.create_metric(metric)
         self.flush()
 
-        self.accessor.get_metric(metric.name)
+        with freezegun.freeze_time("2014-01-01 00:00:00"):
+            self.accessor.get_metric(metric.name)
 
         self.accessor.get_index = old_get_index_fn
 
         old_ttl = self.accessor._ElasticSearchAccessor__updated_on_ttl_sec
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = 1
-        time.sleep(2)
 
-        self.accessor.get_metric(metric.name, touch=True)
+        with freezegun.freeze_time("2014-01-01 00:00:02"):
+            self.accessor.get_metric(metric.name, touch=True)
         self.flush()
 
         search = elasticsearch_dsl.Search()
@@ -341,7 +347,8 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
 
         responses = search.execute()
         self.assertEquals(2, responses.hits.total)
-        self.assertEquals(self.accessor.get_index(metric), responses.hits[0].meta.index)
+        with freezegun.freeze_time("2014-01-01 00:00:02"):
+            self.assertEquals(self.accessor.get_index(metric), responses.hits[0].meta.index)
         self.assertEquals(get_index_mock(None), responses.hits[1].meta.index)
 
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
