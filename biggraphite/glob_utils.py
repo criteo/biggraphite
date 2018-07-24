@@ -272,21 +272,24 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
         # TODO(d.forest): should we instead raise an exception?
         return ([], [])
 
-    glob_re = re.compile(glob_to_regex(graphite_glob))
-
     if metrics:
         metrics = accessor.glob_metric_names(graphite_glob)
-        metrics = list(filter(glob_re.match, metrics))
+        metrics = filter_from_glob(metrics, graphite_glob)
     else:
         metrics = []
 
     if directories:
         directories = accessor.glob_directory_names(graphite_glob)
-        directories = list(filter(glob_re.match, directories))
+        directories = filter_from_glob(directories, graphite_glob)
     else:
         directories = []
 
     return metrics, directories
+
+
+def filter_from_glob(names, glob_repr):
+    glob_re = re.compile(glob_to_regex(glob_repr))
+    return list(filter(glob_re.match, names))
 
 
 class GlobExpression(object):

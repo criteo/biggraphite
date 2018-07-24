@@ -139,6 +139,30 @@ class TestGlobUtilsInternals(unittest.TestCase):
             self.assertSequenceEqual(expected, parsed)
             self.assertEqual(fully_defined, parser.is_fully_defined(parsed), parsed)
 
+    def test_filter_from_glob_should_keep_exact_match(self):
+        name = "foo.bar.baz"
+        filtered = bg_glob.filter_from_glob([name], name)
+        self.assertEqual([name], filtered)
+
+    def test_filter_from_glob_should_keep_regexp_match(self):
+        regexp = "foo.bar.*"
+        matching_name_1 = "foo.bar.baz"
+        matching_name_2 = "foo.bar.qux"
+
+        filtered = bg_glob.filter_from_glob([matching_name_1, matching_name_2], regexp)
+
+        self.assertEqual([matching_name_1, matching_name_2], filtered)
+
+    def test_filter_from_glob_should_remove_regexp_match(self):
+        regexp = "foo.bar.*"
+        matching_name = "foo.bar.baz"
+        not_matching_name_1 = "bar.foo.qux"
+        not_matching_name_2 = "bar.foo.quux"
+
+        filtered = bg_glob.filter_from_glob([matching_name, not_matching_name_1, not_matching_name_2], regexp)
+
+        self.assertEqual([matching_name], filtered)
+
 
 class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
     _metric_names = sorted([
