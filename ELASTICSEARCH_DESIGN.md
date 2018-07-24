@@ -180,6 +180,10 @@ GET biggraphite_metrics*/_search
         {
           "term": {
             "p0": "criteo",
+          }
+        },
+        {
+          "term": {
             "p2": "foo",
           }
         },

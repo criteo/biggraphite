@@ -1369,6 +1369,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             delta = self.__metadata_touch_ttl_sec + 1
         else:
             delta = int(time.time()) - int(updated_on / 1000)
+
         if delta >= self.__metadata_touch_ttl_sec:
             self.touch_metric(metric_name)
 
