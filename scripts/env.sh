@@ -41,7 +41,6 @@ export BG_COMPONENTS_MAX_LEN=12
 
 export CASSANDRA_VERSION=3.11.2
 export ES_VERSION=6.3.1
-export ES_HOME=./.deps/ELASTICSEARCH_HOME
 
 ./tools/install-deps.sh
 
