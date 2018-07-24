@@ -59,11 +59,11 @@ pip install -r requirements.txt
 pip install -r tests-requirements.txt
 pip install -e .
 
-# Install Cassandra
+# Install Cassandra and Elasticsearch
 export CASSANDRA_VERSION=3.11.2
-wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
-tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+export ES_VERSION=6.3.1
 export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}
+./tools/install-deps.sh
 ```
 
 Cassandra tests generate a lot of I/O, so if you are planning to run tests you will also need to mount `/tmp` as tmpfs unless you have a fast SSD.
@@ -95,6 +95,9 @@ Example:
 ```
 ES_HOSTPORT=127.0.0.1:9200 CASSANDRA_HOSTPORT=127.0.0.1:9042 tox
 ```
+
+To make the tests go even faster, move the `data` directories of Elasticsearch and Cassandra
+to /dev/shm.
 
 ### Running Benchmarks
 

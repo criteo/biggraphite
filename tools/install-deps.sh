@@ -3,18 +3,22 @@
 # This scripts require CASSANDRA_VERSION, CASSANDRA_STRATIO_LUCENE_VERSION,
 # ES_VERSION to be set.
 # Example:
-# export CASSANDRA_VERSION=3.11.1
+# export CASSANDRA_VERSION=3.11.2
 # export CASSANDRA_STRATIO_LUCENE_VERSION=${CASSANDRA_VERSION}.0
 # export ES_VERSION=6.3.1
 
 CASSANDRA_HOME=$(pwd)"/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
+ES_HOME=$(pwd)"/.deps/elasticsearch-${ES_VERSION}/"
 
-mkdir .deps
+mkdir -p .deps
 
 if [ -n "${CASSANDRA_VERSION}" ]; then
     cd .deps
-    wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
-    tar -xzf "apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+    FILENAME="apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+    if [ ! -f "${FILENAME}" ]; then
+        wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/${FILENAME}"
+        tar -xzf "${FILENAME}"
+    fi
     cd -
 fi
 
@@ -39,7 +43,10 @@ fi
 
 if [ -n "${ES_VERSION}" ]; then
     cd .deps
-    wget "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-${ES_VERSION}.tar.gz"
-    tar -xzf "elasticsearch-${ES_VERSION}.tar.gz"
+    FILENAME="elasticsearch-${ES_VERSION}.tar.gz"
+    if [ ! -f "${FILENAME}" ]; then
+        wget "https://artifacts.elastic.co/downloads/elasticsearch/${FILENAME}"
+        tar -xzf "${FILENAME}"
+    fi
     cd -
 fi
