@@ -117,6 +117,7 @@ ENV/
 
 # Misc
 apache-cassandra-*
+cassandra-lucene-index-plugin*
 .deps
 
 .pytest_cache/
