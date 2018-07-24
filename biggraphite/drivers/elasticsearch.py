@@ -29,9 +29,7 @@ import time
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _utils
-
-from biggraphite.drivers.ttls import DEFAULT_READ_ON_TTL_SEC, DEFAULT_UPDATED_ON_TTL_SEC
-from biggraphite.drivers.ttls import str_to_datetime, str_to_timestamp, datetime_to_str
+from biggraphite.drivers import ttls
 
 log = logging.getLogger(__name__)
 
@@ -134,8 +132,6 @@ OPTIONS = {
     "port": int,
     "timeout": float,
 }
-
-UNDEFINED_RESULT = None
 
 
 def add_argparse_arguments(parser):
@@ -324,8 +320,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         username=DEFAULT_USERNAME,
         password=DEFAULT_PASSWORD,
         timeout=DEFAULT_TIMEOUT,
-        updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
-        read_on_ttl_sec=DEFAULT_READ_ON_TTL_SEC,
+        updated_on_ttl_sec=ttls.DEFAULT_UPDATED_ON_TTL_SEC,
+        read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
@@ -628,9 +624,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         return self.make_metric(
             document.name,
             metadata,
-            created_on=str_to_datetime(document.created_on),
-            updated_on=str_to_datetime(document.updated_on),
-            read_on=str_to_datetime(document.read_on)
+            created_on=ttls.str_to_datetime(document.created_on),
+            updated_on=ttls.str_to_datetime(document.updated_on),
+            read_on=ttls.str_to_datetime(document.read_on)
         )
 
     def __get_document(self, metric_name):
@@ -653,7 +649,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             metric, time_start, time_end, stage
         )
         self.__update_read_on_on_need(metric)
-        return UNDEFINED_RESULT
+        return []
 
     def touch_metric(self, metric_name):
         """See the real Accessor for a description."""
@@ -680,7 +676,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             }
         }
         self.__update_document(data, index, document_id)
-        document.updated_on = datetime_to_str(updated_on)
+        document.updated_on = ttls.datetime_to_str(updated_on)
 
     def repair(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -726,7 +722,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if not document.updated_on:
             delta = self.__updated_on_ttl_sec + 1
         else:
-            updated_on_timestamp = str_to_timestamp(document.updated_on)
+            updated_on_timestamp = ttls.str_to_timestamp(document.updated_on)
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
@@ -736,7 +732,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if not metric.read_on:
             delta = self.__read_on_ttl_sec + 1
         else:
-            read_on_timestamp = str_to_timestamp(metric.read_on)
+            read_on_timestamp = ttls.str_to_timestamp(metric.read_on)
             delta = int(time.time()) - int(read_on_timestamp)
 
         if delta >= self.__read_on_ttl_sec:

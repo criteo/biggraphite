@@ -14,6 +14,7 @@
 # limitations under the License.
 """Time constants and functions used by accessors."""
 
+import datetime
 import dateutil
 import time
 
@@ -27,6 +28,9 @@ DEFAULT_UPDATED_ON_TTL_SEC = 3 * DAY
 
 def str_to_datetime(str_repr):
     """Convert a string into a datetime."""
+    # Allow the caller to be stupid.
+    if type(str_repr) == datetime.datetime:
+        return str_repr
     if not str_repr:
         return None
     return dateutil.parser.parse(str_repr)
