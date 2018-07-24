@@ -16,11 +16,15 @@
 import unittest
 import prometheus_client
 
-import gourde
-from biggraphite.cli.web import app
+try:
+    import gourde
+    from biggraphite.cli.web import app
+except ImportError:
+    gourde = None
+
 from biggraphite import test_utils as bg_test_utils
 
-
+@unittest.skipUnless(gourde, "Gourde is required.")
 class TestWebApp(bg_test_utils.TestCaseWithFakeAccessor):
 
     def setUp(self):
