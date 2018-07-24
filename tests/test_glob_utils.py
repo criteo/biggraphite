@@ -159,7 +159,10 @@ class TestGlobUtilsInternals(unittest.TestCase):
         not_matching_name_1 = "bar.foo.qux"
         not_matching_name_2 = "bar.foo.quux"
 
-        filtered = bg_glob.filter_from_glob([matching_name, not_matching_name_1, not_matching_name_2], regexp)
+        filtered = bg_glob.filter_from_glob(
+            [matching_name, not_matching_name_1, not_matching_name_2],
+            regexp
+        )
 
         self.assertEqual([matching_name], filtered)
 

@@ -274,13 +274,11 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
 
     if metrics:
         metrics = accessor.glob_metric_names(graphite_glob)
-        metrics = filter_from_glob(metrics, graphite_glob)
     else:
         metrics = []
 
     if directories:
         directories = accessor.glob_directory_names(graphite_glob)
-        directories = filter_from_glob(directories, graphite_glob)
     else:
         directories = []
 
@@ -288,6 +286,7 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
 
 
 def filter_from_glob(names, glob_repr):
+    """Truc."""
     glob_re = re.compile(glob_to_regex(glob_repr))
     return list(filter(glob_re.match, names))
 

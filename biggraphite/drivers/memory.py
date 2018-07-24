@@ -166,12 +166,14 @@ class _MemoryAccessor(bg_accessor.Accessor):
     def glob_metric_names(self, glob):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).glob_metric_names(glob)
-        return iter(self.__glob_names(self._metric_names, glob))
+        metric_names = iter(self.__glob_names(self._metric_names, glob))
+        return bg_glob.filter_from_glob(metric_names, glob)
 
     def glob_directory_names(self, glob):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).glob_directory_names(glob)
-        return iter(self.__glob_names(self._directory_names, glob))
+        directory_names = iter(self.__glob_names(self._directory_names, glob))
+        return bg_glob.filter_from_glob(directory_names, glob)
 
     def has_metric(self, metric_name):
         """See bg_accessor.Accessor."""
