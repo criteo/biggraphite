@@ -10,9 +10,8 @@
 CASSANDRA_HOME=$(pwd)"/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
 ES_HOME=$(pwd)"/.deps/elasticsearch-${ES_VERSION}/"
 
-mkdir -p .deps
-
-if [ -n "${CASSANDRA_VERSION}" ]; then
+function install_cassandra()
+{
     if [ ! -d "${CASSANDRA_HOME}" ]; then
         echo "Installing Cassandra"
         cd .deps
@@ -25,7 +24,10 @@ if [ -n "${CASSANDRA_VERSION}" ]; then
     else
         echo "Skip cassandra installation, already installed in ${CASSANDRA_HOME}"
     fi
+}
 
+function install_lucene()
+{
     if ! ls ${CASSANDRA_HOME}/lib/cassandra-lucene-index-plugin-*.jar 1> /dev/null 2>&1; then
         if [ -n "${CASSANDRA_STRATIO_LUCENE_VERSION}" ]; then
             echo "Installing Cassandra Statio Lucene plugin"
@@ -49,23 +51,38 @@ if [ -n "${CASSANDRA_VERSION}" ]; then
     else
         echo "Skip Cassandra Statio Lucene installation. Already installed"
     fi
-else
-    echo "Skip cassandra installation. CASSANDRA_VERSION is not set"
-fi
 
-if [ ! -d "${ES_HOME}" ]; then
-    if [ -n "${ES_VERSION}" ]; then
-        echo "Installing Elasticsearch"
-        cd .deps
-        FILENAME="elasticsearch-${ES_VERSION}.tar.gz"
-        if [ ! -f "${FILENAME}" ]; then
-            wget "https://artifacts.elastic.co/downloads/elasticsearch/${FILENAME}"
-            tar -xzf "${FILENAME}"
-        fi
-        cd -
+}
+function install_cassandra_with_lucene()
+{
+    if [ -n "${CASSANDRA_VERSION}" ]; then
+        install_cassandra
+        install_lucene
     else
-        echo "Skip elasticsearch installation. ES_VERSION is not set"
+        echo "Skip cassandra installation. CASSANDRA_VERSION is not set"
     fi
-else
-    echo "Skip elasticsearch installation. Already installed in ${ES_HOME}"
-fi
+}
+
+function install_elasticsearch()
+{
+    if [ ! -d "${ES_HOME}" ]; then
+        if [ -n "${ES_VERSION}" ]; then
+            echo "Installing Elasticsearch"
+            cd .deps
+            FILENAME="elasticsearch-${ES_VERSION}.tar.gz"
+            if [ ! -f "${FILENAME}" ]; then
+                wget "https://artifacts.elastic.co/downloads/elasticsearch/${FILENAME}"
+                tar -xzf "${FILENAME}"
+            fi
+            cd -
+        else
+            echo "Skip elasticsearch installation. ES_VERSION is not set"
+        fi
+    else
+        echo "Skip elasticsearch installation. Already installed in ${ES_HOME}"
+    fi
+}
+
+mkdir -p .deps
+install_cassandra_with_lucene
+install_elasticsearch
