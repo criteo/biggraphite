@@ -29,5 +29,5 @@ twisted
 zope.interface
 whisper
 
-# We could use Django<2.0 but we match what graphire requires instead.
+# We could use Django<2.0 but we match what graphite requires instead.
 Django>=1.8,<1.11.99
