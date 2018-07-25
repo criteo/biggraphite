@@ -21,6 +21,8 @@ import gourde
 import prometheus_client
 
 from biggraphite.cli.web import context
+from biggraphite.cli.web.namespaces import biggraphite as ns_biggraphite
+from biggraphite.cli.web.namespaces import bgutil as ns_bgutil
 
 
 class Error(Exception):
@@ -58,10 +60,6 @@ class WebApp(object):
 
     def initialize_api(self):
         """Initialize an API."""
-        # Avoid circular dependencies.
-        from biggraphite.cli.web.namespaces import bgutil as ns_bgutil
-        from biggraphite.cli.web.namespaces import biggraphite as ns_biggraphite
-
         blueprint = flask.Blueprint("api", __name__, url_prefix="/api")
 
         api = flask_restplus.Api(version="1.0", title="BigGraphite API")
