@@ -651,21 +651,23 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def touch_metric(self, metric):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).touch_metric(metric)
-        metric_name = bg_accessor.sanitize_metric_name(metric.name)
-        document = self.__get_document(metric_name)
 
-        # The metric might not exist in elasticsearch yet.
-        if not document:
-            return
-
-        if not document.updated_on:
+        if not metric.updated_on:
             delta = self.__updated_on_ttl_sec + 1
         else:
-            updated_on_timestamp = ttls.str_to_timestamp(document.updated_on)
+            updated_on_timestamp = time.mktime(metric.updated_on.timetuple()) / 1000
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
-            self.__touch_document(document)
+            # Make sure the caller also see the change without refreshing
+            # the metric.
+            metric.updated_on = datetime.datetime.now()
+
+            # Update Elasticsearch.
+            metric_name = bg_accessor.sanitize_metric_name(metric.name)
+            document = self.__get_document(metric_name)
+            if document:
+                self.__touch_document(document)
 
     def __touch_document(self, document):
         metric = self._document_to_metric(document)

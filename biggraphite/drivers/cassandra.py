@@ -24,6 +24,7 @@ import os
 import random
 import time
 import six
+import datetime
 from os import path as os_path
 from distutils import version
 
@@ -1686,6 +1687,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         else:
             delta = int(time.time()) - int(time.mktime(metric.updated_on.timetuple()) / 1000)
         if delta >= self.__metadata_touch_ttl_sec:
+            # Make sure the caller also see the change without refreshing
+            # the metric.
+            metric.updated_on = datetime.datetime.now()
+
+            # Update Cassandra.
             self._execute_async_metadata(
                 self.__touch_metrics_metadata_statement,
                 (metric.name,)
