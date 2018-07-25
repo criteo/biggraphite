@@ -14,6 +14,8 @@
 # limitations under the License.
 """BigGraphite API."""
 
+from __future__ import absolute_import
+
 import flask_restplus as rp
 
 from biggraphite.cli.web import context

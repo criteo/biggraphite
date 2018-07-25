@@ -22,11 +22,6 @@ try:
 except ImportError:
     gourde = None
 
-try:
-    from biggraphite.cli.web import app
-except ImportError:
-    app = None
-
 
 class CommandWeb(command.BaseCommand):
     """Web UI for BigGraphite."""
@@ -42,10 +37,9 @@ class CommandWeb(command.BaseCommand):
 
     def run(self, accessor, opts):
         """Run the command."""
-        # TODO: accessor.connect() could be called asynchronously later.
-        if not app:
-            raise NotImplementedError("gourde is not installed.")
+        from biggraphite.cli.web import app
 
+        # TODO: accessor.connect() could be called asynchronously later.
         accessor.connect()
 
         webapp = app.WebApp()
