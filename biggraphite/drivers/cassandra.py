@@ -1685,7 +1685,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not metric.updated_on:
             delta = self.__metadata_touch_ttl_sec + 1
         else:
-            delta = int(time.time()) - int(time.mktime(metric.updated_on.timetuple()) / 1000)
+            delta = int(time.time()) - int(time.mktime(metric.updated_on.timetuple()))
+
         if delta >= self.__metadata_touch_ttl_sec:
             # Make sure the caller also see the change without refreshing
             # the metric.

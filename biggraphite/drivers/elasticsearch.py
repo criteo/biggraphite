@@ -655,7 +655,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if not metric.updated_on:
             delta = self.__updated_on_ttl_sec + 1
         else:
-            updated_on_timestamp = time.mktime(metric.updated_on.timetuple()) / 1000
+            updated_on_timestamp = time.mktime(metric.updated_on.timetuple())
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
