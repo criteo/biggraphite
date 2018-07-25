@@ -1,7 +1,6 @@
 #!/bin/sh
 
-# Provide base environment for test scripts.This is not meant
-# to be used directly: it is used by other scripts.
+# Provide base environment for tests and test scripts.
 #
 # Usage:
 #  $ source env.sh
