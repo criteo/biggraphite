@@ -110,15 +110,6 @@ class TestHybridAccessor(unittest.TestCase):
         self._metadata_accessor.get_metric.assert_called_with(DEFAULT_METRIC_NAME)
         self._data_accessor.get_metric.assert_not_called()
 
-    def test_make_metric_should_be_called_only_for_metadata(self):
-        self._accessor.connect()
-        self._accessor.make_metric(DEFAULT_METRIC_NAME, DEFAULT_METADATA)
-
-        self._metadata_accessor.make_metric.assert_called_with(
-            DEFAULT_METRIC_NAME, DEFAULT_METADATA, None, None, None
-        )
-        self._data_accessor.make_metric.assert_not_called()
-
     def test_glob_metric_names_should_be_called_only_for_metadata(self):
         self._accessor.connect()
         self._accessor.glob_metric_names(DEFAULT_GLOB)

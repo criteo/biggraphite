@@ -74,12 +74,6 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).get_metric(metric_name)
         return self._metadata_accessor.get_metric(metric_name)
 
-    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
-        """See the real Accessor for a description."""
-        super(HybridAccessor, self).make_metric(name, metadata, created_on, updated_on, read_on)
-        # we chose to call metadata accessor method but it should be moved up the accessor class
-        return self._metadata_accessor.make_metric(name, metadata, created_on, updated_on, read_on)
-
     def glob_metric_names(self, glob):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).glob_metric_names(glob)
