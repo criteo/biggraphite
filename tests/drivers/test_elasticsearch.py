@@ -266,8 +266,8 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
     ACCESSOR_SETTINGS = {'driver': 'elasticsearch'}
 
     def test_metric_is_updated_after_ttl(self):
-        metric = self.make_metric("foo")
         with freezegun.freeze_time("2014-01-01 00:00:00"):
+            metric = self.make_metric("foo")
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -294,8 +294,8 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
 
         self.accessor.get_index = get_index_mock
 
-        metric = self.make_metric("elasticsearch.test_metric_is_recreated_if_index_has_changed")
         with freezegun.freeze_time("2014-01-01 00:00:00"):
+            metric = self.make_metric("elasticsearch.test_metric_is_recreated_if_index_has_changed")
             self.accessor.create_metric(metric)
         self.flush()
 
