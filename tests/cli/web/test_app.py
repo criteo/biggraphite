@@ -24,6 +24,7 @@ except ImportError:
 
 from biggraphite import test_utils as bg_test_utils
 
+
 @unittest.skipUnless(gourde, "Gourde is required.")
 class TestWebApp(bg_test_utils.TestCaseWithFakeAccessor):
 
