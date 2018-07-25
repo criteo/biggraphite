@@ -14,12 +14,9 @@
 # limitations under the License.
 from __future__ import print_function
 
-import re
-
 from biggraphite import accessor as bg_accessor
 from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import test_utils as bg_test_utils
-from biggraphite import glob_utils as bg_glob_utils
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
 
@@ -51,12 +48,10 @@ class BaseTestAccessorMetadata(object):
             # Check we can find the matches of a glob
             matches = sorted(list(self.accessor.glob_metric_names(glob)))
 
-            # Lucene is supposed to give perfect results, so filter wrongly expected matches.
-            if IS_CASSANDRA_LUCENE or IS_ELASTICSEARCH:
-                glob_re = re.compile(bg_glob_utils.glob_to_regex(glob))
-                expected_matches = list(filter(glob_re.match, expected_matches))
-
-            self.assertEqual(expected_matches, matches)
+            self.assertEqual(
+                expected_matches, matches,
+                "Expected '%s' for glob '%s', got '%s'" % (expected_matches, glob, matches)
+            )
 
         # Empty query
         assert_find("", [])
@@ -67,20 +62,18 @@ class BaseTestAccessorMetadata(object):
 
         # Character wildcard
         assert_find("?",
-                    [x for x in metrics if x.count('.') == 0])
-        assert_find("sup?er",
-                    [x for x in metrics if x.startswith("sup")])
+                    [x for x in metrics if len(x) == 1])
+        assert_find("sup?er", ['supper'])
 
         # Character selector
-        for pattern in [
-                "a[!dfp].o.g",
-                u"a[!dfp].o.g",
-                "a[!dfp]suffix.o.g",
-                "a[nope].o.g",
-                "a[nope]suffix.o.g",
+        for pattern, expected in [
+            ("a[!dfp].o.g", ['az.o.g']),
+            (u"a[!dfp].o.g", ['az.o.g']),
+            ("a[!dfp]suffix.o.g", []),
+            ("a[nope].o.g", ['ap.o.g']),
+            ("a[nope]suffix.o.g", []),
         ]:
-            assert_find(pattern,
-                        ["a{0}.o.g".format(x) for x in "dfpz"])
+            assert_find(pattern, expected)
 
         # Sequence wildcard
         assert_find("*",
@@ -105,22 +98,29 @@ class BaseTestAccessorMetadata(object):
                 "-{b,c,d}-.a.t",
                 u"-{b,c,d}-.a.t",
                 "-{b,c,d}?.a.t",
+                "-{b,c,d}[!ha].a.t",
+                "-{b,c,d}*.a.t",
+                "-{b,c,d}*.[ha].t",
+        ]:
+            assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
+
+        for pattern in [
                 "-{b,c,d}?suffix.a.t",
                 "-{b,c,d}[ha].a.t",
                 "-{b,c,d}[ha]suffix.a.t",
-                "-{b,c,d}[!ha].a.t",
                 "-{b,c,d}[!ha]suffix.a.t",
-                "-{b,c,d}*.a.t",
                 "-{b,c,d}*suffix.a.t",
                 u"-{b,c,d}*suffix.a.t",
         ]:
-            assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
+            assert_find(pattern, [])
 
         # Ensure the query optimizer works as expected by having a high
         # combinatorial pattern.
         assert_find(
-            "-{b,c,d}*suffix.a.t{,u}{,v}{,w}{,x}{,y}{,z}",
-            ["-{0}-.a.t".format(c) for c in "bcde"],
+            "-{b,c,d}*.a.t{,u}{,v}{,w}{,x}{,y}{,z}",
+            [u"-{0}-.a.t".format(c)
+             for c in "bcd"
+             if not IS_CASSANDRA_LUCENE and not IS_ELASTICSEARCH],
         )
 
         # Globstars
@@ -197,10 +197,10 @@ class BaseTestAccessorMetadata(object):
         assert_find('{x,y}.*y.[z]', ['x.y.z'])
 
         # Make sure we use the cache.
-        self.accessor.cache.get = lambda _, version: ['fake']
-        assert_find('a', ['fake'])
-        assert_find('**', ['fake'])
-        assert_find('{x,y}.*y.[z]', ['fake'])
+        self.accessor.cache.get = lambda _, version: ['fake.foo.a']
+        assert_find('fake.foo.a', ['fake.foo.a'])
+        assert_find('**', ['fake.foo.a'])
+        assert_find('{fake,feke}.*oo.[a]', ['fake.foo.a'])
 
         self.accessor.cache = original_cache
 
