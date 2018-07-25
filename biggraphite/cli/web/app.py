@@ -65,7 +65,7 @@ class WebApp(object):
         blueprint = flask.Blueprint("api", __name__, url_prefix="/api")
 
         api = flask_restplus.Api(version="1.0", title="BigGraphite API")
-        api.namespaces.clear()
+        api.namespaces = []
         api.add_namespace(ns_bgutil.api)
         api.add_namespace(ns_biggraphite.api)
         api.init_app(blueprint)

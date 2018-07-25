@@ -14,6 +14,8 @@
 # limitations under the License.
 """bgutil API."""
 
+from __future__ import absolute_import
+
 import argparse
 import flask_restplus as rp
 
