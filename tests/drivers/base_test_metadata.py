@@ -367,3 +367,9 @@ class BaseTestAccessorMetadata(object):
             self.assertIsNotNone(name)
 
         self.accessor.map(_callback, errback=_errback)
+
+    def test_touch_without_create(self):
+        metric = self.make_metric("foo")
+        self.accessor.touch_metric(metric)
+        self.accessor.create_metric(metric)
+        self.accessor.touch_metric(metric)
