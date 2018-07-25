@@ -34,7 +34,7 @@ metric = api.model(
         "name": rp.fields.String(description="The metric name"),
         "metadata": rp.fields.Raw(description="The metric metadata"),
         "created_on": rp.fields.DateTime(),
-        "modified_on": rp.fields.DateTime(),
+        "updated_on": rp.fields.DateTime(),
         "read_on": rp.fields.DateTime(),
     },
 )
