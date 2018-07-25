@@ -40,30 +40,10 @@ By convention:
 
 ### Test Environment
 
+To set-up your test enviroment, source `scripts/env.sh`:
+
 ```bash
-# Setup the virtualenv
-export BG_VENV=bg
-virtualenv ${BG_VENV}
-source ${BG_VENV}/bin/activate
-
-# By default carbon and graphite-web are installed in /opt/graphite,
-# We want NO prefix in order to have a good interaction with virtual env.
-export GRAPHITE_NO_PREFIX=true
-
-# Install Graphite Web and Carbon
-pip install graphite-web
-pip install carbon
-
-# Install the libffi-dev package from your distribution before running pip install
-pip install -r requirements.txt
-pip install -r tests-requirements.txt
-pip install -e .
-
-# Install Cassandra and Elasticsearch
-export CASSANDRA_VERSION=3.11.2
-export ES_VERSION=6.3.1
-export CASSANDRA_HOME=$(pwd)/apache-cassandra-${CASSANDRA_VERSION}
-./tools/install-deps.sh
+source scripts/env.sh
 ```
 
 Cassandra tests generate a lot of I/O, so if you are planning to run tests you will also need to mount `/tmp` as tmpfs unless you have a fast SSD.
@@ -88,7 +68,7 @@ $ BG_COMPONENTS_MAX_LEN=12 python -m unittest discover --failfast --verbose --ca
 
 By default, integration tests will start and stop a database instance for every test (Cassandra or
 Elasticsearch). To make them run faster, you can run your own instance and provide the connection
-information using environment variable. 
+information using environment variable.
 
 Example:
 
