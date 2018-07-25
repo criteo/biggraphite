@@ -37,7 +37,6 @@ class CommandWeb(command.BaseCommand):
 
     def run(self, accessor, opts):
         """Run the command."""
-
         # Import only here so that if the optional `gourde` dep
         # is missing we can still import the file.
         from biggraphite.cli.web import app
