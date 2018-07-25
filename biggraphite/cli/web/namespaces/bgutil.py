@@ -76,7 +76,6 @@ class BgUtilResource(rp.Resource):
     @api.expect(command)
     def post(self, command_name):
         """Starts a bgutil command in this thread."""
-
         # Import that here only because we are inside a command and `commands`
         # need to be able to import files from all commands.
         from biggraphite.cli import commands
