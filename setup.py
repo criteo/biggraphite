@@ -36,6 +36,9 @@ _DEPENDENCY_LINKS = [l for l in _REQUIREMENTS_TXT if "://" in l]
 _INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
 
 
+packages = setuptools.find_packages()
+
+
 setuptools.setup(
     name="biggraphite",
     version="0.13.0",
@@ -46,7 +49,7 @@ setuptools.setup(
     keywords="graphite carbon cassandra biggraphite tsdb timeseries",
     url="https://github.com/criteo/biggraphite",
     include_package_data=True,
-    packages=["biggraphite", "biggraphite.plugins", "biggraphite.drivers", "biggraphite.cli"],
+    packages=packages,
     long_description=_read("README.md"),
     install_requires=_INSTALL_REQUIRES,
     dependency_links=_DEPENDENCY_LINKS,
