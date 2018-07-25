@@ -653,6 +653,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).touch_metric(metric)
         metric_name = bg_accessor.sanitize_metric_name(metric.name)
         document = self.__get_document(metric_name)
+
+        # The metric might not exist in elasticsearch yet.
+        if not document:
+            return
+
         if not document.updated_on:
             delta = self.__updated_on_ttl_sec + 1
         else:
