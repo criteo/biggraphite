@@ -6,6 +6,7 @@ pygaljs
 pytest
 pytest-benchmark
 unittest2
+tox
 
 # Linting
 pylama
