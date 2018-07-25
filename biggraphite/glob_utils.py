@@ -286,7 +286,7 @@ def graphite_glob(accessor, graphite_glob, metrics=True, directories=True):
 
 
 def filter_from_glob(names, glob_repr):
-    """Truc."""
+    """Filter metric or directory names from provided glob."""
     glob_re = re.compile(glob_to_regex(glob_repr))
     return list(filter(glob_re.match, names))
 
