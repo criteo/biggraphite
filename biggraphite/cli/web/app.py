@@ -40,7 +40,7 @@ class WebApp(object):
         self.app = self.gourde.app
         self.accessor = None
         self.args = None
-        self.workers = {}
+        self.bgutil_workers = {}
 
     def index(self):
         """Main page."""
@@ -50,11 +50,11 @@ class WebApp(object):
 
     def workers(self):
         """Display background operations."""
-        return flask.render_template("workers.html", workers=self.workers)
+        return flask.render_template("workers.html", workers=self.bgutil_workers)
 
     def is_healthy(self):
         """Custom "health" check."""
-        return all(w["thread"].is_alive() for w in self.workers.values())
+        return all(w["thread"].is_alive() for w in self.bgutil_workers.values())
 
     def initialize_api(self):
         """Initialize an API."""
@@ -91,7 +91,7 @@ class WebApp(object):
         """Init logger to be able to intercept message from each command."""
         class HandlerWrapper(logging.Handler):
             def emit(self, record):
-                w = self.workers.get(record.threadName, None)
+                w = self.bgutil_workers.get(record.threadName, None)
                 if not w:
                     return
 
