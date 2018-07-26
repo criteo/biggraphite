@@ -496,7 +496,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         query = self._create_search_query() \
             .filter('term', name=name)
 
-        log.debug(json.dumps(query.to_dict()))
+        log.debug(json.dumps(query.to_dict(), default=str))
         query.delete()
 
     def delete_directory(self, name):
@@ -508,7 +508,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             query = query.filter('term', **{"p%d" % index: component})
         query = query.filter('range', depth={'gte': depth})
 
-        log.debug(json.dumps(query.to_dict()))
+        log.debug(json.dumps(query.to_dict(), default=str))
         query.delete()
 
     # TODO (t.chataigner) Add unittest.
@@ -559,7 +559,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         search = search.extra(from_=0, size=MAX_QUERY_SIZE)
 
         # TODO (t.chataigner) try to move the sort in the ES search and return a generator.
-        log.debug(json.dumps(search.to_dict()))
+        log.debug(json.dumps(search.to_dict(), default=str))
         results = [h.name for h in search.execute()]
         results.sort()
         return iter(results)
@@ -591,7 +591,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         search.aggs.bucket('distinct_dirs', 'terms', field="p%d" % glob_depth, size=MAX_QUERY_SIZE)
 
-        log.debug(json.dumps(search.to_dict()))
+        log.debug(json.dumps(search.to_dict(), default=str))
         response = search.execute()
 
         # This may not be the same behavior as other drivers.
@@ -646,7 +646,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             .filter('term', name=metric_name) \
             .sort({'updated_on': {'order': 'desc'}})
 
-        log.debug(json.dumps(search.to_dict()))
+        log.debug(json.dumps(search.to_dict(), default=str))
         response = search[:1].execute()
 
         if response is None or response.hits.total == 0:
@@ -801,9 +801,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             #
             updated_on_lower_bound = \
                 start_time - datetime.timedelta(seconds=self.__updated_on_ttl_sec)
-            search = search.filter('range', updated_on={"gte": updated_on_lower_bound})
+            search = search.filter('range', updated_on={"gte": updated_on_lower_bound.isoformat()})
         if end_time is not None:
-            search = search.filter('range', created_on={"lte", end_time})
+            search = search.filter('range', created_on={"lte": end_time.isoformat()})
         return search
 
 
