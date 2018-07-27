@@ -31,6 +31,15 @@ from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import _utils
 from biggraphite.drivers import ttls
 
+import prometheus_client
+
+UPDATED_ON = prometheus_client.Summary(
+    "bg_elasticsearch_updated_on_latency_seconds", "create latency in seconds"
+)
+READ_ON = prometheus_client.Summary(
+    "bg_elasticsearch_read_on_latency_seconds", "create latency in seconds"
+)
+
 log = logging.getLogger(__name__)
 
 # TODO:
@@ -648,6 +657,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__update_read_on_on_need(metric)
         return []
 
+    @UPDATED_ON.time()
     def touch_metric(self, metric):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).touch_metric(metric)
@@ -729,6 +739,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         for i, metric in enumerate(metrics):
             callback(metric, i, total)
 
+    @READ_ON.time()
     def __update_read_on_on_need(self, metric):
         if not metric.read_on:
             delta = self.__read_on_ttl_sec + 1
