@@ -196,9 +196,9 @@ def document_from_metric(metric):
         data["p%d" % i] = component
     data.update({
         "uuid": metric.id,
-        "created_on": datetime.datetime.now(),
-        "updated_on": datetime.datetime.now(),
-        "read_on": None,
+        "created_on": metric.created_on or datetime.datetime.now(),
+        "updated_on": metric.updated_on or datetime.datetime.now(),
+        "read_on": metric.read_on or None,
         "config": config,
     })
     return data
@@ -659,15 +659,14 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
-            # Make sure the caller also see the change without refreshing
-            # the metric.
-            metric.updated_on = datetime.datetime.now()
-
             # Update Elasticsearch.
             metric_name = bg_accessor.sanitize_metric_name(metric.name)
             document = self.__get_document(metric_name)
             if document:
                 self.__touch_document(document)
+            # Make sure the caller also see the change without refreshing
+            # the metric.
+            metric.updated_on = datetime.datetime.now()
 
     def __touch_document(self, document):
         metric = self._document_to_metric(document)
@@ -675,6 +674,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if new_index == document.meta.index:
             self.__update_existing_document(document)
         else:
+            metric.updated_on = datetime.datetime.now()
             self.create_metric(metric)
 
     def __update_existing_document(self, document):
