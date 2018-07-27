@@ -344,6 +344,81 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         # Try again, we read_on != None now
         self.accessor.fetch_points(metric, 0, 1, metric.retention[0])
 
+    def test_update_metric_should_raise_InvalidArgumentError_for_unknown_metric(self):
+        with self.assertRaises(bg_elasticsearch.InvalidArgumentError):
+            self.accessor.update_metric("whatever", None)
+
+    def test_update_metric_should_update_metric_metadata(self):
+        metric_name = "test_update_metric_should_update_metric_metadata.a.b.c"
+        initial_metadata = MetricMetadata(aggregator=Aggregator.total,
+                                          retention=Retention.from_string("42*1s"),
+                                          carbon_xfilesfactor=0.5)
+        create_date = datetime.datetime(2014, 1, 1)
+        update_date = datetime.datetime(2018, 1, 1)
+        new_metadata = MetricMetadata(aggregator=Aggregator.average,
+                                      retention=Retention.from_string("43*100s"),
+                                      carbon_xfilesfactor=0.25)
+        with freezegun.freeze_time(create_date):
+            metric = self.accessor.make_metric(metric_name, initial_metadata)
+            self.accessor.create_metric(metric)
+            self.accessor.flush()
+        with freezegun.freeze_time(update_date):
+            self.accessor.update_metric(metric_name, new_metadata)
+            self.accessor.flush()
+
+        metric = self.accessor.get_metric(metric_name)
+        self.assertEqual(update_date, metric.updated_on)
+        self.assertEqual(new_metadata, metric.metadata)
+
+    def test_delete_metric_should_remove_metric_from_name(self):
+        metric_name = "test_delete_metric_should_remove_metric_from_name.a.b.c"
+        metric = self.make_metric(metric_name)
+        self.accessor.create_metric(metric)
+        self.accessor.flush()
+
+        self.accessor.delete_metric(metric_name)
+        self.accessor.flush()
+
+        self.assertIsNone(self.accessor.get_metric(metric_name))
+
+    def test_delete_directory_should_delete_all_metrics_in_the_given_directory(self):
+        prefix = "test_delete_directory_should_delete_all_metrics_in_the_given_directory"
+        to_delete_prefix = "%s.should_not_be_found" % prefix
+        not_to_delete_prefix = "%s.should_be_found" % prefix
+        short_names = ["a", "b", "c"]
+
+        unexpected_metrics = ["%s.%s" % (to_delete_prefix, short_name)
+                              for short_name in short_names]
+        expected_metrics = ["%s.%s" % (not_to_delete_prefix, short_name)
+                            for short_name in short_names]
+
+        for metric_name in expected_metrics + unexpected_metrics:
+            self.accessor.create_metric(self.make_metric(metric_name))
+            self.accessor.flush()
+
+        self.accessor.delete_directory(to_delete_prefix)
+        self.accessor.flush()
+
+        for expected_metric in expected_metrics:
+            self.assertIsNotNone(self.accessor.get_metric(expected_metric))
+        for unexpected_metric in unexpected_metrics:
+            self.assertIsNone(self.accessor.get_metric(unexpected_metric))
+
+    def test_delete_metric_should_remove_metric_from_index(self):
+        prefix = "test_delete_metric_should_remove_metric_from_index"
+        to_delete_metric_name = "%s.to_delete" % prefix
+        not_to_delete_metric_name = "%s.not_to_delete" % prefix
+
+        self.accessor.create_metric(self.make_metric(to_delete_metric_name))
+        self.accessor.create_metric(self.make_metric(not_to_delete_metric_name))
+        self.accessor.flush()
+
+        self.accessor.delete_metric(to_delete_metric_name)
+        self.accessor.flush()
+
+        self.assertIsNone(self.accessor.get_metric(to_delete_metric_name))
+        self.assertIsNotNone(self.accessor.get_metric(not_to_delete_metric_name))
+
     def test_insert_points_async_is_not_supported(self):
         metric = self.make_metric("foo")
         with self.assertRaises(Exception):
