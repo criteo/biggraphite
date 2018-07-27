@@ -768,7 +768,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             doc_type=INDEX_DOC_TYPE,
             id=document_id,
             body=data,
-            ignore=404
+            ignore=[404, 409]
         )
 
     def _create_search_query(self):
