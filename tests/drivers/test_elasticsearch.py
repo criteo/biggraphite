@@ -72,7 +72,11 @@ class DocumentFromMetricTest(unittest.TestCase):
         retention = Retention.from_string(retention_str)
         carbon_xfilesfactor = 0.5
         metadata = MetricMetadata(aggregator, retention, carbon_xfilesfactor)
-        metric = Metric(metric_name, metric_id, metadata)
+        metric = Metric(
+            metric_name, metric_id, metadata,
+            created_on=datetime.datetime(2017, 1, 1),
+            updated_on=datetime.datetime(2018, 2, 2)
+        )
 
         document = bg_elasticsearch.document_from_metric(metric)
 
@@ -93,8 +97,10 @@ class DocumentFromMetricTest(unittest.TestCase):
 
         self.assertTrue("created_on" in document)
         self.assertTrue(isinstance(document['created_on'], datetime.datetime))
+        self.assertEqual(metric.created_on, document['created_on'])
         self.assertTrue("updated_on" in document)
         self.assertTrue(isinstance(document['updated_on'], datetime.datetime))
+        self.assertEqual(metric.updated_on, document['updated_on'])
         self.assertTrue("read_on" in document)
         self.assertEqual(document['read_on'], None)
 
@@ -258,12 +264,50 @@ class ParseComplexComponentTest(unittest.TestCase):
         self.assertEqual(result, "foo(bar|baz)[^ab].*")
 
 
+def _create_default_metadata():
+    aggregator = Aggregator.maximum
+    retention_str = "42*1s:43*60s"
+    retention = Retention.from_string(retention_str)
+    carbon_xfilesfactor = 0.5
+    metadata = MetricMetadata(aggregator, retention, carbon_xfilesfactor)
+    return metadata
+
+
 @unittest.skipUnless(
     HAS_ELASTICSEARCH, "ES_HOME must be set.",
 )
 class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
                                     bg_test_utils.TestCaseWithAccessor):
     ACCESSOR_SETTINGS = {'driver': 'elasticsearch'}
+
+    def test_created_on_and_updated_on_are_set_upon_creation_date(self):
+        metric_name = "test_created_on_is_set_upon_current_date.a.b.c"
+        expected_created_on = datetime.datetime(2017, 1, 2)
+        with freezegun.freeze_time(expected_created_on):
+            metric = self.accessor.make_metric(metric_name, _create_default_metadata())
+            self.accessor.create_metric(metric)
+            self.accessor.flush()
+
+        metric = self.accessor.get_metric(metric_name)
+
+        self.assertEqual(metric.created_on, expected_created_on)
+        self.assertEqual(metric.updated_on, expected_created_on)
+
+    def test_updated_on_is_set_upon_current_date_with_created_on_unchanged(self):
+        metric_name = "test_created_on_is_set_upon_current_date.a.b.c"
+        expected_created_on = datetime.datetime(2000, 1, 1)
+        expected_updated_on = datetime.datetime(2011, 1, 1)
+        with freezegun.freeze_time(expected_created_on):
+            metric = self.accessor.make_metric(metric_name, _create_default_metadata())
+            self.accessor.create_metric(metric)
+            self.accessor.flush()
+        with freezegun.freeze_time(expected_updated_on):
+            self.accessor.touch_metric(metric)
+            self.accessor.flush()
+        metric = self.accessor.get_metric(metric_name)
+
+        self.assertEqual(expected_created_on, metric.created_on)
+        self.assertEqual(expected_updated_on, metric.updated_on)
 
     def test_metric_is_updated_after_ttl(self):
         with freezegun.freeze_time("2014-01-01 00:00:00"):
