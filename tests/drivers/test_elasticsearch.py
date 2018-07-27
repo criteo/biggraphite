@@ -344,6 +344,16 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         # Try again, we read_on != None now
         self.accessor.fetch_points(metric, 0, 1, metric.retention[0])
 
+    def test_insert_points_async_is_not_supported(self):
+        metric = self.make_metric("foo")
+        with self.assertRaises(Exception):
+            self.accessor.insert_points_async(metric, [])
+
+    def test_insert_downsampled_points_async_is_not_supported(self):
+        metric = self.make_metric("foo")
+        with self.assertRaises(Exception):
+            self.accessor.insert_downsampled_points_async(metric, [])
+
 
 if __name__ == "__main__":
     unittest.main()
