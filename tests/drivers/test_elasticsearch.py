@@ -17,6 +17,7 @@
 from __future__ import print_function
 
 import freezegun
+from freezegun import freeze_time
 import datetime
 import unittest
 import uuid
@@ -476,55 +477,111 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
 
     def test_metric_out_of_search_bounds_should_not_be_found(self):
         metric_name = "test_metric_out_of_search_bounds_should_not_be_found.a.b.c"
-        metric = self.make_metric(metric_name)
-        self.accessor.create_metric(metric)
-        self.accessor.flush()
+        metric = self._create_updated_metric(metric_name)
+        metric_created_on = metric.created_on
+        metric_updated_on = metric.updated_on
 
-        now = datetime.datetime.now()
         one_week = datetime.timedelta(weeks=1)
         bounds = [
-            (now - 2 * one_week, now - one_week),
-            (now + one_week, now + 2 * one_week),
-            (None, now - one_week),
-            (now + one_week, None)
+            (None, metric_created_on - one_week),
+            (metric_created_on - 2 * one_week, metric_created_on - one_week),
+            (metric_updated_on + one_week, None),
+            (metric_updated_on + one_week, metric_updated_on + 2 * one_week),
+
+            # Dummy input cases (inverted bounds)
+            (metric_updated_on + one_week, metric_created_on - one_week)
         ]
 
         for start_time, end_time in bounds:
-            # Without bounds, metric should be found (1 element in the iterator)
-            should_be_found_metrics = self.accessor.glob_metric_names(metric_name)
-            self.assert_iter_not_empty(should_be_found_metrics)
-
-            # With bounds, metric should not be found (0 element in the iterator)
             should_not_be_found_metric = self.accessor.glob_metric_names(
                 metric_name, start_time, end_time
             )
-            self.assert_iter_empty(should_not_be_found_metric)
+            self.assert_iter_empty(should_not_be_found_metric, start_time, end_time)
 
     def test_metric_in_search_bounds_should_be_found(self):
         metric_name = "test_metric_in_search_bounds_should_be_found.a.b.c"
-        metric = self.make_metric(metric_name)
-        self.accessor.create_metric(metric)
-        self.accessor.flush()
+        metric = self._create_updated_metric(metric_name)
+        metric_created_on = metric.created_on
+        metric_updated_on = metric.updated_on
 
-        now = datetime.datetime.now()
         one_week = datetime.timedelta(weeks=1)
         bounds = [
-            (now - one_week, now + one_week),
-            (None, now + one_week),
-            (now - one_week, None)
+            (None, None),
+            (None, metric_created_on),
+            (None, metric_created_on + one_week),
+            (None, metric_updated_on - one_week),
+            (None, metric_updated_on),
+            (None, metric_updated_on + one_week),
+
+            (metric_created_on - one_week, None),
+            (metric_created_on - one_week, metric_created_on),
+            (metric_created_on - one_week, metric_created_on + one_week),
+            (metric_created_on - one_week, metric_updated_on - one_week),
+            (metric_created_on - one_week, metric_updated_on),
+            (metric_created_on - one_week, metric_updated_on + one_week),
+
+            (metric_created_on, None),
+            (metric_created_on, metric_created_on),
+            (metric_created_on, metric_created_on + one_week),
+            (metric_created_on, metric_updated_on - one_week),
+            (metric_created_on, metric_updated_on),
+            (metric_created_on, metric_updated_on + one_week),
+
+            (metric_created_on + one_week, None),
+            (metric_created_on + one_week, metric_created_on + one_week),
+            (metric_created_on + one_week, metric_created_on + 2 * one_week),
+            (metric_created_on + one_week, metric_updated_on - one_week),
+            (metric_created_on + one_week, metric_updated_on),
+            (metric_created_on + one_week, metric_updated_on + one_week),
+
+            (metric_updated_on - one_week, None),
+            (metric_updated_on - one_week, metric_updated_on - one_week),
+            (metric_updated_on - one_week, metric_updated_on),
+            (metric_updated_on - one_week, metric_updated_on + one_week),
+
+            (metric_updated_on, None),
+            (metric_updated_on, metric_updated_on),
+            (metric_updated_on, metric_updated_on + one_week),
         ]
 
         for start_time, end_time in bounds:
             should_be_found_metric = self.accessor.glob_metric_names(
                 metric_name, start_time, end_time
             )
-            self.assert_iter_not_empty(should_be_found_metric)
+            self.assert_iter_not_empty(should_be_found_metric, start_time, end_time)
 
-    def assert_iter_empty(self, it):
-        self.assertEqual(sum(1 for _ in it), 0, "Expected no result, got '%s'" % list(it))
+    def _create_updated_metric(self, metric_name):
+        creation_date = datetime.datetime(2018, 1, 1)
+        update_date = datetime.datetime(2018, 3, 1)
+        with freeze_time(creation_date):
+            metric = self.make_metric(metric_name)
+            self.accessor.create_metric(metric)
+            self.accessor.flush()
+            metric = self.accessor.get_metric(metric_name)
+            assert metric.created_on == creation_date
+            assert metric.updated_on == creation_date
+        with freeze_time(update_date):
+            metric = self.accessor.get_metric(metric_name)
+            self.accessor.touch_metric(metric)
+            self.accessor.flush()
+            metric = self.accessor.get_metric(metric_name)
+            assert metric.created_on == creation_date
+            assert metric.updated_on == update_date
+        return self.accessor.get_metric(metric_name)
 
-    def assert_iter_not_empty(self, it):
-        self.assertTrue(sum(1 for _ in it) > 0, "Expected results, got empty")
+    def assert_iter_empty(self, it, *params):
+        items = list(it)
+        self.assertEqual(
+            len(items), 0,
+            "Expected no result, got '%s' (range: '%s')" % (items, str(params))
+        )
+
+    def assert_iter_not_empty(self, it, *params):
+        items = list(it)
+        self.assertTrue(
+            len(items) > 0,
+            "Expected results, got empty (range: '%s')" % str(params)
+        )
 
 
 if __name__ == "__main__":
