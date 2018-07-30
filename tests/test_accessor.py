@@ -20,7 +20,7 @@ import unittest
 import mock
 
 from biggraphite import accessor as bg_accessor
-from biggraphite import test_utils as bg_test_utils
+from tests import test_utils as bg_test_utils
 
 _METRIC = bg_test_utils.make_metric("test.metric")
 _NAN = float("nan")

@@ -21,8 +21,8 @@ from six import StringIO
 
 from biggraphite.cli import command_stats
 from biggraphite import utils as bg_utils
-from biggraphite import test_utils as bg_test_utils
 from biggraphite.accessor import MetricMetadata, Retention
+from tests import test_utils as bg_test_utils
 
 
 class TestCommandStats(bg_test_utils.TestCaseWithFakeAccessor):

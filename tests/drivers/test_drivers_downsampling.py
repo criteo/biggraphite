@@ -19,8 +19,8 @@ import unittest
 import uuid
 
 from biggraphite import accessor as bg_accessor
-from biggraphite import test_utils
 from biggraphite.drivers import _downsampling as bg_ds
+from tests import test_utils
 
 
 test_utils.setup_logging()

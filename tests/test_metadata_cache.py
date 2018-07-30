@@ -18,8 +18,8 @@ from __future__ import print_function
 import unittest
 from freezegun import freeze_time
 
-from biggraphite import test_utils as bg_test_utils
 from biggraphite import metadata_cache as bg_metadata_cache
+from tests import test_utils as bg_test_utils
 
 _TEST_METRIC = bg_test_utils.make_metric("a.b.c")
 

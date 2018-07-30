@@ -16,9 +16,9 @@ from __future__ import print_function
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import accessor_cache as bg_accessor_cache
-from biggraphite import test_utils as bg_test_utils
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
+from tests import test_utils as bg_test_utils
 
 
 class BaseTestAccessorMetadata(object):

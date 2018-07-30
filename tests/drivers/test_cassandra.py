@@ -21,9 +21,9 @@ import datetime
 from distutils import version
 
 from biggraphite import accessor as bg_accessor
-from biggraphite import test_utils as bg_test_utils
 from biggraphite.drivers import cassandra as bg_cassandra
-from biggraphite.test_utils_cassandra import HAS_CASSANDRA
+from tests import test_utils as bg_test_utils
+from tests.test_utils_cassandra import HAS_CASSANDRA
 
 from tests.drivers.base_test_metadata import BaseTestAccessorMetadata
 

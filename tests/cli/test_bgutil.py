@@ -19,7 +19,7 @@ from mock import patch
 from six import StringIO
 
 from biggraphite.cli import bgutil
-from biggraphite import test_utils as bg_test_utils
+from tests import test_utils as bg_test_utils
 
 
 class TestBgutil(bg_test_utils.TestCaseWithFakeAccessor):

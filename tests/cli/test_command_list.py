@@ -19,8 +19,8 @@ import argparse
 
 from biggraphite.cli import command_list
 from biggraphite import utils as bg_utils
-from biggraphite import test_utils as bg_test_utils
 from biggraphite import accessor as bg_accessor
+from tests import test_utils as bg_test_utils
 
 
 class TestCommandList(bg_test_utils.TestCaseWithFakeAccessor):

@@ -18,8 +18,8 @@ import unittest
 
 from biggraphite.cli import command_copy
 from biggraphite.cli.command_list import list_metrics
-from biggraphite import test_utils as bg_test_utils
 from biggraphite import accessor as bg_accessor
+from tests import test_utils as bg_test_utils
 
 
 class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
