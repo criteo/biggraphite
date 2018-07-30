@@ -389,7 +389,6 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         # Try again, we read_on != None now
         self.accessor.fetch_points(metric, 0, 1, metric.retention[0])
 
-
     def test_update_metric_should_raise_InvalidArgumentError_for_unknown_metric(self):
         with self.assertRaises(bg_elasticsearch.InvalidArgumentError):
             self.accessor.update_metric("whatever", None)
