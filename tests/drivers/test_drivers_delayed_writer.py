@@ -19,8 +19,8 @@ import time
 import unittest
 
 from biggraphite import accessor as bg_accessor
-from biggraphite import test_utils
 from biggraphite.drivers import _delayed_writer as bg_dw
+from tests import test_utils
 
 
 test_utils.setup_logging()

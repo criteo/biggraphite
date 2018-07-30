@@ -7,9 +7,9 @@ import time
 import six
 
 from biggraphite import accessor as bg_accessor
-from biggraphite import test_utils as bg_test_utils
 from biggraphite import utils as bg_utils
 from biggraphite.drivers import cassandra as bg_cassandra
+from tests import test_utils as bg_test_utils
 
 
 if bool(os.getenv("CASSANDRA_HOME")):

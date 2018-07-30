@@ -25,10 +25,10 @@ import uuid
 import elasticsearch_dsl
 
 from biggraphite import glob_utils as bg_glob
-from biggraphite import test_utils as bg_test_utils
 from biggraphite.accessor import Aggregator, Metric, MetricMetadata, Retention
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
-from biggraphite.test_utils_elasticsearch import HAS_ELASTICSEARCH
+from tests import test_utils as bg_test_utils
+from tests.test_utils_elasticsearch import HAS_ELASTICSEARCH
 
 from tests.drivers.base_test_metadata import BaseTestAccessorMetadata
 

@@ -18,7 +18,7 @@ from __future__ import print_function
 
 import unittest
 
-from biggraphite import test_utils as bg_test_utils
+from tests import test_utils as bg_test_utils
 
 # This needs to run before we import the plugin.
 bg_test_utils.prepare_graphite()

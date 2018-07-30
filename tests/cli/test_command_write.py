@@ -19,7 +19,7 @@ import argparse
 
 from biggraphite.cli import command_write
 from biggraphite import utils as bg_utils
-from biggraphite import test_utils as bg_test_utils
+from tests import test_utils as bg_test_utils
 
 
 class TestCommandWrite(bg_test_utils.TestCaseWithFakeAccessor):

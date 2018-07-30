@@ -19,8 +19,8 @@ import argparse
 
 from biggraphite.cli import command_graphite_web
 from biggraphite import utils as bg_utils
-from biggraphite import test_utils as bg_test_utils
 from biggraphite import accessor as bg_accessor
+from tests import test_utils as bg_test_utils
 
 
 class TestCommandGraphiteWeb(bg_test_utils.TestCaseWithFakeAccessor):

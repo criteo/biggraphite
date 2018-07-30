@@ -19,8 +19,8 @@ from collections import defaultdict
 import re
 import unittest
 
-from biggraphite import test_utils as bg_test_utils
 from biggraphite import glob_utils as bg_glob
+from tests import test_utils as bg_test_utils
 
 
 class TestGlobUtilsInternals(unittest.TestCase):
