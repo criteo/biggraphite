@@ -14,8 +14,8 @@
 # limitations under the License.
 from __future__ import print_function
 
-from biggraphite import accessor as bg_accessor
 from biggraphite import accessor_cache as bg_accessor_cache
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
 from tests import test_utils as bg_test_utils
@@ -206,8 +206,8 @@ class BaseTestAccessorMetadata(object):
 
     def test_create_metrics(self):
         meta_dict = {
-            "aggregator": bg_accessor.Aggregator.last,
-            "retention": bg_accessor.Retention.from_string("60*1s:60*60s"),
+            "aggregator": bg_metric.Aggregator.last,
+            "retention": bg_metric.Retention.from_string("60*1s:60*60s"),
             "carbon_xfilesfactor": 0.3,
         }
         metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
@@ -228,11 +228,11 @@ class BaseTestAccessorMetadata(object):
 
         # prepare test
         meta_dict = {
-            "aggregator": bg_accessor.Aggregator.last,
-            "retention": bg_accessor.Retention.from_string("60*1s:60*60s"),
+            "aggregator": bg_metric.Aggregator.last,
+            "retention": bg_metric.Retention.from_string("60*1s:60*60s"),
             "carbon_xfilesfactor": 0.3,
         }
-        metadata = bg_accessor.MetricMetadata(**meta_dict)
+        metadata = bg_metric.MetricMetadata(**meta_dict)
         metric_name = "a.b.c.d.e.f"
         self.accessor.create_metric(
             bg_test_utils.make_metric(metric_name, metadata))
@@ -243,11 +243,11 @@ class BaseTestAccessorMetadata(object):
 
         # test
         updated_meta_dict = {
-            "aggregator": bg_accessor.Aggregator.maximum,
-            "retention": bg_accessor.Retention.from_string("30*1s:120*30s"),
+            "aggregator": bg_metric.Aggregator.maximum,
+            "retention": bg_metric.Retention.from_string("30*1s:120*30s"),
             "carbon_xfilesfactor": 0.5,
         }
-        updated_metadata = bg_accessor.MetricMetadata(**updated_meta_dict)
+        updated_metadata = bg_metric.MetricMetadata(**updated_meta_dict)
         # Setting a known metric name should work
         self.accessor.update_metric(metric_name, updated_metadata)
         updated_metric = self.accessor.get_metric(metric_name)

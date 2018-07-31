@@ -21,7 +21,7 @@ import datetime
 
 from biggraphite.cli import command
 from biggraphite.cli.command_list import list_metrics
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 
 
 class CommandRead(command.BaseCommand):
@@ -80,7 +80,7 @@ class CommandRead(command.BaseCommand):
 
         metrics = list(list_metrics(accessor, opts.metrics))
 
-        forced_stage = bg_accessor.Stage.from_string(
+        forced_stage = bg_metric.Stage.from_string(
             opts.stage) if opts.stage else None
         time_start = opts.time_start
         time_end = opts.time_end

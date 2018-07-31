@@ -20,6 +20,7 @@ import unittest
 import mock
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
 _METRIC = bg_test_utils.make_metric("test.metric")
@@ -41,7 +42,7 @@ class TestAggregator(unittest.TestCase):
             ("total", 6),
         )
         for name, value_expected in expectations:
-            aggregator = bg_accessor.Aggregator.from_config_name(name)
+            aggregator = bg_metric.Aggregator.from_config_name(name)
             aggregated = aggregator.aggregate(
                 values=values, counts=counts, newest_first=True)
             self.assertEqual(value_expected, aggregated)
@@ -49,19 +50,19 @@ class TestAggregator(unittest.TestCase):
     def test_aggregate_nan(self):
         values = [_NAN, _NAN]
         counts = [0, 0]
-        for aggregator in bg_accessor.Aggregator:
+        for aggregator in bg_metric.Aggregator:
             aggregated = aggregator.aggregate(
                 values=values, counts=counts, newest_first=True)
             self.assertTrue(math.isnan(aggregated), aggregator)
 
     def test_aggregate_newest_last(self):
-        aggregator = bg_accessor.Aggregator.last
+        aggregator = bg_metric.Aggregator.last
         values = [10, 20, _NAN, ]
         aggregated = aggregator.aggregate(values=values, newest_first=False)
         self.assertEqual(20, aggregated)
 
     def test_aggregate_no_values(self):
-        aggregator = bg_accessor.Aggregator.last
+        aggregator = bg_metric.Aggregator.last
         aggregated = aggregator.aggregate(values=[], newest_first=False)
         self.assertTrue(math.isnan(aggregated))
 
@@ -76,21 +77,21 @@ class TestAggregator(unittest.TestCase):
             ("total", (30, 2)),
         )
         for name, value_expected in expectations:
-            aggregator = bg_accessor.Aggregator.from_config_name(name)
+            aggregator = bg_metric.Aggregator.from_config_name(name)
             merged = aggregator.merge(values, count)
             self.assertEqual(value_expected, merged)
 
     def test_merge_nans(self):
-        aggregator = bg_accessor.Aggregator.average
+        aggregator = bg_metric.Aggregator.average
         self.assertEqual((10, 1), aggregator.merge([10, _NAN]))
         self.assertEqual((10, 1), aggregator.merge([_NAN, 10]))
 
     def test_config_names(self):
         self.assertEqual(
-            bg_accessor.Aggregator.from_carbon_name("average"),
-            bg_accessor.Aggregator.average,
+            bg_metric.Aggregator.from_carbon_name("average"),
+            bg_metric.Aggregator.average,
         )
-        self.assertIsNone(bg_accessor.Aggregator.from_carbon_name(""))
+        self.assertIsNone(bg_metric.Aggregator.from_carbon_name(""))
 
 
 class TestStage(unittest.TestCase):
@@ -98,22 +99,22 @@ class TestStage(unittest.TestCase):
 
     def test_operators(self):
         # Doesn't use assertEqual to make == and != are called
-        s1 = bg_accessor.Stage(points=24, precision=3600)
+        s1 = bg_metric.Stage(points=24, precision=3600)
         self.assertTrue(s1 != object())
         self.assertFalse(s1 == object())
 
-        s2 = bg_accessor.Stage.from_string("24*3600s")
+        s2 = bg_metric.Stage.from_string("24*3600s")
         self.assertTrue(s1 == s2)
         self.assertFalse(s1 != s2)
 
-        s3 = bg_accessor.Stage.from_string("12*3600s")
+        s3 = bg_metric.Stage.from_string("12*3600s")
         self.assertFalse(s1 == s3)
         self.assertTrue(s1 != s3)
 
     def test_stage0(self):
-        s1 = bg_accessor.Stage(points=24, precision=3600, stage0=True)
-        s2 = bg_accessor.Stage.from_string("24*3600s_0")
-        s3 = bg_accessor.Stage.from_string("24*3600s_aggr")
+        s1 = bg_metric.Stage(points=24, precision=3600, stage0=True)
+        s2 = bg_metric.Stage.from_string("24*3600s_0")
+        s3 = bg_metric.Stage.from_string("24*3600s_aggr")
 
         self.assertTrue(s1.stage0)
         self.assertTrue(s2.stage0)
@@ -125,7 +126,7 @@ class TestStage(unittest.TestCase):
 class TestRetention(unittest.TestCase):
 
     _TEST_STRING = "60*60s:24*3600s"
-    _TEST = bg_accessor.Retention.from_string(_TEST_STRING)
+    _TEST = bg_metric.Retention.from_string(_TEST_STRING)
 
     def test_simple(self):
         for i, points, precision in ((0, 60, 60), (1, 24, 3600)):
@@ -139,11 +140,11 @@ class TestRetention(unittest.TestCase):
         self.assertFalse(r1 == object())
         self.assertTrue(r1 != object())
 
-        r2 = bg_accessor.Retention.from_string(self._TEST_STRING)
+        r2 = bg_metric.Retention.from_string(self._TEST_STRING)
         self.assertFalse(r1 != r2)
         self.assertTrue(r1 == r2)
 
-        r3 = bg_accessor.Retention.from_string(self._TEST_STRING + ":2*86400s")
+        r3 = bg_metric.Retention.from_string(self._TEST_STRING + ":2*86400s")
         self.assertFalse(r1 == r3)
 
     def test_invalid(self):
@@ -153,17 +154,17 @@ class TestRetention(unittest.TestCase):
             "60*1s:15*2s",  # 60*1>15*2
         ]
         for s in strings:
-            self.assertRaises(bg_accessor.InvalidArgumentError,
-                              bg_accessor.Retention.from_string, s)
+            self.assertRaises(bg_metric.InvalidArgumentError,
+                              bg_metric.Retention.from_string, s)
 
     def test_align_time_window(self):
         retention = self._TEST
 
         self.assertNotEqual(
             retention.align_time_window(0, 0, 0),
-            (0, 0, bg_accessor.Stage(precision=60, points=60))
+            (0, 0, bg_metric.Stage(precision=60, points=60))
         )
-        stage0 = bg_accessor.Stage(precision=60, points=60, stage0=True)
+        stage0 = bg_metric.Stage(precision=60, points=60, stage0=True)
         self.assertEqual(
             retention.align_time_window(0, 0, 0),
             (0, 0, stage0)
@@ -182,7 +183,7 @@ class TestRetention(unittest.TestCase):
         )
         self.assertEqual(
             retention.align_time_window(59, 3601, 8000),
-            (0, 7200, bg_accessor.Stage(precision=3600, points=24))
+            (0, 7200, bg_metric.Stage(precision=3600, points=24))
         )
 
 

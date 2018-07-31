@@ -40,6 +40,7 @@ from cassandra import query as c_query
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite import metric as bg_metric
+from biggraphite import utils as bg_utils
 from biggraphite.drivers import cassandra_stratio_lucene as lucene
 from biggraphite.drivers import cassandra_sasi as sasi
 from biggraphite.drivers import cassandra_common as common
@@ -487,7 +488,7 @@ def _row_size_ms(stage):
             _MIN_PARTITION_SIZE_MS
         )
     )
-    return bg_accessor.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
+    return bg_utils.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
 
 REACTOR_TO_USE = None
@@ -1283,8 +1284,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # We fetch with ms precision, even though we only store with second
         # precision.
         row_size_ms_stage = _row_size_ms(stage)
-        first_row = bg_accessor.round_down(time_start_ms, row_size_ms_stage)
-        last_row = bg_accessor.round_down(time_end_ms, row_size_ms_stage)
+        first_row = bg_utils.round_down(time_start_ms, row_size_ms_stage)
+        last_row = bg_utils.round_down(time_end_ms, row_size_ms_stage)
 
         res = []
         # range(a,b) does not contain b, so we use last_row+1
@@ -1395,7 +1396,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if parent_dir and not self.has_directory(parent_dir):
             return None
 
-        metadata = bg_accessor.MetricMetadata.from_string_dict(config)
+        metadata = bg_metric.MetricMetadata.from_string_dict(config)
         return bg_metric.Metric(metric_name, uid, metadata, updated_on=updated_on)
 
     def glob_directory_names(self, glob, start_time=None, end_time=None):
@@ -1652,7 +1653,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 if not stage_str:
                     continue
                 try:
-                    stage = bg_accessor.Stage.from_string(stage_str)
+                    stage = bg_metric.Stage.from_string(stage_str)
                 except Exception as e:
                     log.debug(e)
                     continue
@@ -1745,7 +1746,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     continue
 
                 try:
-                    metadata = bg_accessor.MetricMetadata.from_string_dict(config)
+                    metadata = bg_metric.MetricMetadata.from_string_dict(config)
                     metric = bg_metric.Metric(
                         metric_name, uid, metadata,
                         created_on, updated_on, read_on,

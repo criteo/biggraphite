@@ -21,7 +21,8 @@ from six import StringIO
 
 from biggraphite.cli import command_stats
 from biggraphite import settings as bg_settings
-from biggraphite.accessor import MetricMetadata, Retention
+from biggraphite.metric import Retention
+from biggraphite.metric import MetricMetadata
 from tests import test_utils as bg_test_utils
 
 

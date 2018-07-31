@@ -33,7 +33,6 @@ from twisted.internet import task
 from biggraphite import utils
 from biggraphite import settings as bg_settings
 from biggraphite import graphite_utils
-from biggraphite import accessor
 from biggraphite import metric as bg_metric
 
 
@@ -68,7 +67,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     plugin_name = "biggraphite"
     aggregationMethods = [
-        member.value for member in list(accessor.Aggregator)]
+        member.value for member in list(bg_metric.Aggregator)]
 
     # See class pydoc for the rational.
     _SYNC_EVERY_N_WRITES = 10
@@ -174,10 +173,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         orig_metric_name = metric_name
         metric_name = self.encode(metric_name)
 
-        metadata = accessor.MetricMetadata(
-            aggregator=accessor.Aggregator.from_carbon_name(
+        metadata = bg_metric.MetricMetadata(
+            aggregator=bg_metric.Aggregator.from_carbon_name(
                 aggregation_method),
-            retention=accessor.Retention.from_carbon(retentions),
+            retention=bg_metric.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
         metric = bg_metric.make_metric(metric_name, metadata)

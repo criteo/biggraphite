@@ -21,6 +21,7 @@ import datetime
 from distutils import version
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import cassandra as bg_cassandra
 from tests import test_utils as bg_test_utils
 from tests.test_utils_cassandra import HAS_CASSANDRA
@@ -275,7 +276,7 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
     def test_syncdb(self):
-        retentions = [bg_accessor.Retention.from_string("60*1s:60*60s")]
+        retentions = [bg_metric.Retention.from_string("60*1s:60*60s")]
         self.accessor.syncdb(retentions=retentions, dry_run=True)
         self.accessor.syncdb(retentions=retentions, dry_run=False)
 

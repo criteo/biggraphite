@@ -18,7 +18,7 @@ from __future__ import print_function
 import time
 import unittest
 
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import _delayed_writer as bg_dw
 from tests import test_utils
 
@@ -38,12 +38,12 @@ class TestDelayedWriter(test_utils.TestCaseWithFakeAccessor):
         stages = (self.DURATION, self.PRECISION,
                   self.DURATION, self.PRECISION * 100)
         retention_string = "%d*%ds:%d*%ds" % (stages)
-        retention = bg_accessor.Retention.from_string(retention_string)
+        retention = bg_metric.Retention.from_string(retention_string)
         self.stage_0 = retention.stages[0]
         self.stage_1 = retention.stages[1]
 
-        metadata = bg_accessor.MetricMetadata(
-            aggregator=bg_accessor.Aggregator.average, retention=retention)
+        metadata = bg_metric.MetricMetadata(
+            aggregator=bg_metric.Aggregator.average, retention=retention)
         self.metric = test_utils.make_metric(self.METRIC_NAME, metadata=metadata)
         self.accessor.create_metric(self.metric)
         self.dw = bg_dw.DelayedWriter(

@@ -30,6 +30,7 @@ from biggraphite import accessor as bg_accessor
 from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import glob_utils
 from biggraphite import graphite_utils
+from biggraphite import metric as bg_metric
 
 
 _CONFIG_NAME = "biggraphite"
@@ -90,13 +91,13 @@ class Reader(BaseReader):
         if self._metric is not None:
             return self._metric.metadata
         else:
-            return bg_accessor.MetricMetadata()
+            return bg_metric.MetricMetadata()
 
     def __get_time_info(self, start_time, end_time, now, shift=False):
         """Constrain the provided range in an aligned interval within retention."""
         retention = (
-            self.__get_metadata().retention or
-            bg_accessor.MetricMetadata._DEFAULT_RETENTION
+                self.__get_metadata().retention or
+                bg_metric.MetricMetadata._DEFAULT_RETENTION
         )
         return retention.align_time_window(
             start_time, end_time, now, shift=shift)

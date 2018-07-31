@@ -41,8 +41,6 @@ import lmdb
 import six
 import prometheus_client
 
-
-from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
 
 
@@ -211,7 +209,7 @@ class MetadataCache(object):
         with self._json_cache_lock:
             metadata = self._json_cache.get(metadata_str)
             if not metadata:
-                metadata = bg_accessor.MetricMetadata.from_json(metadata_str)
+                metadata = bg_metric.MetricMetadata.from_json(metadata_str)
                 self._json_cache[metadata_str] = metadata
         return metadata
 

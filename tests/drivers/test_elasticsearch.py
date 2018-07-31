@@ -26,7 +26,7 @@ import elasticsearch_dsl
 
 from biggraphite import glob_utils as bg_glob
 from biggraphite import metric as bg_metric
-from biggraphite.accessor import Aggregator, MetricMetadata, Retention
+from biggraphite.metric import Aggregator, Retention, MetricMetadata
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
 from tests import test_utils as bg_test_utils
 from tests.test_utils_elasticsearch import HAS_ELASTICSEARCH
