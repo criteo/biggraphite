@@ -575,7 +575,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         return self._document_to_metric(document)
 
     def _document_to_metric(self, document):
-        metadata = bg_accessor.MetricMetadata.from_string_dict(
+        metadata = bg_metric.MetricMetadata.from_string_dict(
             document.config.to_dict()
         )
         # TODO: Have a look at dsl doc to avoid parsing strings to dates

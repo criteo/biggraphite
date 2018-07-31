@@ -24,7 +24,6 @@ import copy
 from biggraphite.cli import command
 from biggraphite.cli.command_list import list_metrics
 from biggraphite.drivers.cassandra import TooManyMetrics
-from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
 
 log = logging.getLogger(__name__)
@@ -122,9 +121,9 @@ class CommandCopy(command.BaseCommand):
 
         # Prepare retention override
         if src_retention:
-            src_retention = bg_accessor.Retention.from_string(src_retention)
+            src_retention = bg_metric.Retention.from_string(src_retention)
         if dst_retention:
-            dst_retention = bg_accessor.Retention.from_string(dst_retention)
+            dst_retention = bg_metric.Retention.from_string(dst_retention)
 
         for src_metric in src_metrics:
             if src_retention and src_metric.metadata.retention != src_retention:

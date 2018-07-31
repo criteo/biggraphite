@@ -22,7 +22,7 @@ import unittest
 from carbon import database
 from carbon import conf as carbon_conf
 
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from biggraphite.plugins import carbon as bg_carbon
 
 
@@ -110,8 +110,8 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
         # See if we can update.
         metric = bg_test_utils.make_metric(metric_name)
-        metric.metadata.retention = bg_accessor.Retention(
-            [bg_accessor.Stage(1, 1)])
+        metric.metadata.retention = bg_metric.Retention(
+            [bg_metric.Stage(1, 1)])
         self._plugin._createAsyncOrig(metric, metric_name)
         self._plugin._createOneMetric()
         retention = self._plugin.getMetadata(metric_name, "retention")

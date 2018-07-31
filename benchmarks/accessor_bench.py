@@ -1,16 +1,14 @@
 import logging
 import os
-import pytest
 import random
 import string
 import time
-import six
 
-from biggraphite import accessor as bg_accessor
+import pytest
+
 from biggraphite import metric as bg_metric
 from biggraphite.drivers import cassandra as bg_cassandra
 from tests import test_utils as bg_test_utils
-
 
 if bool(os.getenv("CASSANDRA_HOME")):
     BASE_CLASS = bg_test_utils.TestCaseWithAccessor
@@ -55,8 +53,8 @@ def _random_name(n):
 
 
 def _gen_metric(accessor):
-    retention = bg_accessor.Retention.from_string("86400*1s:10080*60s")
-    metadata = bg_accessor.MetricMetadata(retention=retention)
+    retention = bg_metric.Retention.from_string("86400*1s:10080*60s")
+    metadata = bg_metric.MetricMetadata(retention=retention)
     return bg_metric.make_metric(_random_name(10), metadata)
 
 

@@ -25,7 +25,7 @@ except ImportError:
     HAVE_CARBON = False
 
 from biggraphite.cli import command
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 
 
 class CommandSyncdb(command.BaseCommand):
@@ -65,7 +65,7 @@ class CommandSyncdb(command.BaseCommand):
             options = dict(config_parser.items(section))
             retentions = options['retentions'].split(',')
             archives = [carbon_util.parseRetentionDef(s) for s in retentions]
-            ret.append(bg_accessor.Retention.from_carbon(archives))
+            ret.append(bg_metric.Retention.from_carbon(archives))
 
         return ret
 
@@ -77,7 +77,7 @@ class CommandSyncdb(command.BaseCommand):
             retentions.extend(self._get_retentions_from_storage_schemas(opts))
         if opts.retention:
             retentions.extend(
-                [bg_accessor.Retention.from_string(opts.retention)])
+                [bg_metric.Retention.from_string(opts.retention)])
 
         schema = accessor.syncdb(retentions=retentions, dry_run=opts.dry_run)
         if opts.dry_run:

@@ -18,12 +18,11 @@ import unittest
 
 from mock import Mock
 
-from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
 from biggraphite.drivers import hybrid
 
 DEFAULT_METRIC_NAME = "foo.bar"
-DEFAULT_METADATA = bg_accessor.MetricMetadata()
+DEFAULT_METADATA = bg_metric.MetricMetadata()
 DEFAULT_METRIC = bg_metric.Metric(DEFAULT_METRIC_NAME, "id", DEFAULT_METADATA)
 
 DEFAULT_GLOB = "foo.bar.**"
@@ -84,7 +83,7 @@ class TestHybridAccessor(unittest.TestCase):
     def test_fetch_points_should_be_called_on_both_accessors(self):
         time_start = 0
         time_end = 1
-        stage = bg_accessor.Stage("0", "1")
+        stage = bg_metric.Stage("0", "1")
         aggregated = False
 
         self._accessor.connect()

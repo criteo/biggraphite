@@ -32,7 +32,6 @@ import time
 
 import whisper
 
-from biggraphite import accessor as bg_accessor
 from biggraphite import accessor_factory as bg_accessor_factory
 from biggraphite import metric as bg_metric
 from biggraphite import settings as bg_settings
@@ -85,14 +84,14 @@ class _Worker(object):
         if not info:
             return None
 
-        retentions = bg_accessor.Retention([
-            bg_accessor.Stage(
+        retentions = bg_metric.Retention([
+            bg_metric.Stage(
                 precision=a["secondsPerPoint"], points=a["points"])
             for a in info["archives"]
         ])
-        aggregator = bg_accessor.Aggregator.from_carbon_name(
+        aggregator = bg_metric.Aggregator.from_carbon_name(
             info["aggregationMethod"])
-        return bg_accessor.MetricMetadata(
+        return bg_metric.MetricMetadata(
             aggregator=aggregator,
             retention=retentions,
             carbon_xfilesfactor=info["xFilesFactor"],
@@ -112,7 +111,7 @@ class _Worker(object):
         stage0 = True
         for archive in archives:
             offset = archive["offset"]
-            stage = bg_accessor.Stage(
+            stage = bg_metric.Stage(
                 precision=archive["secondsPerPoint"],
                 points=archive["points"],
                 stage0=stage0)
@@ -209,7 +208,7 @@ def _parse_opts(args):
     bg_settings.add_argparse_arguments(parser)
     opts = parser.parse_args(args)
     opts.ignored_stages = [
-        bg_accessor.Stage.from_string(s)
+        bg_metric.Stage.from_string(s)
         for s in opts.ignored_stages
     ]
     return opts

@@ -19,7 +19,7 @@ import argparse
 
 from biggraphite.cli import command_delete
 from biggraphite import settings as bg_setting
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
 
@@ -35,8 +35,8 @@ class TestCommandDelete(bg_test_utils.TestCaseWithFakeAccessor):
         cmd.add_arguments(parser)
 
         name = 'foo.bar'
-        metadata = bg_accessor.MetricMetadata(
-            retention=bg_accessor.Retention.from_string('1440*60s'))
+        metadata = bg_metric.MetricMetadata(
+            retention=bg_metric.Retention.from_string('1440*60s'))
 
         self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
         opts = parser.parse_args(['foo', '--recursive', '--dry-run'])

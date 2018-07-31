@@ -18,7 +18,6 @@ from __future__ import print_function
 import unittest
 import uuid
 
-from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
 from biggraphite.drivers import _downsampling as bg_ds
 from tests import test_utils
@@ -38,18 +37,18 @@ class TestDownsampler(unittest.TestCase):
         capacity_precisions = (self.CAPACITY, self.PRECISION,
                                self.CAPACITY, self.PRECISION ** 2)
         retention_string = "%d*%ds:%d*%ds" % (capacity_precisions)
-        retention = bg_accessor.Retention.from_string(retention_string)
+        retention = bg_metric.Retention.from_string(retention_string)
         self.stage_0 = retention.stages[0]
         self.stage_1 = retention.stages[1]
         uid = uuid.uuid4()
-        metric_metadata = bg_accessor.MetricMetadata(
-            aggregator=bg_accessor.Aggregator.total, retention=retention)
+        metric_metadata = bg_metric.MetricMetadata(
+            aggregator=bg_metric.Aggregator.total, retention=retention)
         self.metric_sum = bg_metric.Metric(
             self.METRIC_NAME_SUM, uid, metric_metadata)
 
         uid = uuid.uuid4()
-        metric_metadata = bg_accessor.MetricMetadata(
-            aggregator=bg_accessor.Aggregator.average, retention=retention)
+        metric_metadata = bg_metric.MetricMetadata(
+            aggregator=bg_metric.Aggregator.average, retention=retention)
         self.metric_avg = bg_metric.Metric(
             self.METRIC_NAME_AVG, uid, metric_metadata)
         self.ds = bg_ds.Downsampler(self.CAPACITY)

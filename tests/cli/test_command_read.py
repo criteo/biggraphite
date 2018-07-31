@@ -19,7 +19,7 @@ import argparse
 
 from biggraphite.cli import command_read
 from biggraphite import settings as bg_settings
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
 
@@ -27,8 +27,8 @@ class TestCommandRead(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_run(self):
         name = 'foo.bar'
-        metadata = bg_accessor.MetricMetadata(
-            retention=bg_accessor.Retention.from_string('1440*60s'))
+        metadata = bg_metric.MetricMetadata(
+            retention=bg_metric.Retention.from_string('1440*60s'))
         self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
 
         cmd = command_read.CommandRead()

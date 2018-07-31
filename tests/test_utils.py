@@ -15,22 +15,21 @@
 
 from __future__ import print_function
 
+import logging
 import os
+import shutil
 import sys
 import tempfile
-import shutil
 import unittest
-import logging
 import uuid
 
 import mock
 
-from biggraphite import utils as bg_utils
-from biggraphite import accessor as bg_accessor
 from biggraphite import accessor_factory as bg_accessor_factory
-from biggraphite import metric as bg_metric
-from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache as bg_metadata_cache
+from biggraphite import metric as bg_metric
+from biggraphite import utils as bg_utils
+from biggraphite.drivers import memory as bg_memory
 from tests.test_utils_cassandra import CassandraHelper
 from tests.test_utils_elasticsearch import ElasticsearchHelper
 
@@ -108,12 +107,12 @@ def make_metric(name, metadata=None, **kwargs):
     encoded_name = bg_metric.encode_metric_name(name)
     retention = kwargs.get("retention")
     if isinstance(retention, str):
-        kwargs["retention"] = bg_accessor.Retention.from_string(retention)
+        kwargs["retention"] = bg_metric.Retention.from_string(retention)
     if metadata:
-        assert isinstance(metadata, bg_accessor.MetricMetadata)
+        assert isinstance(metadata, bg_metric.MetricMetadata)
         assert not kwargs
     else:
-        metadata = bg_accessor.MetricMetadata(**kwargs)
+        metadata = bg_metric.MetricMetadata(**kwargs)
     return bg_metric.make_metric(encoded_name, metadata)
 
 

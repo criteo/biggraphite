@@ -18,15 +18,15 @@ import unittest
 
 from biggraphite.cli import command_copy
 from biggraphite.cli.command_list import list_metrics
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
 
 class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3 * 3600
-    _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s:48*3600s")
-    _RETENTION_BIS = bg_accessor.Retention.from_string(
+    _RETENTION = bg_metric.Retention.from_string("20*15s:1440*60s:48*3600s")
+    _RETENTION_BIS = bg_metric.Retention.from_string(
         "20*10s:14400*60s:500*3600s")
     _POINTS = bg_test_utils._make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,

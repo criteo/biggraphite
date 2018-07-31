@@ -19,7 +19,7 @@ from __future__ import print_function
 import unittest
 import mock
 
-from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
 # This needs to run before we import the plugin.
@@ -35,7 +35,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3600
-    _RETENTION = bg_accessor.Retention.from_string("20*15s:1440*60s:48*3600s")
+    _RETENTION = bg_metric.Retention.from_string("20*15s:1440*60s:48*3600s")
     _POINTS = bg_test_utils._make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
     )
@@ -97,7 +97,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         metric_name = 'fake.name'
         metric = bg_test_utils.make_metric(_METRIC_NAME)
         # Custom aggregator to make sure all goes right.
-        metric.metadata.aggregator = bg_accessor.Aggregator.minimum
+        metric.metadata.aggregator = bg_metric.Aggregator.minimum
         self.accessor.create_metric(metric)
         self.accessor.flush()
         self.reader = bg_graphite.Reader(
