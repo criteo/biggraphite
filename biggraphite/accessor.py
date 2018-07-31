@@ -17,20 +17,17 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-import uuid
-
-from builtins import zip
-
 import abc
 import array
-import codecs
-import datetime
-import enum
 import json
 import math
 import re
 import threading
-import six
+
+import enum
+from builtins import zip
+
+from biggraphite import metric as bg_metric
 
 
 class Error(Exception):
@@ -44,8 +41,6 @@ class RetryableError(Error):
 class InvalidArgumentError(Error):
     """Callee did not follow requirements on the arguments."""
 
-
-_UTF8_CODEC = codecs.getencoder('utf8')
 
 _NAN = float("nan")
 
@@ -61,8 +56,6 @@ SHARD_REPLICA_BITS = bin(SHARD_REPLICA_MASK).count('1')
 SHARD_WRITER_BITS = 16 - SHARD_REPLICA_BITS
 SHARD_REPLICA_SHIFT = SHARD_WRITER_BITS
 SHARD_MAX_REPLICAS = 2**SHARD_REPLICA_BITS
-
-_UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
 
 
 def pack_shard(replica, writer):
@@ -101,33 +94,6 @@ def _wait_async_call(async_function, *args, **kwargs):
     event.wait(3.0)
     if exception_box[0]:
         raise exception_box[0]
-
-
-def encode_metric_name(name):
-    """Encode name as utf-8, raise UnicodeError if it can't.
-
-    Args:
-      name: The metric to encode.
-
-    This function make sure that we only have simple strings.
-
-    For Python 2: must be an instance of basestring.
-        If it is an instance of string, it will be assumed to already have been
-        encoded for performance reasons.
-
-    For Python 3: breaks bytes are given. We could probably decode them instead.
-
-    Raises:
-      UnicodeError: Couldn't encode.
-    """
-    if six.PY3:
-        assert(name) is not bytes, "%s should not be of type 'bytes'" % name
-        return name
-
-    if isinstance(name, str):
-        return name
-    # Next line may raise UnicodeError
-    return _UTF8_CODEC(name)[0]
 
 
 def round_down(rounded, divider):
@@ -630,88 +596,6 @@ class MetricMetadata(object):
         )
 
 
-class Metric(object):
-    """Represents all information about a metric.
-
-    This is not an instance of MetricMetadata: It cannot be serialized
-    in JSON to minimise confusion in cache that expects few possible
-    Metadata at any time.
-
-    Not meant to be mutated.
-    """
-
-    __slots__ = (
-        "name",
-        "id",
-        "metadata",
-        "created_on",
-        "updated_on",
-        "read_on",
-    )
-
-    def __init__(self, name, id, metadata,
-                 created_on=None, updated_on=None, read_on=None):
-        """Record its arguments."""
-        super(Metric, self).__init__()
-        assert name, "Metric: name is None"
-        assert id, "Metric: id is None"
-        assert metadata, "Metric: metadata is None"
-        self.name = encode_metric_name(name)
-        self.id = id
-        self.metadata = metadata
-        self.created_on = created_on
-        self.updated_on = updated_on
-        self.read_on = read_on
-
-    def as_string_dict(self):
-        """Turn an instance into a dict of string to string."""
-        return {
-            "id": str(self.id),
-            "name": self.name,
-            "created_on": self.created_on,
-            "updated_on": self.updated_on,
-            "read_on": self.read_on,
-            "metadata": self.metadata.as_string_dict(),
-        }
-
-    def __getattr__(self, name):
-        return getattr(self.metadata, name)
-
-    def __dir__(self):
-        res = dir(self.metadata)
-        res.extend(self.__slots__)
-        res.sort()
-        return res
-
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, other):
-        if not isinstance(other, Metric):
-            return False
-        return (self.name == other.name and
-                self.metadata == other.metadata)
-
-    def __ne__(self, other):
-        return not (self == other)
-
-
-def _components_from_name(metric_name):
-    res = metric_name.split(".")
-    return list(filter(None, res))
-
-
-def sanitize_metric_name(name):
-    """Sanitize a metric name by removing double dots.
-
-    :param name: Metric name
-    :return: Sanitized metric name
-    """
-    if name is None:
-        return None
-    return ".".join(_components_from_name(name))
-
-
 class Accessor(object):
     """Provides Read/Write accessors to BigGraphite.
 
@@ -783,7 +667,7 @@ class Accessor(object):
         Args:
           metric: definition as a Metric object.
         """
-        if not isinstance(metric, Metric):
+        if not isinstance(metric, bg_metric.Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
 
@@ -845,7 +729,7 @@ class Accessor(object):
         Raises:
           InvalidArgumentError: if time_start or time_end are not as per above
         """
-        if not isinstance(metric, Metric):
+        if not isinstance(metric, bg_metric.Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         if not isinstance(stage, Stage):
             raise InvalidArgumentError("%s is not a Stage instance" % stage)
@@ -867,30 +751,6 @@ class Accessor(object):
     def get_metric(self, metric_name):
         """Return a Metric for this metric_name, None if no such metric."""
         self._check_connected()
-
-    def make_metric(self, name, metadata, created_on=None, updated_on=None, read_on=None):
-        """Create a Metric object from its definition as name and metadata.
-
-        Args:
-          name: metric name.
-          metadata: metric metadata.
-          created_on: metric creation date.
-          updated_on: metric last update date.
-          read_on: metric last read date.
-
-        Returns: a Metric object with a valid id.
-        """
-        name = sanitize_metric_name(name)
-        uid = uuid.uuid5(_UUID_NAMESPACE, name)
-        now = datetime.datetime.now()
-        return Metric(
-            name,
-            uid,
-            metadata,
-            created_on=created_on or now,
-            updated_on=updated_on or now,
-            read_on=read_on
-        )
 
     @abc.abstractmethod
     def glob_metric_names(self, glob, start_time=None, end_time=None):
@@ -937,7 +797,7 @@ class Accessor(object):
           datapoints: An iterable of (timestamp in seconds, values as double)
           on_done(e: Exception): called on done, with an exception or None if succesfull
         """
-        if not isinstance(metric, Metric):
+        if not isinstance(metric, bg_metric.Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
         self.touch_metric(metric)
@@ -962,7 +822,7 @@ class Accessor(object):
           datapoints: An iterable of (timestamp in seconds, values as double, count as int, stage)
           on_done(e: Exception): called on done, with an exception or None if succesfull
         """
-        if not isinstance(metric, Metric):
+        if not isinstance(metric, bg_metric.Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
 

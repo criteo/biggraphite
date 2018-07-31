@@ -28,6 +28,7 @@ import time
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import _utils
 from biggraphite.drivers import ttls
 
@@ -135,7 +136,7 @@ def document_from_metric(metric):
     """Creates an ElasticSearch document from a Metric."""
     config = metric.metadata.as_string_dict()
     components = _components_from_name(metric.name)
-    name = bg_accessor.sanitize_metric_name(metric.name)
+    name = bg_metric.sanitize_metric_name(metric.name)
 
     data = {
         "depth": len(components) - 1,
@@ -422,13 +423,13 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).update_metric(name, updated_metadata)
 
-        name = bg_accessor.sanitize_metric_name(name)
+        name = bg_metric.sanitize_metric_name(name)
         metric = self.get_metric(name)
 
         if metric is None:
             raise InvalidArgumentError("Unknown metric '%s'" % name)
 
-        updated_metric = self.make_metric(
+        updated_metric = bg_metric.make_metric(
             name,
             updated_metadata,
             created_on=metric.created_on,
@@ -438,7 +439,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.create_metric(updated_metric)
 
     def delete_metric(self, name):
-        name = bg_accessor.sanitize_metric_name(name)
+        name = bg_metric.sanitize_metric_name(name)
 
         query = self._create_search_query() \
             .filter('term', name=name)
@@ -475,7 +476,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # Handle fully defined glob.
         if self.__glob_parser.is_fully_defined(components):
             return False, search.filter(
-                'term', **{"name": bg_accessor.sanitize_metric_name(glob)})
+                'term', **{"name": bg_metric.sanitize_metric_name(glob)})
 
         # Handle all other use cases.
         for i, c in enumerate(components):
@@ -565,7 +566,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name)
 
-        metric_name = bg_accessor.sanitize_metric_name(metric_name)
+        metric_name = bg_metric.sanitize_metric_name(metric_name)
 
         document = self.__get_document(metric_name)
         if document is None:
@@ -579,7 +580,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         )
         # TODO: Have a look at dsl doc to avoid parsing strings to dates
         # https://github.com/elastic/elasticsearch-dsl-py/blob/master/docs/persistence.rst
-        return self.make_metric(
+        return bg_metric.make_metric(
             document.name,
             metadata,
             created_on=ttls.str_to_datetime(document.created_on),
@@ -622,7 +623,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         if delta >= self.__updated_on_ttl_sec:
             # Update Elasticsearch.
-            metric_name = bg_accessor.sanitize_metric_name(metric.name)
+            metric_name = bg_metric.sanitize_metric_name(metric.name)
             document = self.__get_document(metric_name)
             if document:
                 self.__touch_document(document)

@@ -33,6 +33,7 @@ import time
 import whisper
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from biggraphite import utils as bg_utils
 from biggraphite.cli import command
 
@@ -141,7 +142,7 @@ class _Worker(object):
         if not metadata:
             return 0
 
-        metric = self._accessor.make_metric(name, metadata)
+        metric = bg_metric.make_metric(name, metadata)
         if not self._opts.no_metadata:
             self._accessor.create_metric(metric)
 

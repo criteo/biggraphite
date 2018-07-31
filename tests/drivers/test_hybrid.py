@@ -19,11 +19,12 @@ import unittest
 from mock import Mock
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import hybrid
 
 DEFAULT_METRIC_NAME = "foo.bar"
 DEFAULT_METADATA = bg_accessor.MetricMetadata()
-DEFAULT_METRIC = bg_accessor.Metric(DEFAULT_METRIC_NAME, "id", DEFAULT_METADATA)
+DEFAULT_METRIC = bg_metric.Metric(DEFAULT_METRIC_NAME, "id", DEFAULT_METADATA)
 
 DEFAULT_GLOB = "foo.bar.**"
 

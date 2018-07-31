@@ -19,6 +19,7 @@ import unittest
 import uuid
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import _downsampling as bg_ds
 from tests import test_utils
 
@@ -43,13 +44,13 @@ class TestDownsampler(unittest.TestCase):
         uid = uuid.uuid4()
         metric_metadata = bg_accessor.MetricMetadata(
             aggregator=bg_accessor.Aggregator.total, retention=retention)
-        self.metric_sum = bg_accessor.Metric(
+        self.metric_sum = bg_metric.Metric(
             self.METRIC_NAME_SUM, uid, metric_metadata)
 
         uid = uuid.uuid4()
         metric_metadata = bg_accessor.MetricMetadata(
             aggregator=bg_accessor.Aggregator.average, retention=retention)
-        self.metric_avg = bg_accessor.Metric(
+        self.metric_avg = bg_metric.Metric(
             self.METRIC_NAME_AVG, uid, metric_metadata)
         self.ds = bg_ds.Downsampler(self.CAPACITY)
 

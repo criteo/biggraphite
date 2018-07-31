@@ -43,6 +43,7 @@ import prometheus_client
 
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 
 
 METRICS_LABELS = ['type', 'name']
@@ -143,10 +144,6 @@ class MetadataCache(object):
     def cache_set(self, metric_name, metric):
         """Insert a metric in the cache."""
         return self._cache_set(metric_name, metric)
-
-    def make_metric(self, name, metadata):
-        """Create a metric object from a name and metadata."""
-        return self._accessor.make_metric(name, metadata)
 
     def create_metric(self, metric, metric_name=None):
         """Create a metric definition from a Metric."""
@@ -505,7 +502,7 @@ class DiskCache(MetadataCache):
                 txn.delete(key=encoded_metric_name)
 
         metadata = self.metadata_from_str(metadata_str)
-        return bg_accessor.Metric(metric_name, id, metadata), True
+        return bg_metric.Metric(metric_name, id, metadata), True
 
     def _cache_set(self, metric_name, metric):
         """If metric is valid, add it to the cache.

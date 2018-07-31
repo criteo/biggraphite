@@ -25,7 +25,8 @@ import uuid
 import elasticsearch_dsl
 
 from biggraphite import glob_utils as bg_glob
-from biggraphite.accessor import Aggregator, Metric, MetricMetadata, Retention
+from biggraphite import metric as bg_metric
+from biggraphite.accessor import Aggregator, MetricMetadata, Retention
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
 from tests import test_utils as bg_test_utils
 from tests.test_utils_elasticsearch import HAS_ELASTICSEARCH
@@ -73,7 +74,7 @@ class DocumentFromMetricTest(unittest.TestCase):
         retention = Retention.from_string(retention_str)
         carbon_xfilesfactor = 0.5
         metadata = MetricMetadata(aggregator, retention, carbon_xfilesfactor)
-        metric = Metric(
+        metric = bg_metric.Metric(
             metric_name, metric_id, metadata,
             created_on=datetime.datetime(2017, 1, 1),
             updated_on=datetime.datetime(2018, 2, 2)
@@ -285,7 +286,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         metric_name = "test_created_on_is_set_upon_current_date.a.b.c"
         expected_created_on = datetime.datetime(2017, 1, 2)
         with freezegun.freeze_time(expected_created_on):
-            metric = self.accessor.make_metric(metric_name, _create_default_metadata())
+            metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
             self.accessor.create_metric(metric)
             self.accessor.flush()
 
@@ -299,7 +300,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         expected_created_on = datetime.datetime(2000, 1, 1)
         expected_updated_on = datetime.datetime(2011, 1, 1)
         with freezegun.freeze_time(expected_created_on):
-            metric = self.accessor.make_metric(metric_name, _create_default_metadata())
+            metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
             self.accessor.create_metric(metric)
             self.accessor.flush()
         with freezegun.freeze_time(expected_updated_on):
@@ -312,7 +313,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
 
     def test_metric_is_updated_after_ttl(self):
         with freezegun.freeze_time("2014-01-01 00:00:00"):
-            metric = self.make_metric("foo")
+            metric = bg_test_utils.make_metric("foo")
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -340,7 +341,8 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         self.accessor.get_index = get_index_mock
 
         with freezegun.freeze_time("2014-01-01 00:00:00"):
-            metric = self.make_metric("elasticsearch.test_metric_is_recreated_if_index_has_changed")
+            metric = bg_test_utils\
+                .make_metric("elasticsearch.test_metric_is_recreated_if_index_has_changed")
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -372,7 +374,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
 
     def test_fetch_points_updates_read_on(self):
-        metric = self.make_metric("foo")
+        metric = bg_test_utils.make_metric("foo")
         self.accessor.create_metric(metric)
         self.flush()
 
@@ -404,7 +406,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
                                       retention=Retention.from_string("43*100s"),
                                       carbon_xfilesfactor=0.25)
         with freezegun.freeze_time(create_date):
-            metric = self.accessor.make_metric(metric_name, initial_metadata)
+            metric = bg_test_utils.make_metric(metric_name, initial_metadata)
             self.accessor.create_metric(metric)
             self.accessor.flush()
         with freezegun.freeze_time(update_date):
@@ -417,7 +419,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
 
     def test_delete_metric_should_remove_metric_from_name(self):
         metric_name = "test_delete_metric_should_remove_metric_from_name.a.b.c"
-        metric = self.make_metric(metric_name)
+        metric = bg_test_utils.make_metric(metric_name)
         self.accessor.create_metric(metric)
         self.accessor.flush()
 
@@ -438,7 +440,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
                             for short_name in short_names]
 
         for metric_name in expected_metrics + unexpected_metrics:
-            self.accessor.create_metric(self.make_metric(metric_name))
+            self.accessor.create_metric(bg_test_utils.make_metric(metric_name))
             self.accessor.flush()
 
         self.accessor.delete_directory(to_delete_prefix)
@@ -454,8 +456,8 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         to_delete_metric_name = "%s.to_delete" % prefix
         not_to_delete_metric_name = "%s.not_to_delete" % prefix
 
-        self.accessor.create_metric(self.make_metric(to_delete_metric_name))
-        self.accessor.create_metric(self.make_metric(not_to_delete_metric_name))
+        self.accessor.create_metric(bg_test_utils.make_metric(to_delete_metric_name))
+        self.accessor.create_metric(bg_test_utils.make_metric(not_to_delete_metric_name))
         self.accessor.flush()
 
         self.accessor.delete_metric(to_delete_metric_name)
@@ -465,12 +467,12 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         self.assertIsNotNone(self.accessor.get_metric(not_to_delete_metric_name))
 
     def test_insert_points_async_is_not_supported(self):
-        metric = self.make_metric("foo")
+        metric = bg_test_utils.make_metric("foo")
         with self.assertRaises(Exception):
             self.accessor.insert_points_async(metric, [])
 
     def test_insert_downsampled_points_async_is_not_supported(self):
-        metric = self.make_metric("foo")
+        metric = bg_test_utils.make_metric("foo")
         with self.assertRaises(Exception):
             self.accessor.insert_downsampled_points_async(metric, [])
 
@@ -553,7 +555,7 @@ class TestAccessorWithElasticsearch(BaseTestAccessorMetadata,
         creation_date = datetime.datetime(2018, 1, 1)
         update_date = datetime.datetime(2018, 3, 1)
         with freeze_time(creation_date):
-            metric = self.make_metric(metric_name)
+            metric = bg_test_utils.make_metric(metric_name)
             self.accessor.create_metric(metric)
             self.accessor.flush()
             metric = self.accessor.get_metric(metric_name)
