@@ -25,7 +25,7 @@ from biggraphite.cli import command
 from biggraphite.cli.command_list import list_metrics
 from biggraphite.drivers.cassandra import TooManyMetrics
 from biggraphite import accessor as bg_accessor
-
+from biggraphite import metric as bg_metric
 
 log = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ class CommandCopy(command.BaseCommand):
                 dst_metadata = copy.deepcopy(src_metric.metadata)
                 if dst_retention:
                     dst_metadata.retention = dst_retention
-                dst_metric = accessor.make_metric(
+                dst_metric = bg_metric.make_metric(
                     dst_metric_name, dst_metadata)
                 if not dry_run:
                     accessor.create_metric(dst_metric)

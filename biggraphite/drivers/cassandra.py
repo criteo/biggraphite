@@ -39,6 +39,7 @@ from cassandra import query as c_query
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import cassandra_stratio_lucene as lucene
 from biggraphite.drivers import cassandra_sasi as sasi
 from biggraphite.drivers import cassandra_common as common
@@ -1191,7 +1192,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # Cleanup name (avoid double dots)
         name = ".".join(self._components_from_name(name)[:-1])
 
-        encoded_metric_name = bg_accessor.encode_metric_name(name)
+        encoded_metric_name = bg_metric.encode_metric_name(name)
         metadata_dict = updated_metadata.as_string_dict()
         self._execute_metadata(
             self.__update_metric_metadata_statement,
@@ -1329,7 +1330,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _select_metric(self, metric_name):
         """Fetch metric metadata."""
-        encoded_metric_name = bg_accessor.encode_metric_name(metric_name)
+        encoded_metric_name = bg_metric.encode_metric_name(metric_name)
         result = list(self._execute_metadata(
             self.__select_metric_metadata_statement, (encoded_metric_name, )))
         if not result:
@@ -1346,7 +1347,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).has_metric(metric_name)
         metric_name = ".".join(self._components_from_name(metric_name)[:-1])
-        metric_name = bg_accessor.encode_metric_name(metric_name)
+        metric_name = bg_metric.encode_metric_name(metric_name)
         if not self._select_metric(metric_name):
             return False
 
@@ -1360,7 +1361,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return True
 
     def has_directory(self, directory):
-        encoded_directory = bg_accessor.encode_metric_name(directory)
+        encoded_directory = bg_metric.encode_metric_name(directory)
         result = list(self._execute_metadata(
             self.__select_directory_statement, (encoded_directory, )))
         return bool(result)
@@ -1378,7 +1379,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
         metric_name = ".".join(self._components_from_name(metric_name)[:-1])
-        metric_name = bg_accessor.encode_metric_name(metric_name)
+        metric_name = bg_metric.encode_metric_name(metric_name)
         result = self._select_metric(metric_name)
         if not result:
             return None
@@ -1395,7 +1396,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return None
 
         metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-        return bg_accessor.Metric(metric_name, uid, metadata, updated_on=updated_on)
+        return bg_metric.Metric(metric_name, uid, metadata, updated_on=updated_on)
 
     def glob_directory_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric directories matching this glob."""
@@ -1745,7 +1746,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
                 try:
                     metadata = bg_accessor.MetricMetadata.from_string_dict(config)
-                    metric = bg_accessor.Metric(
+                    metric = bg_metric.Metric(
                         metric_name, uid, metadata,
                         created_on, updated_on, read_on,
                     )

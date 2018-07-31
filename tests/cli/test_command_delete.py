@@ -38,7 +38,7 @@ class TestCommandDelete(bg_test_utils.TestCaseWithFakeAccessor):
         metadata = bg_accessor.MetricMetadata(
             retention=bg_accessor.Retention.from_string('1440*60s'))
 
-        self.accessor.create_metric(self.make_metric(name, metadata))
+        self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
         opts = parser.parse_args(['foo', '--recursive', '--dry-run'])
         cmd.run(self.accessor, opts)
         self.assertIn(name, self.accessor.glob_metric_names('*.*'))

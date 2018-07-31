@@ -44,7 +44,7 @@ class TestDelayedWriter(test_utils.TestCaseWithFakeAccessor):
 
         metadata = bg_accessor.MetricMetadata(
             aggregator=bg_accessor.Aggregator.average, retention=retention)
-        self.metric = self.make_metric(self.METRIC_NAME, metadata=metadata)
+        self.metric = test_utils.make_metric(self.METRIC_NAME, metadata=metadata)
         self.accessor.create_metric(self.metric)
         self.dw = bg_dw.DelayedWriter(
             self.accessor, period_ms=self.WRITER_PERIOD)

@@ -21,6 +21,7 @@ import datetime
 
 from biggraphite.cli import command
 from biggraphite import accessor as bg_accessor
+from biggraphite import metric as bg_metric
 
 
 class CommandWrite(command.BaseCommand):
@@ -88,7 +89,7 @@ class CommandWrite(command.BaseCommand):
                 retention=bg_accessor.Retention.from_string(opts.retention),
                 carbon_xfilesfactor=opts.x_files_factor,
             )
-            metric = accessor.make_metric(opts.metric, metadata)
+            metric = bg_metric.make_metric(opts.metric, metadata)
             accessor.create_metric(metric)
 
         timestamp = int(time.mktime(opts.timestamp.timetuple()))

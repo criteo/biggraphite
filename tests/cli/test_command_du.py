@@ -14,14 +14,15 @@
 # limitations under the License.
 from __future__ import print_function
 
-import unittest
 import argparse
+import unittest
+
 from mock import patch
 from six import StringIO
 
-from biggraphite.cli import command_du
 from biggraphite import utils as bg_utils
 from biggraphite.accessor import MetricMetadata, Retention
+from biggraphite.cli import command_du
 from tests import test_utils as bg_test_utils
 
 
@@ -35,7 +36,7 @@ class TestCommandDu(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
             self.accessor.create_metric(
-                self.make_metric(metric, self.metadata))
+                bg_test_utils.make_metric(metric, self.metadata))
 
         cmd = command_du.CommandDu()
 

@@ -33,6 +33,7 @@ from twisted.internet import task
 from biggraphite import utils
 from biggraphite import graphite_utils
 from biggraphite import accessor
+from biggraphite import metric as bg_metric
 
 
 # Ignore D102: Missing docstring in public method: Most of them come from upstream module.
@@ -178,7 +179,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             retention=accessor.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
-        metric = self.cache.make_metric(metric_name, metadata)
+        metric = bg_metric.make_metric(metric_name, metadata)
         self.cache.cache_set(metric_name, metric)
         self._createAsync(metric, orig_metric_name)
 

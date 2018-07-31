@@ -61,7 +61,7 @@ class TestAccessorWithCassandraSASI(BaseTestAccessorMetadata, bg_test_utils.Test
 
     # FIXME (t.chataigner) some duplication with ElasticsearchTestAccessorMetadata.
     def test_metric_is_updated_after_ttl(self):
-        metric = self.make_metric("foo")
+        metric = bg_test_utils.make_metric("foo")
         self.accessor.create_metric(metric)
         self.flush()
 
@@ -159,8 +159,8 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(_USEFUL_POINTS, fetched)
 
     def test_fetch_doubledots(self):
-        metric = self.make_metric("a.b..c")
-        metric_1 = self.make_metric("a.b.c")
+        metric = bg_test_utils.make_metric("a.b..c")
+        metric_1 = bg_test_utils.make_metric("a.b.c")
         points = [(1, 42)]
         self.accessor.create_metric(metric)
         self.accessor.create_metric(metric_1)

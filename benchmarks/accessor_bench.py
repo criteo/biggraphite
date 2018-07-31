@@ -7,7 +7,7 @@ import time
 import six
 
 from biggraphite import accessor as bg_accessor
-from biggraphite import utils as bg_utils
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import cassandra as bg_cassandra
 from tests import test_utils as bg_test_utils
 
@@ -57,7 +57,7 @@ def _random_name(n):
 def _gen_metric(accessor):
     retention = bg_accessor.Retention.from_string("86400*1s:10080*60s")
     metadata = bg_accessor.MetricMetadata(retention=retention)
-    return accessor.make_metric(_random_name(10), metadata)
+    return bg_metric.make_metric(_random_name(10), metadata)
 
 
 def make_metric(benchmark):

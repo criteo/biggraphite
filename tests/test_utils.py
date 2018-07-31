@@ -27,10 +27,11 @@ import mock
 
 from biggraphite import utils as bg_utils
 from biggraphite import accessor as bg_accessor
-from tests.test_utils_cassandra import CassandraHelper
-from tests.test_utils_elasticsearch import ElasticsearchHelper
+from biggraphite import metric as bg_metric
 from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache as bg_metadata_cache
+from tests.test_utils_cassandra import CassandraHelper
+from tests.test_utils_elasticsearch import ElasticsearchHelper
 
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
@@ -145,9 +146,9 @@ def prepare_graphite_imports():
 _UUID_NAMESPACE = uuid.UUID('{00000000-0000-0000-0000-000000000000}')
 
 
-def make_metric(name, metadata=None, accessor=None, **kwargs):
+def make_metric(name, metadata=None, **kwargs):
     """Create a bg_accessor.Metric with specified metadata."""
-    encoded_name = bg_accessor.encode_metric_name(name)
+    encoded_name = bg_metric.encode_metric_name(name)
     retention = kwargs.get("retention")
     if isinstance(retention, str):
         kwargs["retention"] = bg_accessor.Retention.from_string(retention)
@@ -156,11 +157,7 @@ def make_metric(name, metadata=None, accessor=None, **kwargs):
         assert not kwargs
     else:
         metadata = bg_accessor.MetricMetadata(**kwargs)
-    if not accessor:
-        uid = uuid.uuid5(_UUID_NAMESPACE, str(encoded_name))
-        return bg_accessor.Metric(name, uid, metadata)
-    else:
-        return accessor.make_metric(name, metadata)
+    return bg_metric.make_metric(encoded_name, metadata)
 
 
 def _make_easily_queryable_points(start, end, period):
@@ -225,10 +222,6 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def make_metric(self, name, metadata=None, **kwargs):
-        """Create a bg_accessor.Metric with specified metadata."""
-        return make_metric(name, metadata=metadata, accessor=self.accessor, **kwargs)
-
 
 class TestCaseWithAccessor(TestCaseWithTempDir):
     """A TestCase with an Accessor."""
@@ -289,10 +282,6 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.accessor.flush()
         if self.cassandra_helper:
             self.cassandra_helper.flush(self.accessor)
-
-    def make_metric(self, name, metadata=None, **kwargs):
-        """Create a bg_accessor.Metric with specified metadata."""
-        return make_metric(name, metadata=metadata, accessor=self.accessor, **kwargs)
 
     def __drop_all_metrics(self):
         self.accessor.connect()
