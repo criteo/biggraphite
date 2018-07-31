@@ -5,6 +5,9 @@ progressbar2
 scandir
 tabulate
 
+# Command line web
+gourde
+
 # Memory driver
 sortedcontainers
 
