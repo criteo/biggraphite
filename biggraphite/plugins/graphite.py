@@ -14,15 +14,14 @@
 """Adapter between BigGraphite and Graphite."""
 from __future__ import absolute_import  # Otherwise graphite is this module.
 
-import time
 import threading
-
+import time
 from datetime import datetime
 
+from graphite import carbonlink
 from graphite import intervals
 from graphite import node
 from graphite import readers
-from graphite import carbonlink
 from graphite.logger import log
 from graphite.render import hashing
 
@@ -31,7 +30,6 @@ from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import glob_utils
 from biggraphite import graphite_utils
 from biggraphite import metric as bg_metric
-
 
 _CONFIG_NAME = "biggraphite"
 

@@ -14,9 +14,9 @@
 # limitations under the License.
 """Web Command."""
 
-from biggraphite.cli import command
 from biggraphite import settings
 from biggraphite import utils
+from biggraphite.cli import command
 
 try:
     import gourde

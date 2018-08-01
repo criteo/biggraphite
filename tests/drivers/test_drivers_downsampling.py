@@ -22,7 +22,6 @@ from biggraphite import metric as bg_metric
 from biggraphite.drivers import _downsampling as bg_ds
 from tests import test_utils
 
-
 test_utils.setup_logging()
 
 

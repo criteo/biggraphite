@@ -35,7 +35,6 @@ from biggraphite.cli import (
     command_write,
 )
 
-
 COMMANDS = [
     command_clean.CommandClean(),
     command_copy.CommandCopy(),

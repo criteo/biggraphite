@@ -16,22 +16,21 @@
 
 from __future__ import print_function
 
-import freezegun
-from freezegun import freeze_time
 import datetime
 import unittest
 import uuid
 
 import elasticsearch_dsl
+import freezegun
+from freezegun import freeze_time
 
 from biggraphite import glob_utils as bg_glob
 from biggraphite import metric as bg_metric
-from biggraphite.metric import Aggregator, Retention, MetricMetadata
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
+from biggraphite.metric import Aggregator, Retention, MetricMetadata
 from tests import test_utils as bg_test_utils
-from tests.test_utils_elasticsearch import HAS_ELASTICSEARCH
-
 from tests.drivers.base_test_metadata import BaseTestAccessorMetadata
+from tests.test_utils_elasticsearch import HAS_ELASTICSEARCH
 
 
 class ComponentFromNameTest(unittest.TestCase):

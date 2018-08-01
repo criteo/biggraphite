@@ -22,7 +22,6 @@ from biggraphite import metric as bg_metric
 from biggraphite.drivers import _delayed_writer as bg_dw
 from tests import test_utils
 
-
 test_utils.setup_logging()
 
 

@@ -15,8 +15,9 @@
 from __future__ import absolute_import  # Otherwise carbon is this module.
 
 import time
-from six.moves import queue
+
 import prometheus_client
+from six.moves import queue
 
 try:
     from graphite.tags import utils as tags_utils

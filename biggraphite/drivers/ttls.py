@@ -15,8 +15,9 @@
 """Time constants and functions used by accessors."""
 
 import datetime
-import dateutil
 import time
+
+import dateutil
 
 MINUTE = 60
 HOUR = 60 * MINUTE

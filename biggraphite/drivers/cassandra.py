@@ -17,18 +17,19 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import collections
+import datetime
 import json
 import logging
 import multiprocessing
 import os
 import random
 import time
-import six
-import datetime
-from os import path as os_path
 from distutils import version
+from os import path as os_path
 
 import cassandra
+import prometheus_client
+import six
 from cassandra import auth
 from cassandra import cluster as c_cluster
 from cassandra import concurrent as c_concurrent
@@ -41,19 +42,15 @@ from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
 from biggraphite import metric as bg_metric
 from biggraphite import utils as bg_utils
-from biggraphite.drivers import cassandra_stratio_lucene as lucene
-from biggraphite.drivers import cassandra_sasi as sasi
-from biggraphite.drivers import cassandra_common as common
-from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
+from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
+from biggraphite.drivers import cassandra_common as common
 from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
-
+from biggraphite.drivers import cassandra_sasi as sasi
+from biggraphite.drivers import cassandra_stratio_lucene as lucene
 from biggraphite.drivers.ttls import DAY, HOUR, MINUTE
 from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
-
-import prometheus_client
-
 
 PM_DELETED_DIRECTORIES = prometheus_client.Counter(
     'bg_cassandra_deleted_directories',

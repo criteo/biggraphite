@@ -17,10 +17,10 @@
 from __future__ import absolute_import
 
 import argparse
+
 import flask_restplus as rp
 
 from biggraphite.cli.web import context
-
 
 api = rp.Namespace("bgutil", description="bgutil as a service")
 

@@ -18,11 +18,11 @@ from __future__ import print_function
 
 import sys
 
+from biggraphite import accessor_factory as bg_accessor_factory
 from biggraphite import settings as bg_settings
 from biggraphite import utils as bg_utils
-from biggraphite import accessor_factory as bg_accessor_factory
-from biggraphite.cli import commands
 from biggraphite.cli import command_shell
+from biggraphite.cli import commands
 
 
 def main(args=None, accessor=None):

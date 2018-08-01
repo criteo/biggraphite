@@ -14,22 +14,22 @@
 # limitations under the License.
 """Replays traffic from tcpdump to a Graphite cluster."""
 
-from __future__ import unicode_literals
 from __future__ import absolute_import
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import argparse
 import datetime
-import dpkt
 import logging
+import multiprocessing
+import re
 import sys
 import time
-import progressbar
-import re
-from six.moves.urllib import parse
-
-import multiprocessing
 from multiprocessing import dummy as multiprocessing_dummy
+
+import dpkt
+import progressbar
+from six.moves.urllib import parse
 
 from biggraphite.cli import clusters_diff
 

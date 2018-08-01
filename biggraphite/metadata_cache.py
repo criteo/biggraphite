@@ -27,22 +27,21 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import abc
+import logging
 import os
-from os import path as os_path
+import random
 import sys
 import threading
-import logging
-import uuid
 import time
-import random
+import uuid
+from os import path as os_path
 
 import cachetools
 import lmdb
-import six
 import prometheus_client
+import six
 
 from biggraphite import metric as bg_metric
-
 
 METRICS_LABELS = ['type', 'name']
 

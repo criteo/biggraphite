@@ -14,19 +14,18 @@
 # limitations under the License.
 from __future__ import print_function
 
-import freezegun
-import unittest
 import datetime
-
+import unittest
 from distutils import version
+
+import freezegun
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
 from biggraphite.drivers import cassandra as bg_cassandra
 from tests import test_utils as bg_test_utils
-from tests.test_utils_cassandra import HAS_CASSANDRA
-
 from tests.drivers.base_test_metadata import BaseTestAccessorMetadata
+from tests.test_utils_cassandra import HAS_CASSANDRA
 
 _METRIC = bg_test_utils.make_metric("test.metric")
 

@@ -16,6 +16,7 @@
 from __future__ import print_function
 
 import unittest
+
 from freezegun import freeze_time
 
 from biggraphite import metadata_cache as bg_metadata_cache

@@ -18,10 +18,11 @@
 import logging
 import os
 import sys
+
 import progressbar
 
-from biggraphite.cli import command
 from biggraphite import metadata_cache
+from biggraphite.cli import command
 
 _DEV_NULL = open(os.devnull, "w")
 

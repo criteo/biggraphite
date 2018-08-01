@@ -16,11 +16,11 @@
 
 from __future__ import print_function
 
-import time
 import datetime
+import time
 
-from biggraphite.cli import command
 from biggraphite import metric as bg_metric
+from biggraphite.cli import command
 
 
 class CommandWrite(command.BaseCommand):

@@ -16,11 +16,11 @@ from __future__ import print_function
 
 import unittest
 
+
 # pylama:ignore=W0611
 # No tests, at least check that the syntax is valid.
 # TODO: bundle a small pcap file and test that we can parse
 # it (also add a --dry_run).
-from biggraphite.cli import replay_traffic
 
 
 class TestReplayTraffic(unittest.TestCase):
