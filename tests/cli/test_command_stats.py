@@ -20,7 +20,7 @@ from mock import patch
 from six import StringIO
 
 from biggraphite.cli import command_stats
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_settings
 from biggraphite.accessor import MetricMetadata, Retention
 from tests import test_utils as bg_test_utils
 
@@ -40,7 +40,7 @@ class TestCommandStats(bg_test_utils.TestCaseWithFakeAccessor):
         cmd = command_stats.CommandStats()
 
         parser = argparse.ArgumentParser(add_help=False)
-        bg_utils.add_argparse_arguments(parser)
+        bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
 
         opts = parser.parse_args(args)

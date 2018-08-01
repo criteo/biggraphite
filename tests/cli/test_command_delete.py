@@ -18,7 +18,7 @@ import unittest
 import argparse
 
 from biggraphite.cli import command_delete
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_setting
 from biggraphite import accessor as bg_accessor
 from tests import test_utils as bg_test_utils
 
@@ -31,7 +31,7 @@ class TestCommandDelete(bg_test_utils.TestCaseWithFakeAccessor):
         cmd = command_delete.CommandDelete()
 
         parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
+        bg_setting.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
 
         name = 'foo.bar'

@@ -18,7 +18,9 @@ from __future__ import print_function
 
 import sys
 
+from biggraphite import settings as bg_settings
 from biggraphite import utils as bg_utils
+from biggraphite import accessor_factory as bg_accessor_factory
 from biggraphite.cli import commands
 from biggraphite.cli import command_shell
 
@@ -32,9 +34,9 @@ def main(args=None, accessor=None):
     if not getattr(opts, "func", None):
         opts.func = command_shell.CommandShell().run
 
-    settings = bg_utils.settings_from_args(opts)
+    settings = bg_settings.settings_from_args(opts)
     bg_utils.set_log_level(settings)
-    accessor = accessor or bg_utils.accessor_from_settings(settings)
+    accessor = accessor or bg_accessor_factory.accessor_from_settings(settings)
     opts.func(accessor, opts)
     accessor.flush()
     accessor.shutdown()

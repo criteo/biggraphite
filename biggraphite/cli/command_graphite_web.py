@@ -23,7 +23,8 @@ try:
 except ImportError:
     flamegraph = None
 
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_settings
+from biggraphite import cache_factory as bg_cache_factory
 from biggraphite.cli import command
 from biggraphite.cli import command_read
 
@@ -101,8 +102,8 @@ class CommandGraphiteWeb(command_read.CommandRead):
         from graphite import util as graphite_util
         from biggraphite.plugins import graphite
 
-        settings = bg_utils.settings_from_confattr(opts, prefix='')
-        metadata_cache = bg_utils.cache_from_settings(accessor, settings)
+        settings = bg_settings.settings_from_confattr(opts, prefix='')
+        metadata_cache = bg_cache_factory.cache_from_settings(accessor, settings)
         metadata_cache.open()
 
         if opts.profile == "flamegraph":

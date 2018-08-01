@@ -31,6 +31,7 @@ from carbon import log
 from twisted.internet import task
 
 from biggraphite import utils
+from biggraphite import settings as bg_settings
 from biggraphite import graphite_utils
 from biggraphite import accessor
 from biggraphite import metric as bg_metric
@@ -90,7 +91,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             'BG_SYNC_EVERY_N_WRITES', self._SYNC_EVERY_N_WRITES
         )
 
-        utils.start_admin(utils.settings_from_confattr(settings))
+        utils.start_admin(bg_settings.settings_from_confattr(settings))
         self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
         self.reactor.callInThread(self._createMetrics)
         self._lc = task.LoopingCall(self._background)

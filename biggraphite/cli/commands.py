@@ -16,7 +16,7 @@
 
 import argparse
 
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_settings
 from biggraphite.cli import (
     command_clean,
     command_copy,
@@ -58,7 +58,7 @@ COMMANDS = [
 def parse_opts(args):
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="BigGraphite command line utility.")
-    bg_utils.add_argparse_arguments(parser)
+    bg_settings.add_argparse_arguments(parser)
     subparsers = parser.add_subparsers(help="commands")
     for command in COMMANDS:
         subparser = subparsers.add_parser(

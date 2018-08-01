@@ -18,7 +18,7 @@ import unittest
 import argparse
 
 from biggraphite.cli import command_graphite_web
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_settings
 from biggraphite import accessor as bg_accessor
 from tests import test_utils as bg_test_utils
 
@@ -35,7 +35,7 @@ class TestCommandGraphiteWeb(bg_test_utils.TestCaseWithFakeAccessor):
         cmd = command_graphite_web.CommandGraphiteWeb()
 
         parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
+        bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
         opts = parser.parse_args(['foo.bar'])
         cmd.run(self.accessor, opts)

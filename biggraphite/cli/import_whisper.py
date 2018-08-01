@@ -33,7 +33,9 @@ import time
 import whisper
 
 from biggraphite import accessor as bg_accessor
+from biggraphite import accessor_factory as bg_accessor_factory
 from biggraphite import metric as bg_metric
+from biggraphite import settings as bg_settings
 from biggraphite import utils as bg_utils
 from biggraphite.cli import command
 
@@ -70,9 +72,9 @@ def metric_name_from_wsp(root_dir, prefix, wsp_path):
 class _Worker(object):
 
     def __init__(self, opts):
-        settings = bg_utils.settings_from_args(opts)
+        settings = bg_settings.settings_from_args(opts)
         bg_utils.set_log_level(settings)
-        self._accessor = bg_utils.accessor_from_settings(settings)
+        self._accessor = bg_accessor_factory.accessor_from_settings(settings)
         self._opts = opts
         self.time_start = time.mktime(self._opts.time_start.timetuple())
         self.time_end = time.mktime(self._opts.time_end.timetuple())
@@ -204,7 +206,7 @@ def _parse_opts(args):
         default=datetime.datetime.now(),
         required=False,
     )
-    bg_utils.add_argparse_arguments(parser)
+    bg_settings.add_argparse_arguments(parser)
     opts = parser.parse_args(args)
     opts.ignored_stages = [
         bg_accessor.Stage.from_string(s)
