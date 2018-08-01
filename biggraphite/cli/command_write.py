@@ -20,7 +20,6 @@ import time
 import datetime
 
 from biggraphite.cli import command
-from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
 
 
