@@ -27,6 +27,7 @@ import mock
 
 from biggraphite import utils as bg_utils
 from biggraphite import accessor as bg_accessor
+from biggraphite import accessor_factory as bg_accessor_factory
 from biggraphite import metric as bg_metric
 from biggraphite.drivers import memory as bg_memory
 from biggraphite import metadata_cache as bg_metadata_cache
@@ -35,50 +36,6 @@ from tests.test_utils_elasticsearch import ElasticsearchHelper
 
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
-
-    def _check_settings(self, settings):
-        # A non existing value.
-        value, found = bg_utils.get_setting(settings, "BAR")
-        self.assertEqual(value, None)
-        self.assertFalse(found)
-
-        # An existing value.
-        value, found = bg_utils.get_setting(settings, "FOO")
-        self.assertEqual(value, "BAR")
-        self.assertTrue(found)
-
-    def test_carbon_settings(self):
-        from carbon import conf as carbon_conf
-        settings = carbon_conf.Settings()
-        settings["FOO"] = "BAR"
-        self._check_settings(settings)
-
-    def test_django_settings(self):
-        import types
-        settings = types.ModuleType("settings")
-        settings.FOO = "BAR"
-        self._check_settings(settings)
-
-    def test_cassandra_accessor(self):
-        settings = {"BG_DRIVER": "cassandra"}
-        settings["BG_CASSANDRA_CONTACT_POINTS"] = "localhost"
-        settings["BG_CASSANDRA_COMPRESSION"] = True
-        settings["BG_CASSANDRA_TIMEOUT"] = 5
-
-        settings = bg_utils.settings_from_confattr(settings)
-        accessor = bg_utils.accessor_from_settings(settings)
-        self.assertNotEqual(accessor, None)
-
-        settings["BG_CASSANDRA_COMPRESSION"] = False
-        settings = bg_utils.settings_from_confattr(settings)
-        accessor = bg_utils.accessor_from_settings(settings)
-        self.assertNotEqual(accessor, None)
-
-    def test_memory_accessor(self):
-        settings = {"BG_DRIVER": "memory"}
-        settings = bg_utils.settings_from_confattr(settings)
-        accessor = bg_utils.accessor_from_settings(settings)
-        self.assertNotEqual(accessor, None)
 
     def test_set_log_level(self):
         bg_utils.set_log_level({"log_level": "INFO"})
@@ -236,7 +193,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     def setUpClass(cls):
         """Create the test Accessor."""
         # TODO (t.chataigner) Handle hybrid accessor here.
-        driver_name = cls.ACCESSOR_SETTINGS.get('driver', bg_utils.DEFAULT_DRIVER)
+        driver_name = cls.ACCESSOR_SETTINGS.get('driver', bg_accessor_factory.DEFAULT_DRIVER)
         if "cassandra" in driver_name:
             cls.cassandra_helper = CassandraHelper()
             cls.cassandra_helper.setUpClass()
@@ -248,7 +205,7 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             cls.ACCESSOR_SETTINGS.update(
                 cls.elasticsearch_helper.get_accessor_settings())
 
-        cls.accessor = bg_utils.accessor_from_settings(cls.ACCESSOR_SETTINGS)
+        cls.accessor = bg_accessor_factory.accessor_from_settings(cls.ACCESSOR_SETTINGS)
         cls.accessor.syncdb()
         cls.accessor.connect()
 

@@ -18,7 +18,7 @@ import unittest
 import argparse
 
 from biggraphite.cli import command_write
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_settings
 from tests import test_utils as bg_test_utils
 
 
@@ -28,7 +28,7 @@ class TestCommandWrite(bg_test_utils.TestCaseWithFakeAccessor):
         cmd = command_write.CommandWrite()
 
         parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
+        bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
         opts = parser.parse_args(['metric', '1'])
         cmd.run(self.accessor, opts)

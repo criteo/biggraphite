@@ -18,7 +18,7 @@ import unittest
 import argparse
 
 from biggraphite.cli import command_list
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_settings
 from biggraphite import accessor as bg_accessor
 from tests import test_utils as bg_test_utils
 
@@ -31,7 +31,7 @@ class TestCommandList(bg_test_utils.TestCaseWithFakeAccessor):
         cmd = command_list.CommandList()
 
         parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
+        bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
 
         name = 'foo.bar'

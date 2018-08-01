@@ -15,6 +15,7 @@
 """Web Command."""
 
 from biggraphite.cli import command
+from biggraphite import settings
 from biggraphite import utils
 
 try:
@@ -45,7 +46,7 @@ class CommandWeb(command.BaseCommand):
         accessor.connect()
 
         webapp = app.WebApp()
-        utils.start_admin(utils.settings_from_args(opts))
+        utils.start_admin(settings.settings_from_args(opts))
         webapp.initialize_app(accessor, opts)
         if not opts.dry_run:
             webapp.run()

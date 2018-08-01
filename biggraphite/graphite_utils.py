@@ -14,6 +14,9 @@
 # limitations under the License.
 """Graphite utility module."""
 
+from biggraphite import accessor_factory as bg_accessor_factory
+from biggraphite import cache_factory as bg_cache_factory
+from biggraphite import settings as bg_settings
 from biggraphite import utils as bg_utils
 
 
@@ -26,9 +29,9 @@ def accessor_from_settings(settings):
     Returns:
       Accessor (not connected).
     """
-    settings = bg_utils.settings_from_confattr(settings)
+    settings = bg_settings.settings_from_confattr(settings)
     bg_utils.set_log_level(settings)
-    return bg_utils.accessor_from_settings(settings)
+    return bg_accessor_factory.accessor_from_settings(settings)
 
 
 def cache_from_settings(accessor, settings, name=None):
@@ -41,5 +44,5 @@ def cache_from_settings(accessor, settings, name=None):
     Returns:
       Cache (not opened).
     """
-    settings = bg_utils.settings_from_confattr(settings)
-    return bg_utils.cache_from_settings(accessor, settings, name)
+    settings = bg_settings.settings_from_confattr(settings)
+    return bg_cache_factory.cache_from_settings(accessor, settings, name)

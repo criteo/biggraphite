@@ -18,7 +18,7 @@ import unittest
 import argparse
 
 from biggraphite.cli import command_test
-from biggraphite import utils as bg_utils
+from biggraphite import settings as bg_settings
 from tests import test_utils as bg_test_utils
 
 
@@ -28,7 +28,7 @@ class TestCommandTest(bg_test_utils.TestCaseWithFakeAccessor):
         cmd = command_test.CommandTest()
 
         parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
+        bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
         opts = parser.parse_args([])
         cmd.run(self.accessor, opts)
@@ -37,11 +37,11 @@ class TestCommandTest(bg_test_utils.TestCaseWithFakeAccessor):
         cmd = command_test.CommandTest()
 
         parser = argparse.ArgumentParser()
-        bg_utils.add_argparse_arguments(parser)
+        bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
         opts = parser.parse_args(["--cassandra_contact_points=127.0.0.1,192.168.0.1",
                                   "--cassandra_contact_points_metadata=127.0.0.1,192.168.1.1"])
-        settings = bg_utils.settings_from_args(opts)
+        settings = bg_settings.settings_from_args(opts)
         self.assertIsInstance(settings['cassandra_contact_points'], list)
         self.assertIsInstance(
             settings['cassandra_contact_points_metadata'], list)
