@@ -92,6 +92,18 @@ mkdir /dev/shm/es-bg-data
 ln -s /dev/shm/es-bg-data .deps/elasticsearch-${ES_VERSION}/data
 ```
 
+Scripts are provided to let you automate it easily:
+
+```bash
+$ source scripts/env.sh
+Skip cassandra installation, already installed
+Skip Cassandra Statio Lucene installation. Already installed
+Skip elasticsearch installation. Already installed
+$ ./tools/mount-tmpfs.sh
+Mounting Cassandra data directory to tmpfs
+Mounting Elasticsearch data directory to tmpfs
+```
+
 ### Running Benchmarks
 
 The simpliest way is to use tox. The command below will run all the tests inside benchmarks/ directory.

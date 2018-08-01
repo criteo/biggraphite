@@ -1,8 +1,7 @@
 [![Build Status](https://travis-ci.org/criteo/biggraphite.svg?branch=master)](https://travis-ci.org/criteo/biggraphite)
 [![Coverage Status](https://coveralls.io/repos/github/criteo/biggraphite/badge.svg)](https://coveralls.io/github/criteo/biggraphite?branch=master)
-[![Dependency Status](https://gemnasium.com/badges/github.com/criteo/biggraphite.svg)](https://gemnasium.com/github.com/criteo/biggraphite)
 
-# Big Graphite
+# BigGraphite
 
 BigGraphite is a storage layer for timeseries data. It integrates with Graphite as a plugin.
 
@@ -19,7 +18,10 @@ See [USAGE.md](USAGE.md) and [CONFIGURATION.md](CONFIGURATION.md).
 
 # Backends
 
-There is only one supported backend for now: Cassandra, whose design is [described in CASSANDRA_DESIGN.md](CASSANDRA_DESIGN.md).
+There is only one supported backend that provides all features: Cassandra, whose design is [described in CASSANDRA_DESIGN.md](CASSANDRA_DESIGN.md).
+
+Another backend supports metadata only, stored in Elasticsearch, [see ELASTICSEARCH_DESIGN.md](ELASTICSEARCH_DESIGN).
+Using it, it is possible to use Cassandra to store data points and Elasticsearch to store metrics metadata.
 
 
 # Code structure
@@ -27,7 +29,7 @@ There is only one supported backend for now: Cassandra, whose design is [describ
 - `biggraphite.accessor` exposes the public API to store/retrieve metrics
 - `biggraphite.metadata_cache` implements a machine-local cache using [LMDB](https://lmdb.readthedocs.io) so that one does not need a round-trip for each call to `accessor`
 - `biggraphite.plugins.*` implements integration with Carbon and Graphite
-- `biggraphite.backends.*` implements the storage backends (eg: Cassandra-specific code)
+- `biggraphite.drivers.*` implements the storage backends (eg: Cassandra-specific code)
 
 # Disclaimer
 
