@@ -20,7 +20,6 @@ from biggraphite import cache_factory as bg_cache_factory
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
 
-
 DEFAULT_LOG_LEVEL = "WARNING"
 DEFAULT_ADMIN_PORT = None
 

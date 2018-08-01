@@ -15,14 +15,15 @@
 """Web Application for BigGraphite."""
 
 import logging
+
 import flask
 import flask_restplus
 import gourde
 import prometheus_client
 
 from biggraphite.cli.web import context
-from biggraphite.cli.web.namespaces import biggraphite as ns_biggraphite
 from biggraphite.cli.web.namespaces import bgutil as ns_bgutil
+from biggraphite.cli.web.namespaces import biggraphite as ns_biggraphite
 
 
 class Error(Exception):

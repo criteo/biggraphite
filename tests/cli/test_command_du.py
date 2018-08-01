@@ -21,9 +21,9 @@ from mock import patch
 from six import StringIO
 
 from biggraphite import settings as bg_settings
-from biggraphite.metric import Retention
-from biggraphite.metric import MetricMetadata
 from biggraphite.cli import command_du
+from biggraphite.metric import MetricMetadata
+from biggraphite.metric import Retention
 from tests import test_utils as bg_test_utils
 
 

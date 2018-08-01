@@ -14,15 +14,16 @@
 # limitations under the License.
 from __future__ import print_function
 
-import unittest
 import argparse
+import unittest
+
 from mock import patch
 from six import StringIO
 
-from biggraphite.cli import command_stats
 from biggraphite import settings as bg_settings
-from biggraphite.metric import Retention
+from biggraphite.cli import command_stats
 from biggraphite.metric import MetricMetadata
+from biggraphite.metric import Retention
 from tests import test_utils as bg_test_utils
 
 

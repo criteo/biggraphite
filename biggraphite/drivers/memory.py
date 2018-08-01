@@ -23,8 +23,8 @@ import sortedcontainers
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
-from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _delayed_writer
+from biggraphite.drivers import _downsampling
 
 log = logging.getLogger(__name__)
 

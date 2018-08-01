@@ -16,15 +16,15 @@
 
 from __future__ import print_function
 
-import time
+import copy
 import datetime
 import logging
-import copy
+import time
 
+from biggraphite import metric as bg_metric
 from biggraphite.cli import command
 from biggraphite.cli.command_list import list_metrics
 from biggraphite.drivers.cassandra import TooManyMetrics
-from biggraphite import metric as bg_metric
 
 log = logging.getLogger(__name__)
 

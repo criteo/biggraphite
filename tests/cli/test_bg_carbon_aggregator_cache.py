@@ -13,7 +13,8 @@
 # limitations under the License.
 from __future__ import print_function
 
-from tests import test_utils as bg_test_utils   # noqa
+from tests import test_utils as bg_test_utils  # noqa
+
 bg_test_utils.prepare_graphite_imports()  # noqa
 
 import unittest

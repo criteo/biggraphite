@@ -16,15 +16,14 @@
 
 from __future__ import print_function
 
-import time
 import collections
 import re
-import tabulate
+import time
 
+import tabulate
 from six.moves.configparser import ConfigParser
 
 from biggraphite.cli import command
-
 
 # Hack to add some more formats.
 # TODO: Add Graphite support.

@@ -18,6 +18,7 @@ from __future__ import print_function
 
 import datetime
 import os
+
 try:
     import flamegraph
 except ImportError:

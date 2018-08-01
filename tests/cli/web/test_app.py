@@ -14,6 +14,7 @@
 """Test the WebApp."""
 
 import unittest
+
 import prometheus_client
 
 try:

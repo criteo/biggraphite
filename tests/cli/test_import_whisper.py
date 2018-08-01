@@ -14,18 +14,17 @@
 # limitations under the License.
 from __future__ import print_function
 
-from os import path as os_path
-from distutils.dir_util import mkpath
-import tempfile
 import shutil
+import tempfile
 import time
 import unittest
+from distutils.dir_util import mkpath
+from os import path as os_path
 
 import whisper
 
 from biggraphite.cli import import_whisper
 from tests import test_utils as bg_test_utils
-
 
 bg_test_utils.prepare_graphite_imports()
 

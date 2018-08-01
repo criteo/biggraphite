@@ -21,8 +21,8 @@ from __future__ import print_function
 
 from cassandra import query as c_query
 
-from biggraphite.drivers import lucene
 from biggraphite.drivers import cassandra_common
+from biggraphite.drivers import lucene
 
 _COMPONENTS_INDEX_MAX_LEN = cassandra_common.COMPONENTS_MAX_LEN
 

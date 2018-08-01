@@ -16,20 +16,20 @@
 
 from __future__ import print_function
 
-from multiprocessing import dummy as multiprocessing_dummy
 import argparse
 import datetime
 import io
 import logging
 import multiprocessing
 import os
-import progressbar
 import re
-import scandir
 import struct
 import sys
 import time
+from multiprocessing import dummy as multiprocessing_dummy
 
+import progressbar
+import scandir
 import whisper
 
 from biggraphite import accessor_factory as bg_accessor_factory
@@ -37,7 +37,6 @@ from biggraphite import metric as bg_metric
 from biggraphite import settings as bg_settings
 from biggraphite import utils as bg_utils
 from biggraphite.cli import command
-
 
 _DEV_NULL = open(os.devnull, "w")
 

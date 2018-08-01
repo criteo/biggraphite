@@ -21,10 +21,9 @@ import itertools
 
 from cassandra import encoder as c_encoder
 
-from biggraphite import glob_utils as bg_glob
 from biggraphite import accessor as bg_accessor
+from biggraphite import glob_utils as bg_glob
 from biggraphite.drivers import cassandra_common
-
 
 GLOBSTAR = bg_glob.Globstar()
 ANYSEQUENCE = bg_glob.AnySequence()

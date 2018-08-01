@@ -15,7 +15,6 @@
 
 from __future__ import absolute_import  # Otherwise graphite is this module.
 
-
 from graphite.tags import base
 
 

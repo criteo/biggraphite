@@ -14,10 +14,11 @@
 # limitations under the License.
 """Globbing utility module."""
 
-from enum import Enum
 import itertools
 import re
+
 import six
+from enum import Enum
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
 _GRAPHITE_GLOB_RE = re.compile(r"^[^*?{}\[\]]+$")

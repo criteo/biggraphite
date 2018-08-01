@@ -16,9 +16,9 @@ from __future__ import print_function
 
 import unittest
 
+from biggraphite import metric as bg_metric
 from biggraphite.cli import command_copy
 from biggraphite.cli.command_list import list_metrics
-from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
 

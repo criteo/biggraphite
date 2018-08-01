@@ -20,7 +20,6 @@ import flask_restplus as rp
 
 from biggraphite.cli.web import context
 
-
 # TODO:
 # - Add the equivalent of what the accessor provides
 # - Add the ability to get/set points.

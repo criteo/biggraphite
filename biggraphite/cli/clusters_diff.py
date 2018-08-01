@@ -16,24 +16,25 @@
 
 Through this module, a "query" is "the name of a query", a string.
 """
-from __future__ import unicode_literals
 from __future__ import absolute_import
 from __future__ import print_function
-import argparse
-import json
-import base64
-import time
-import sys
-import logging
-import collections
-import progressbar
-import operator
-import abc
-import netrc
+from __future__ import unicode_literals
 
+import abc
+import argparse
+import base64
+import collections
+import json
+import logging
+import netrc
+import operator
+import sys
+import time
+
+import progressbar
 import six
-from six.moves.urllib import request as urllib
 from six.moves.urllib import parse
+from six.moves.urllib import request as urllib
 
 
 class Error(Exception):

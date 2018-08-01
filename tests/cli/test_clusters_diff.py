@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # coding: utf-8
 """Test clusters_diff.py."""
-from __future__ import unicode_literals
 from __future__ import absolute_import
 from __future__ import print_function
-import unittest
-from biggraphite.cli import clusters_diff
-import tempfile
-import mock
-import json
+from __future__ import unicode_literals
+
 import collections
+import json
+import tempfile
+import unittest
+
+import mock
+
+from biggraphite.cli import clusters_diff
 
 
 class TestRequest(unittest.TestCase):

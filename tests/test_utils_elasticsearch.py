@@ -20,10 +20,9 @@ dependencies, instead one needs the elements of tests-requirements.txt .
 from __future__ import absolute_import
 from __future__ import print_function
 
+import logging
 import os
 import sys
-import logging
-
 
 HAS_ES_HOME = bool(os.getenv("ES_HOME"))
 ES_HOSTPORT = os.getenv("ES_HOSTPORT")

@@ -17,12 +17,13 @@
 
 import logging
 import os
-import time
 import sys
+import time
+
 import progressbar
 
-from biggraphite.cli import command
 from biggraphite import metadata_cache
+from biggraphite.cli import command
 
 _DEV_NULL = open(os.devnull, "w")
 

@@ -19,7 +19,6 @@ import os
 
 import prometheus_client
 
-
 DEFAULT_LOG_LEVEL = "WARNING"
 DEFAULT_ADMIN_PORT = None
 

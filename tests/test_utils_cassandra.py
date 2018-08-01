@@ -20,12 +20,11 @@ dependencies, instead one needs the elements of tests-requirements.txt .
 from __future__ import absolute_import
 from __future__ import print_function
 
+import logging
 import os
 import sys
-import logging
 
 from cassandra import cluster as c_cluster
-
 
 HAS_CASSANDRA_HOME = bool(os.getenv("CASSANDRA_HOME"))
 CASSANDRA_HOSTPORT = os.getenv("CASSANDRA_HOSTPORT")

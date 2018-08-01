@@ -14,9 +14,11 @@
 # limitations under the License.
 from __future__ import print_function
 
-import unittest
 import argparse
+import unittest
+
 import prometheus_client
+
 try:
     import gourde
 except ImportError:

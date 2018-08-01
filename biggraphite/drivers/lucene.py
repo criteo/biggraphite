@@ -16,8 +16,9 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-import six
 import json
+
+import six
 
 from biggraphite import glob_utils
 from biggraphite.drivers import cassandra_common

@@ -15,9 +15,9 @@
 
 from __future__ import print_function
 
-from collections import defaultdict
 import re
 import unittest
+from collections import defaultdict
 
 from biggraphite import glob_utils as bg_glob
 from tests import test_utils as bg_test_utils

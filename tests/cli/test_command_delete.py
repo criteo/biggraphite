@@ -14,12 +14,12 @@
 # limitations under the License.
 from __future__ import print_function
 
-import unittest
 import argparse
+import unittest
 
-from biggraphite.cli import command_delete
-from biggraphite import settings as bg_setting
 from biggraphite import metric as bg_metric
+from biggraphite import settings as bg_setting
+from biggraphite.cli import command_delete
 from tests import test_utils as bg_test_utils
 
 

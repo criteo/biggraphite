@@ -20,7 +20,6 @@ import logging
 
 from biggraphite.cli import command
 
-
 log = logging.getLogger(__name__)
 
 
