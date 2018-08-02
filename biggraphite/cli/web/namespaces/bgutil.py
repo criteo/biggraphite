@@ -16,11 +16,12 @@
 
 from __future__ import absolute_import
 
-import argparse
 
+import argparse
 import flask_restplus as rp
 
 from biggraphite.cli.web import context
+from biggraphite.cli.web.capture import Capture
 
 api = rp.Namespace("bgutil", description="bgutil as a service")
 
@@ -98,9 +99,12 @@ class BgUtilResource(rp.Resource):
 
         args = [a for a in api.payload["arguments"]]
 
+        result = None
         try:
             opts = parser.parse_args(args)
-            cmd.run(context.accessor, opts)
+            with Capture() as capture:
+                cmd.run(context.accessor, opts)
+                result = capture.get_content()
         except Exception as e:
             rp.abort(message=str(e))
 
@@ -108,9 +112,11 @@ class BgUtilResource(rp.Resource):
 
         # TODO:
         # - Allow asynchronous execution of commands.
-        # - Capture stdout/stderr and logs.
+        # - Capture logs.
         # To do that we might want to run new bgutil process and to add
         # a --bgutil_binary option to bgutil web (by default argv[0]). It would be
         # much easier to capture output and input this way.
 
-        return None
+        return result
+
+
