@@ -17,8 +17,8 @@ matrix:
 env:
   global:
     - JAVA=false # Default
-    - CASSANDRA_VERSION=3.11.2
-    - CASSANDRA_STRATIO_LUCENE_VERSION=3.11.1.0 #We should use ${CASSANDRA_VERSION}.0, but not released for 3.11.2 yet.
+    - CASSANDRA_VERSION=3.11.3
+    - CASSANDRA_STRATIO_LUCENE_VERSION=3.11.1.0 #We should use ${CASSANDRA_VERSION}.0, but not released for 3.11.3 yet.
     - CASSANDRA_HOME="${TRAVIS_BUILD_DIR}/.deps/apache-cassandra-${CASSANDRA_VERSION}/"
     - ES_VERSION=6.3.1
     - ES_HOME="${TRAVIS_BUILD_DIR}/.deps/elasticsearch-${ES_VERSION}/"

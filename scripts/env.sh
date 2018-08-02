@@ -38,7 +38,7 @@ fi
 # In test environment, limit to 12 components
 export BG_COMPONENTS_MAX_LEN=12
 
-export CASSANDRA_VERSION=3.11.2
+export CASSANDRA_VERSION=3.11.3
 export CASSANDRA_STRATIO_LUCENE_VERSION=3.11.1.0
 export ES_VERSION=6.3.1
 
