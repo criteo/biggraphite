@@ -96,12 +96,6 @@ class HybridAccessor(bg_accessor.Accessor):
         self._metadata_accessor.flush()
         self._data_accessor.flush()
 
-    def clear(self):
-        """See the real Accessor for a description."""
-        super(HybridAccessor, self).clear()
-        self._metadata_accessor.clear()
-        self._data_accessor.clear()
-
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).insert_points_async(metric, datapoints, on_done)
