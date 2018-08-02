@@ -230,7 +230,6 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         super(TestCaseWithAccessor, self).tearDown()
         self.metadata_cache.close()
         self.accessor.flush()
-        self.accessor.clear()
         self.__drop_all_metrics()
 
     def flush(self):

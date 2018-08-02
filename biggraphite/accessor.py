@@ -265,11 +265,6 @@ class Accessor(object):
         """Flush any internal buffers."""
         pass
 
-    @abc.abstractmethod
-    def clear(self):
-        """Clear all internal data."""
-        pass
-
     def insert_points(self, metric, datapoints):
         """Insert points for a given metric.
 

@@ -366,10 +366,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 ignore_unavailable=True,
             )
 
-    def clear(self):
-        """Clear all internal data."""
-        self._known_indices = {}
-
     def get_index(self, metric):
         """Get the index where a metric should be stored."""
         # Here the index could be sharded further by looking at the
@@ -406,6 +402,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).drop_all_metrics(*args, **kwargs)
         # Drop indices.
         self.client.indices.delete("%s*" % self._index_prefix)
+        self._known_indices = {}
 
     def create_metric(self, metric):
         """See the real Accessor for a description."""

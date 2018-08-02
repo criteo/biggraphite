@@ -89,13 +89,6 @@ class _MemoryAccessor(bg_accessor.Accessor):
         if self.__delayed_writer:
             self.__delayed_writer.flush()
 
-    def clear(self):
-        """Clear all internal data."""
-        if self.__downsampler:
-            self.__downsampler.clear()
-        if self.__delayed_writer:
-            self.__delayed_writer.clear()
-
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).insert_points_async(
