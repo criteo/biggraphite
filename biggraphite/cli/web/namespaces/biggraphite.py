@@ -16,8 +16,10 @@
 
 from __future__ import absolute_import
 
+from flask import request
 import flask_restplus as rp
 
+from biggraphite import metric as bg_metric
 from biggraphite.cli.web import context
 
 # TODO:
@@ -26,12 +28,21 @@ from biggraphite.cli.web import context
 
 api = rp.Namespace("biggraphite", description="BigGraphite API")
 
+metric_metadata = api.model(
+    "MetricMetadata",
+    {
+        "aggregator": rp.fields.String(description="The metric aggregator"),
+        "retention": rp.fields.String(description="The metric retention"),
+        "carbon_xfilesfactor": rp.fields.Float(description="The metric carbon xfiles factor"),
+    }
+)
+
 metric = api.model(
     "Metric",
     {
         "id": rp.fields.String(readOnly=True, description="The metric identifier"),
         "name": rp.fields.String(description="The metric name"),
-        "metadata": rp.fields.Raw(description="The metric metadata"),
+        "metadata": rp.fields.Nested(metric_metadata, description="The metric metadata"),
         "created_on": rp.fields.DateTime(),
         "updated_on": rp.fields.DateTime(),
         "read_on": rp.fields.DateTime(),
@@ -53,3 +64,18 @@ class MetricResource(rp.Resource):
         if not m:
             rp.abort(404)
         return m.as_string_dict()
+
+    @api.doc("Update a metric.")
+    @api.expect(metric_metadata)
+    def post(self, name):
+        """Update a metric."""
+        if not context.accessor.has_metric(name):
+            return "Unknown metric: '%s'" % name, 404
+        payload = request.json
+        metadata = bg_metric.MetricMetadata(
+            aggregator=bg_metric.Aggregator.from_config_name(payload["aggregator"]),
+            retention=bg_metric.Retention.from_string(payload["retention"]),
+            carbon_xfilesfactor=payload["carbon_xfilesfactor"]
+        )
+        context.accessor.update_metric(name, metadata)
+        return '', 204
