@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.1] - 2018-05-02
+
+### Added
+- Use provided time range to glob search metrics and directories (Elasticsearch only)
+
+### Fixed
+- Metadata update lost creation date in Elasticsearch backend
+- Ignore update conflicts on Elasticsearch (HTTP 409)
+
 ## [0.13.0] - 2018-23-07
 
 ### Added
@@ -238,7 +247,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/criteo/biggraphite/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/criteo/biggraphite/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/criteo/biggraphite/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/criteo/biggraphite/compare/v0.10.7...v0.11.0
