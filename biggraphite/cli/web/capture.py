@@ -24,12 +24,15 @@ except ImportError:
 
 
 class Capture:
+    """Capture outputs in usage scope."""
 
     def __init__(self):
+        """Init capture scope."""
         self.closed = True
         self.content = None
 
     def __enter__(self):
+        """Enter capture scope."""
         self.capture_io = StringIO()
         self.sys_stdout = sys.stdout
         self.sys_stderr = sys.stderr
@@ -47,6 +50,7 @@ class Capture:
         return self
 
     def __exit__(self, t, value, traceback):
+        """End capture scope."""
         sys.stdout = self.sys_stdout
         sys.stderr = self.sys_stderr
 
@@ -62,6 +66,7 @@ class Capture:
         self.closed = True
 
     def get_content(self):
+        """Get capture content as string."""
         if self.closed:
             return self.content
         else:
