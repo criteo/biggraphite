@@ -14,6 +14,7 @@
 # limitations under the License.
 """Tests for Capture."""
 
+import logging
 import sys
 from unittest import TestCase
 
@@ -53,3 +54,10 @@ class TestCapture(TestCase):
         with Capture() as capture:
             sys.stdout.write(expected_content)
         self.assertEqual(capture.get_content(), expected_content)
+
+    def test_capture_should_get_logger_content_with_line_break(self):
+        content = "foo"
+        logger = logging.getLogger("test-logger")
+        with Capture() as capture:
+            logger.info(content)
+        self.assertEqual(capture.get_content(), content + '\n')

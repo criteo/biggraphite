@@ -112,7 +112,6 @@ class BgUtilResource(rp.Resource):
 
         # TODO:
         # - Allow asynchronous execution of commands.
-        # - Capture logs.
         # To do that we might want to run new bgutil process and to add
         # a --bgutil_binary option to bgutil web (by default argv[0]). It would be
         # much easier to capture output and input this way.

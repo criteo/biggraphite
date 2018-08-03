@@ -14,6 +14,7 @@
 # limitations under the License.
 """Capture I/O."""
 
+import logging
 import sys
 
 try:
@@ -36,6 +37,11 @@ class Capture:
         sys.stdout = self.capture_io
         sys.stderr = self.capture_io
 
+        capture_logger = logging.getLogger()
+        capture_logger.setLevel(logging.DEBUG)
+        self.log_handler = logging.StreamHandler(self.capture_io)
+        capture_logger.addHandler(self.log_handler)
+
         self.closed = False
 
         return self
@@ -43,7 +49,15 @@ class Capture:
     def __exit__(self, t, value, traceback):
         sys.stdout = self.sys_stdout
         sys.stderr = self.sys_stderr
+
+        capture_logger = logging.getLogger()
+        capture_logger.removeHandler(self.log_handler)
+
+        self.log_handler.flush()
+        self.capture_io.flush()
+
         self.content = self.get_content()
+
         self.capture_io.close()
         self.closed = True
 
