@@ -56,6 +56,73 @@ log = logging.getLogger(__name__)
 
 INDEX_DOC_TYPE = "_doc"
 
+# TODO: Make that configurable (in a file), this will be particularly important
+# for the number of shards and replicas.
+INDEX_SETTINGS = {
+    "settings": {
+        "index": {
+            "number_of_shards": 3,
+            "number_of_replicas": 1,
+            "refresh_interval": "60s",
+            "translog": {
+                "sync_interval": "120s",
+                "durability": "async",
+            },
+            "search": {
+                "slowlog": {
+                    "level": "info",
+                    "threshold": {
+                        "query": {
+                            "debug": "2s",
+                            "info": "5s",
+                        },
+                        "fetch": {
+                            "debug": "200ms",
+                            "info": "500ms",
+                        },
+                    }
+                }
+            }
+        },
+    },
+    "mappings": {
+        INDEX_DOC_TYPE: {
+            "properties": {
+                "depth": {"type": "long"},
+                "created_on": {"type": "date"},
+                "read_on": {"type": "date"},
+                "updated_on": {"type": "date"},
+                "name": {
+                    "type": "keyword",
+                    "ignore_above": 1024,
+                },
+                "uuid": {
+                    "type": "keyword",
+                },
+                "config": {
+                    "type": "object",
+                    # TODO: describe existing fields with more details.
+                },
+            },
+            # Additional properties (such as path components) or labels
+            # TODO: have a specific dynamic mapping for labels using "match"
+            "dynamic_templates": [
+                {
+                    "strings_as_keywords": {
+                        "match": "p*",
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "keyword",
+                            "ignore_above": 256,
+                            "ignore_malformed": True,
+                        }
+                    }
+                }
+            ]
+        },
+    },
+}
+
 DEFAULT_INDEX = "biggraphite_metrics"
 DEFAULT_INDEX_SUFFIX = "_%Y-%m-%d"
 DEFAULT_HOSTS = ["127.0.0.1"]
@@ -63,8 +130,6 @@ DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
 DEFAULT_USERNAME = os.getenv("BG_ELASTICSEARCH_USERNAME")
 DEFAULT_PASSWORD = os.getenv("BG_ELASTICSEARCH_PASSWORD")
-
-DEFAULT_ES_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), '../../share/es_schema.json')
 
 MAX_QUERY_SIZE = 10000
 
@@ -118,12 +183,6 @@ def add_argparse_arguments(parser):
         type=int,
         help="elasticsearch query timeout in seconds.",
         default=DEFAULT_TIMEOUT,
-    )
-    parser.add_argument(
-        "--elasticsearch_schema",
-        metavar="SCHEMA",
-        help="elasticsearch schema path.",
-        default=DEFAULT_ES_SCHEMA_PATH,
     )
 
 
@@ -273,7 +332,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         timeout=DEFAULT_TIMEOUT,
         updated_on_ttl_sec=ttls.DEFAULT_UPDATED_ON_TTL_SEC,
         read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
-        schema_path=DEFAULT_ES_SCHEMA_PATH
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
@@ -288,9 +346,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__updated_on_ttl_sec = updated_on_ttl_sec
         self.__read_on_ttl_sec = read_on_ttl_sec
-        self.__schema_path = schema_path
         self.client = None
-        self.schema = None
         log.debug(
             "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'" %
             (self._index_prefix, self._index_suffix)
@@ -332,9 +388,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         log.info("Connected: %s" % es.info())
         self.client = es
 
-        with open(self.__schema_path, "r") as es_schema_file:
-            self.schema = json.load(es_schema_file)
-
     def shutdown(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).shutdown(*args, **kwargs)
@@ -375,7 +428,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             if not self.client.indices.exists(index=index_name):
                 self.client.indices.create(
                     index=index_name,
-                    body=self.schema,
+                    body=INDEX_SETTINGS,
                     ignore=409
                 )
                 self.client.indices.flush()
