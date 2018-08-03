@@ -117,5 +117,3 @@ class BgUtilResource(rp.Resource):
         # much easier to capture output and input this way.
 
         return result
-
-
