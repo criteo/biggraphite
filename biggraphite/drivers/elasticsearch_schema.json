@@ -1,0 +1,61 @@
+{
+    "settings": {
+        "index": {
+            "number_of_shards": 3,
+            "number_of_replicas": 1,
+            "refresh_interval": "60s",
+            "translog": {
+                "sync_interval": "120s",
+                "durability": "async"
+            },
+            "search": {
+                "slowlog": {
+                    "level": "info",
+                    "threshold": {
+                        "query": {
+                            "debug": "2s",
+                            "info": "5s"
+                        },
+                        "fetch": {
+                            "debug": "200ms",
+                            "info": "500ms"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "mappings": {
+        "_doc": {
+            "properties": {
+                "depth": {"type": "long"},
+                "created_on": {"type": "date"},
+                "read_on": {"type": "date"},
+                "updated_on": {"type": "date"},
+                "name": {
+                    "type": "keyword",
+                    "ignore_above": 1024
+                },
+                "uuid": {
+                    "type": "keyword"
+                },
+                "config": {
+                    "type": "object"
+                }
+            },
+            "dynamic_templates": [
+                {
+                    "strings_as_keywords": {
+                        "match": "p*",
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "keyword",
+                            "ignore_above": 256,
+                            "ignore_malformed": "True"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
