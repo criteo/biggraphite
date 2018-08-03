@@ -6,7 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-## [0.13.1] - 2018-05-02
+## [0.13.2] - 2018-08-03
+
+### Removed
+- Configurable es schema (reverted while waiting for a fix)
+- Accessor clear method (only used by tests)
+
+## [0.13.1] - 2018-08-02
 
 ### Added
 - Use provided time range to glob search metrics and directories (Elasticsearch only)
@@ -247,7 +253,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.2...HEAD
+[0.13.2]: https://github.com/criteo/biggraphite/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/criteo/biggraphite/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/criteo/biggraphite/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/criteo/biggraphite/compare/v0.11.0...v0.12.0
