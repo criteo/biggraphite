@@ -12,8 +12,6 @@ import threading
 import uuid
 import urllib.parse
 
-UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
-
 INDEX_PREFIX = "biggraphite_"
 
 INDEX_SCHEMA_METRICS_PATH = os.path.join(
