@@ -14,7 +14,6 @@ import urllib.parse
 
 UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
 
-DIRECTORIES = set()
 INDEX_PREFIX = "biggraphite_"
 
 INDEX_SCHEMA_METRICS_PATH = os.path.join(
@@ -34,6 +33,7 @@ def uuid_to_datetime(u):
 
 
 def document_base(name):
+    """Build base document with components."""
     data = {"depth": name.count("."), "name": name}
 
     for i, component in enumerate(name.split(".")):
@@ -111,12 +111,10 @@ def create(opts, es, row):
             metric, labels = guess_labels(metric, directory)
             row[0] = metric
             create_metric(es, row, labels=labels)
-        if directory not in DIRECTORIES:
-            DIRECTORIES.add(directory)
-            create_directory(es, directory)
 
 
 def create_metric(es, row, labels=None):
+    """Create a metric."""
     metric, config, created_on, uid, read_on, updated_on = row
     print(metric, labels)
 
@@ -131,17 +129,6 @@ def create_metric(es, row, labels=None):
         doc_type="metric",
         id=doc_id,
         body=document(metric, config, created_on, updated_on, read_on, uid, labels),
-        ignore=409,
-    )
-
-
-def create_directory(es, directory):
-    print(directory)
-    es.create(
-        index=INDEX_PREFIX + "directories",
-        doc_type="directory",
-        id=directory,
-        body=document_base(directory),
         ignore=409,
     )
 
