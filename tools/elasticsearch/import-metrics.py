@@ -17,62 +17,10 @@ UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
 DIRECTORIES = set()
 INDEX_PREFIX = "biggraphite_"
 
-INDEX_BODY_METRICS = {
-    "settings": {"index": {"number_of_shards": 6, "number_of_replicas": 1}},
-    "mappings": {
-        "metric": {
-            "properties": {
-                "depth": {"type": "long"},
-                "created_on": {"type": "date"},
-                "read_on": {"type": "date"},
-                "updated_on": {"type": "date"},
-                "name": {"type": "keyword", "ignore_above": 1024},
-                "uuid": {"type": "keyword"},
-                # TODO: Maybe make that non-analyzed
-                "config": {"type": "object"},
-            },
-            # Additional properties (such as path components) or labels
-            "dynamic_templates": [
-                {
-                    "strings_as_keywords": {
-                        "match": "p*",
-                        "match_mapping_type": "string",
-                        "mapping": {
-                            "type": "keyword",
-                            "ignore_above": 256,
-                            "ignore_malformed": True,
-                        },
-                    }
-                }
-            ],
-        }
-    },
-}
-INDEX_BODY_DIRECTORIES = {
-    "settings": {"index": {"number_of_shards": 3, "number_of_replicas": 1}},
-    "mappings": {
-        "directory": {
-            "properties": {
-                "depth": {"type": "long"},
-                "name": {"type": "keyword", "ignore_above": 1024},
-            },
-            # Additional properties (such as path components) or labels
-            "dynamic_templates": [
-                {
-                    "strings_as_keywords": {
-                        "match": "p*",
-                        "match_mapping_type": "string",
-                        "mapping": {
-                            "type": "keyword",
-                            "ignore_above": 256,
-                            "ignore_malformed": True,
-                        },
-                    }
-                }
-            ],
-        }
-    },
-}
+INDEX_SCHEMA_METRICS_PATH = os.path.join(
+    os.path.dirname(__file__),
+    '../../biggraphite/drivers/elasticsearch_schema.json'
+)
 
 
 def uuid_to_datetime(u):
@@ -241,17 +189,13 @@ def main():
     print("Connected:", es.info())
     if opts.cleanup:
         es.indices.delete(index=INDEX_PREFIX + "metrics", ignore=[400, 404])
-        es.indices.delete(index=INDEX_PREFIX + "directories", ignore=[400, 404])
     if not es.indices.exists(INDEX_PREFIX + "metrics"):
-        es.indices.create(
-            index=INDEX_PREFIX + "metrics", body=INDEX_BODY_METRICS, ignore=409
-        )
-    if not es.indices.exists(INDEX_PREFIX + "directories"):
-        es.indices.create(
-            index=INDEX_PREFIX + "directories", body=INDEX_BODY_DIRECTORIES, ignore=409
-        )
+        with open(INDEX_SCHEMA_METRICS_PATH, "r") as es_schema_file:
+            json_schema = json.load(es_schema_file)
+            es.indices.create(
+                index=INDEX_PREFIX + "metrics", body=json_schema, ignore=409
+            )
 
-    # TODO: Also create directories.
     rows = read_metrics(opts.input)
     executor = futures.ThreadPoolExecutor(max_workers=max_workers)
     for row in rows:
