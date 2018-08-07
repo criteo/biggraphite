@@ -31,6 +31,41 @@ command = api.model(
 )
 
 
+class UnknownCommandException(Exception):
+    """Unknown command exception."""
+    def __init__(self, command_name):
+        """Init UnknownCommandException."""
+        super.__init__("Unknown command: %s" % command_name)
+
+
+def parse_command(command_name, payload):
+    """Parse and build a BgUtil command."""
+    # Import that here only because we are inside a command and `commands`
+    # need to be able to import files from all commands.
+    from biggraphite.cli import commands
+
+    cmd = None
+    for cmd in commands.COMMANDS:
+        if cmd.NAME == command_name:
+            break
+    if not cmd or cmd.NAME != command_name:
+        raise UnknownCommandException(command_name)
+
+    parser = NonExitingArgumentParser(add_help=False)
+    parser.add_argument(
+        "--help",
+        action=_HelpAction,
+        default=argparse.SUPPRESS,
+        help="Show this help message and exit.",
+    )
+    cmd.add_arguments(parser)
+
+    args = [a for a in payload["arguments"]]
+    opts = parser.parse_args(args)
+
+    return cmd, opts
+
+
 class _HelpAction(argparse.Action):
     """Help Action that sends an exception."""
 
@@ -101,10 +136,12 @@ class BgUtilResource(rp.Resource):
 
         result = None
         try:
-            opts = parser.parse_args(args)
+            cmd, opts = parse_command(command_name, api.payload)
             with Capture() as capture:
                 cmd.run(context.accessor, opts)
                 result = capture.get_content()
+        except UnknownCommandException as e:
+            rp.abort(message=str(e))
         except Exception as e:
             rp.abort(message=str(e))
 
