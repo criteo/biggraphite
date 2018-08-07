@@ -1,4 +1,8 @@
-# ElasticSearch driver
-elasticsearch<6.0.0
+# Elasticsearch driver
+elasticsearch
+certifi
+
+# Cassandra driver (timeuuid conversion)
+cassandra-driver
 
 ratelimiter
