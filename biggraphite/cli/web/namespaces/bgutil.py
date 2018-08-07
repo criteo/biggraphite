@@ -112,27 +112,6 @@ class BgUtilResource(rp.Resource):
     @api.expect(command)
     def post(self, command_name):
         """Starts a bgutil command in this thread."""
-        # Import that here only because we are inside a command and `commands`
-        # need to be able to import files from all commands.
-        from biggraphite.cli import commands
-
-        cmd = None
-        for cmd in commands.COMMANDS:
-            if cmd.NAME == command_name:
-                break
-        if not cmd or cmd.NAME != command_name:
-            rp.abort(404, "Unknown command '%s'" % command_name)
-
-        parser = NonExitingArgumentParser(add_help=False)
-        parser.add_argument(
-            "--help",
-            action=_HelpAction,
-            default=argparse.SUPPRESS,
-            help="Show this help message and exit.",
-        )
-        cmd.add_arguments(parser)
-
-        args = [a for a in api.payload["arguments"]]
 
         result = None
         try:
@@ -154,3 +133,16 @@ class BgUtilResource(rp.Resource):
         # much easier to capture output and input this way.
 
         return result
+
+
+@api.route("/async/<string:command_name>")
+@api.param("command_name", "bgutil sub-command to run.")
+class BgUtilAsyncResource(rp.Resource):
+    """BgUtil asynchronous resource."""
+
+    @api.doc("Run a bgutil command.")
+    @api.expect(command)
+    def post(self, command_name):
+        """Run asynchronously a BgUtil command."""
+        return command_name, 501
+
