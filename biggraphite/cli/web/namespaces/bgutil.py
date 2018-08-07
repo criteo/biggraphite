@@ -16,8 +16,9 @@
 
 from __future__ import absolute_import
 
-
 import argparse
+from concurrent import futures
+
 import flask_restplus as rp
 
 from biggraphite.cli.web import context
@@ -33,6 +34,7 @@ command = api.model(
 
 class UnknownCommandException(Exception):
     """Unknown command exception."""
+
     def __init__(self, command_name):
         """Init UnknownCommandException."""
         super.__init__("Unknown command: %s" % command_name)
@@ -70,11 +72,11 @@ class _HelpAction(argparse.Action):
     """Help Action that sends an exception."""
 
     def __init__(
-        self,
-        option_strings,
-        dest=argparse.SUPPRESS,
-        default=argparse.SUPPRESS,
-        help=None,
+            self,
+            option_strings,
+            dest=argparse.SUPPRESS,
+            default=argparse.SUPPRESS,
+            help=None,
     ):
         """Constructor."""
         super(_HelpAction, self).__init__(
@@ -112,7 +114,6 @@ class BgUtilResource(rp.Resource):
     @api.expect(command)
     def post(self, command_name):
         """Starts a bgutil command in this thread."""
-
         result = None
         try:
             cmd, opts = parse_command(command_name, api.payload)
@@ -140,9 +141,25 @@ class BgUtilResource(rp.Resource):
 class BgUtilAsyncResource(rp.Resource):
     """BgUtil asynchronous resource."""
 
+    def __init__(self, rp_api=None, *args, **kwargs):
+        """Init BgUtilAsyncResource."""
+        super(BgUtilAsyncResource, self).__init__(rp_api, *args, **kwargs)
+        self.__executor = futures.ThreadPoolExecutor(max_workers=10)
+
     @api.doc("Run a bgutil command.")
     @api.expect(command)
+    @api.response(201, 'Created')
     def post(self, command_name):
         """Run asynchronously a BgUtil command."""
-        return command_name, 501
+        # TODO: monitor background tasks and feed /workers with it
+        try:
+            cmd, opts = parse_command(command_name, api.payload)
+            self.__executor.submit(cmd.run, context.accessor, opts)
+        except UnknownCommandException as e:
+            rp.abort(message=str(e))
+        except Exception as e:
+            rp.abort(message=str(e))
 
+        context.accessor.flush()
+
+        return None, 201
