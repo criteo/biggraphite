@@ -124,7 +124,7 @@ def create_metric(es, row, labels=None):
 
     es.create(
         index=INDEX_PREFIX + "metrics",
-        doc_type="metric",
+        doc_type="_doc",
         id=doc_id,
         body=document(metric, config, created_on, updated_on, read_on, uid, labels),
         ignore=409,
