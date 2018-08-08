@@ -1387,7 +1387,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return None
         uid = result[0]
         config = result[1]
-        updated_on = result[2]
+        updated_on = datetime.datetime.fromtimestamp(result[2]/1000)
 
         # Return None if any of the important column is missing.
         if not uid or not config:
