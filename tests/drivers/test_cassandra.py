@@ -142,6 +142,21 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(_USEFUL_POINTS[-10:], fetched[-10:])
         self.assertEqual(_USEFUL_POINTS, fetched)
 
+    def test_insert_fetch_existing_metric(self):
+        self.accessor.create_metric(_METRIC)
+        actual_metric = self.accessor.get_metric(_METRIC.name)
+        self.accessor.insert_points(actual_metric, _POINTS)
+
+        # TODO: Test fetch at different stages for a given metric.
+        fetched = self.fetch(_METRIC, _QUERY_START, _QUERY_END)
+
+        # assertEqual is very slow when the diff is huge, so we give it a chance of
+        # failing early to avoid imprecise test timeouts.
+        self.assertEqual(_QUERY_RANGE, len(fetched))
+        self.assertEqual(_USEFUL_POINTS[:10], fetched[:10])
+        self.assertEqual(_USEFUL_POINTS[-10:], fetched[-10:])
+        self.assertEqual(_USEFUL_POINTS, fetched)
+
     def test_insert_fetch_replicas(self):
         self.accessor.shard = bg_accessor.pack_shard(replica=0, writer=0)
         self.accessor.insert_points(_METRIC, _POINTS)
