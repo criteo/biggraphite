@@ -61,3 +61,18 @@ class TestCapture(TestCase):
         with Capture() as capture:
             logger.info(content)
         self.assertEqual(capture.get_content(), content + '\n')
+
+    def test_capture_should_get_print_content(self):
+        content = "Hello"
+        with Capture() as capture:
+            print(content)
+        self.assertEqual(capture.get_content(), content + '\n')
+
+    def test_capture_should_handle_line_breaks(self):
+        content_line_1 = "Hello"
+        content_line_2 = "World"
+        expected_result = "%s\n%s\n" % (content_line_1, content_line_2)
+        with Capture() as capture:
+            print(content_line_1)
+            print(content_line_2)
+        self.assertEqual(capture.get_content(), expected_result)
