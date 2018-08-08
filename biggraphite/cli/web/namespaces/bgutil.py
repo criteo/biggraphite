@@ -37,7 +37,7 @@ class UnknownCommandException(Exception):
 
     def __init__(self, command_name):
         """Init UnknownCommandException."""
-        super.__init__("Unknown command: %s" % command_name)
+        super(UnknownCommandException, self).__init__("Unknown command: %s" % command_name)
 
 
 def parse_command(command_name, payload):
