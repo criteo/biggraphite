@@ -22,6 +22,7 @@ import gourde
 import prometheus_client
 
 from biggraphite.cli.web import context
+from biggraphite.cli.web import worker
 from biggraphite.cli.web.namespaces import bgutil as ns_bgutil
 from biggraphite.cli.web.namespaces import biggraphite as ns_biggraphite
 
@@ -76,6 +77,7 @@ class WebApp(object):
         # Hack to access accessor and app in resources.
         context.accessor = accessor
         context.app = self
+        context.task_runner = worker.TaskRunner()
 
         self.accessor = accessor
         self.args = args
