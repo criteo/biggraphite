@@ -16,3 +16,6 @@
 
 accessor = None
 app = None
+
+# BgUtil running tasks
+task_runner = None

@@ -17,7 +17,6 @@
 from __future__ import absolute_import
 
 import argparse
-from concurrent import futures
 
 import flask_restplus as rp
 
@@ -141,11 +140,6 @@ class BgUtilResource(rp.Resource):
 class BgUtilAsyncResource(rp.Resource):
     """BgUtil asynchronous resource."""
 
-    def __init__(self, rp_api=None, *args, **kwargs):
-        """Init BgUtilAsyncResource."""
-        super(BgUtilAsyncResource, self).__init__(rp_api, *args, **kwargs)
-        self.__executor = futures.ThreadPoolExecutor(max_workers=10)
-
     @api.doc("Run a bgutil command.")
     @api.expect(command)
     @api.response(201, 'Created')
@@ -154,7 +148,8 @@ class BgUtilAsyncResource(rp.Resource):
         # TODO: monitor background tasks and feed /workers with it
         try:
             cmd, opts = parse_command(command_name, api.payload)
-            self.__executor.submit(cmd.run, context.accessor, opts)
+            label = self._make_label(command_name)
+            context.task_runner.submit(label, cmd, opts)
         except UnknownCommandException as e:
             rp.abort(message=str(e))
         except Exception as e:
@@ -163,3 +158,32 @@ class BgUtilAsyncResource(rp.Resource):
         context.accessor.flush()
 
         return None, 201
+
+    @staticmethod
+    def _make_label(command_name):
+        return "%s %s" % (command_name, ' '.join(api.payload["arguments"]))
+
+
+@api.route("/tasks/")
+class BgUtilTasksResource(rp.Resource):
+    """BgUtil list asynchronous resource."""
+
+    @api.doc("List asynchronous bgutil tasks.")
+    def get(self):
+        """List asynchronous bgutil tasks."""
+        return [self._format(task) for task in context.task_runner.tasks]
+
+    @staticmethod
+    def _format(task):
+        return {
+            "label": task.label,
+            "submitted_on": BgUtilTasksResource._format_date(task.submitted_on),
+            "started_on": BgUtilTasksResource._format_date(task.started_on),
+            "completed_on": BgUtilTasksResource._format_date(task.completed_on),
+            "status": task.status.value,
+            "result": task.result
+        }
+
+    @staticmethod
+    def _format_date(date):
+        return date.isoformat() if date else None
