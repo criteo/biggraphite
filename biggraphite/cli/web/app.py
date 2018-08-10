@@ -22,6 +22,7 @@ import gourde
 import prometheus_client
 
 from biggraphite.cli.web import context
+from biggraphite.cli.web import filters
 from biggraphite.cli.web import worker
 from biggraphite.cli.web.namespaces import bgutil as ns_bgutil
 from biggraphite.cli.web.namespaces import biggraphite as ns_biggraphite
@@ -44,7 +45,6 @@ class WebApp(object):
         self.app = self.gourde.app
         self.accessor = None
         self.args = None
-        self.bgutil_workers = {}
 
     def index(self):
         """Main page."""
@@ -54,7 +54,8 @@ class WebApp(object):
 
     def workers(self):
         """Display background operations."""
-        return flask.render_template("workers.html", workers=self.bgutil_workers)
+        tasks = enumerate(context.task_runner.tasks)
+        return flask.render_template("workers.html", tasks=tasks)
 
     def is_healthy(self):
         """Custom "health" check."""
@@ -86,6 +87,8 @@ class WebApp(object):
         self.gourde.setup(args)
         self.gourde.is_healthy = self.is_healthy
 
+        self._register_filters()
+
         self.initialize_api()
 
     def _init_logger(self):
@@ -113,6 +116,9 @@ class WebApp(object):
         logging.setLoggerClass(LoggerWrapper)
         logging.getLogger().propagate = True
         logging.getLogger().addHandler(HandlerWrapper())
+
+    def _register_filters(self):
+        self.app.jinja_env.filters["datetime"] = filters.format_datetime
 
     def run(self):
         """Run the application."""
