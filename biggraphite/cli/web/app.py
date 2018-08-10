@@ -59,7 +59,7 @@ class WebApp(object):
 
     def is_healthy(self):
         """Custom "health" check."""
-        return all(w["thread"].is_alive() for w in self.bgutil_workers.values())
+        return all(t.is_alive() for t in context.task_runner._executor._threads)
 
     def initialize_api(self):
         """Initialize an API."""
@@ -95,6 +95,7 @@ class WebApp(object):
         """Init logger to be able to intercept message from each command."""
         class HandlerWrapper(logging.Handler):
             def emit(self, record):
+                # FIXME Configure logging on executor threads
                 w = self.bgutil_workers.get(record.threadName, None)
                 if not w:
                     return
