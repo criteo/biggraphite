@@ -29,7 +29,8 @@ class TaskRunner:
     def __init__(self):
         """Init TaskRunner."""
         self.tasks = []
-        self.__executor = futures.ThreadPoolExecutor(max_workers=10)
+        self.__executor = futures.ThreadPoolExecutor(max_workers=10,
+                                                     thread_name_prefix="bgutil_worker")
 
     def submit(self, label, command, opts):
         """Submit a bgutil command to run it asynchronously."""
