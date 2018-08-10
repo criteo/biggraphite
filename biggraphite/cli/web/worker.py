@@ -29,8 +29,8 @@ class TaskRunner:
     def __init__(self):
         """Init TaskRunner."""
         self.tasks = []
-        self.__executor = futures.ThreadPoolExecutor(max_workers=10,
-                                                     thread_name_prefix="bgutil_worker")
+        self._executor = futures.ThreadPoolExecutor(max_workers=10,
+                                                    thread_name_prefix="bgutil_worker")
 
     def submit(self, label, command, opts):
         """Submit a bgutil command to run it asynchronously."""
@@ -46,7 +46,7 @@ class TaskRunner:
             except futures.TimeoutError:
                 task.timed_out()
 
-        future = self.__executor.submit(self._wrap_command, task, context.accessor, command, opts)
+        future = self._executor.submit(self._wrap_command, task, context.accessor, command, opts)
         future.add_done_callback(_done_callback)
         task.submitted()
 
