@@ -14,11 +14,9 @@
 # limitations under the License.
 from __future__ import print_function
 
-import datetime
 import unittest
+import time
 from distutils import version
-
-import freezegun
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
@@ -67,20 +65,19 @@ class TestAccessorWithCassandraSASI(BaseTestAccessorMetadata, bg_test_utils.Test
 
         created_metric = self.accessor.get_metric(metric.name)
 
-        now = datetime.datetime.now()
-        with freezegun.freeze_time(now + datetime.timedelta(seconds=2)):
-            self.accessor.touch_metric(metric)
-
         old_ttl = self.accessor._CassandraAccessor__metadata_touch_ttl_sec
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = 1
 
-        with freezegun.freeze_time(now + datetime.timedelta(seconds=2)):
-            self.accessor.touch_metric(metric)
+        # TODO: use freezegun instead of a sleep.
+        # We can't use freezegun here since creating/updating metric
+        # now() is computed inside cassandra queries (outside python).
+        time.sleep(2)
+        self.accessor.touch_metric(metric)
         self.flush()
 
         updated_metric = self.accessor.get_metric(metric.name)
 
-        self.assertNotEquals(created_metric.updated_on, updated_metric.updated_on)
+        self.assertNotEqual(created_metric.updated_on, updated_metric.updated_on)
 
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = old_ttl
 
