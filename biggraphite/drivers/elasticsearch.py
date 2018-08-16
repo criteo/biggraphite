@@ -262,11 +262,7 @@ def _raise_unsupported():
 class _ElasticSearchAccessor(bg_accessor.Accessor):
     """A ElasticSearch acessor that doubles as a ElasticSearch MetadataCache."""
 
-    Row = collections.namedtuple(
-        "Row", ["time_start_ms", "offset", "shard", "value", "count"]
-    )
-
-    Row0 = collections.namedtuple("Row", ["time_start_ms", "offset", "value"])
+    TYPE = "elasticsearch"
 
     def __init__(
         self,
@@ -301,6 +297,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'"
             % (self._index_prefix, self._index_suffix)
         )
+
+    def get_accessor_name(self):
+        """Return the name of the accessor."""
+        return "elasticsearch"
 
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -664,26 +664,83 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             if callback_on_progress:
                 callback_on_progress(i, t)
             # TODO Implements the function
-            log.warn("%s is not implemented" % self.repair.__name__)
+            log.warning("%s is not implemented" % self.repair.__name__)
 
         self.map(_callback, *args, **kwargs)
 
-    def clean(self, *args, **kwargs):
+    def clean(
+        self,
+        max_age=None,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        callback_on_progress=None,
+    ):
         """See bg_accessor.Accessor."""
-        super(_ElasticSearchAccessor, self).clean(*args, **kwargs)
-        callback_on_progress = kwargs.pop("callback_on_progress", None)
-        kwargs.pop("max_age", None)
+        super(_ElasticSearchAccessor, self).clean(
+            max_age, start_key, end_key, shard, nshards, callback_on_progress
+        )
+        custom_suffix = ""
+        index_suffix = self._index_suffix
 
-        def _callback(m, i, t):
+        indices_datetime = []
+        # TODO, we could also do this:
+        # self.client.cat.indices(
+        #   index="%s*" % self._index_prefix,
+        #   format="json", h="index,creation.date"
+        # )
+        for index in self.client.indices.get("%s*" % self._index_prefix):
+            # Hack if we use week as strptime cannot parse without weekday
+            # So we add -0 to identify the first day of week
+            if index_suffix.endswith("%W"):
+                index_suffix += "-%w"
+                custom_suffix = "-0"
+            index += custom_suffix
+            try:
+                index_datetime = datetime.datetime.strptime(
+                    index, self._index_prefix + index_suffix
+                )
+                print(index_datetime)
+            except ValueError as e:
+                # Ignore dates that we can't parse.
+                logging.error("Can't parse %s: %s" % (index, e))
+                continue
+            indices_datetime.append(index_datetime)
+
+        indices_datetime.sort(reverse=True)
+        # Remove the two most recent index to be sure we keep data we are currently using.
+        indices_datetime.pop(0)
+        indices_datetime.pop(0)
+
+        max_date = datetime.datetime.now() - datetime.timedelta(seconds=max_age)
+        done = 0
+        for index_datetime in indices_datetime:
+            if index_datetime < max_date:
+                index_to_drop = self._index_prefix + index_datetime.strftime(
+                    self._index_suffix
+                )
+
+                if self.client.indices.exists(index_to_drop):
+                    logging.info("Removing index %s" % index_to_drop)
+                    self.client.indices.delete(index_to_drop)
+                else:
+                    # Maybe wrong suffix, should be deleted by hand.
+                    logging.warning("Can't find %s" % index_to_drop)
+
+            done += 1
             if callback_on_progress:
-                callback_on_progress(i, t)
-            # TODO Implements the function
-            log.warn("%s is not implemented" % self.clean.__name__)
-
-        self.map(_callback, *args, **kwargs)
+                callback_on_progress(done, len(indices_datetime))
 
     def map(
-        self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None
+        self,
+        callback,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        errback=None,
+        callback_on_progress=None,
     ):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).map(
@@ -691,11 +748,44 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         )
 
         # TODO: implement
-        log.warn("map is not implemented")
+        log.error("map is not implemented")
         metrics = []
         total = len(metrics)
         for i, metric in enumerate(metrics):
             callback(metric, i, total)
+
+    def metric_stats(self, namespaces):
+        """See bg_accessor.Accessor."""
+        # TODO: implement sharding using this
+        # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-preference.html
+        n_metrics = collections.defaultdict(int)
+        n_points = collections.defaultdict(int)
+
+        for pattern, namespace in namespaces.patterns.items():
+            search = self._create_search_query()
+            # Transform a pattern to a regexp.
+            regexp = pattern.pattern + ".*"
+            search = search.query("regexp", name=regexp)
+            search.aggs.bucket(
+                "metrics_per_retention", "terms", field="config.retention.keyword"
+            )
+            result = search.execute()
+            if not result.aggregations:
+                continue
+            metrics_per_retention = result.aggregations.metrics_per_retention.buckets
+            metrics_total = 0
+            points = 0
+            for metrics in metrics_per_retention:
+                metrics_total += metrics.doc_count
+                points += (
+                    bg_metric.Retention.from_string(metrics.key).points
+                    * metrics.doc_count
+                )
+
+            n_metrics[namespace] = metrics_total
+            n_points[namespace] = points
+
+        return n_metrics, n_points
 
     @READ_ON.time()
     def __update_read_on_on_need(self, metric):

@@ -841,6 +841,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
     Please refer to bg_accessor.Accessor.
     """
 
+    TYPE = "cassandra"
+
     def __init__(
         self,
         keyspace=DEFAULT_KEYSPACE,
@@ -913,6 +915,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.port = port
         self.port_metadata = port_metadata
         self.use_lucene = use_lucene
+        if use_lucene:
+            self.TYPE += "-lucene"
         self.max_metrics_per_pattern = max_metrics_per_pattern
         self.max_queries_per_pattern = max_queries_per_pattern
         self.max_concurrent_queries_per_pattern = max_concurrent_queries_per_pattern
@@ -971,6 +975,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self.max_queries_per_pattern,
                 self.max_metrics_per_pattern,
             )
+
+    def get_accessor_name(self):
+        """Return the name of the accessor."""
+        return "cassandra"
 
     def connect(self):
         """See bg_accessor.Accessor."""
@@ -1763,11 +1771,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
             )
 
     def map(
-        self, callback, start_key=None, end_key=None, shard=1, nshards=0, errback=None
+        self,
+        callback,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        errback=None,
+        callback_on_progress=None,
     ):
         """See bg_accessor.Accessor.
 
-        Slight change for start_key and end_key, they are intrepreted as
+        Slight change for start_key and end_key, they are interpreted as
         tokens directly.
         """
         start_token, stop_token = self._get_search_range(
@@ -1793,7 +1808,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         while token < stop_token:
             # Schedule read first.
             future = self._execute_async_metadata(
-                select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+                select, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
             )
 
             # Then execute callback for the *previous* result while C* is
@@ -1826,6 +1841,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     continue
 
                 callback(metric, done + 1, total)
+                if callback_on_progress:
+                    callback_on_progress(done + 1, total)
 
             # Then, read new data.
             try:
@@ -1879,7 +1896,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             start_token += my_tokens * shard
             stop_token = start_token + my_tokens
 
-        return (start_token, stop_token)
+        return start_token, stop_token
 
     def _repair_missing_dir(
         self,
@@ -1934,7 +1951,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
-                dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+                dir_query, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
             )
             if len(result.current_rows) == 0:
                 break
@@ -1955,7 +1972,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             for ret in rets:
                 if not ret.success:
-                    log.warn(str(ret.result_or_exc))
+                    log.warning(str(ret.result_or_exc))
 
             if callback_on_progress:
                 callback_on_progress(token - start_token, stop_token - start_token)
@@ -2002,7 +2019,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 if results:
                     continue
                 dir_name = response.result_or_exc.response_future.query.values[0]
-                dir_name = dir_name.rpartition(".")[0]
+                dir_name = str(dir_name).rpartition(".")[0]
                 log.info("Scheduling delete for empty dir '%s'" % dir_name)
                 PM_DELETED_DIRECTORIES.inc()
                 yield delete_empty_dir_stm, (dir_name,)
@@ -2011,7 +2028,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
-                dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+                dir_query, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
             )
             if len(result.current_rows) == 0:
                 break
@@ -2140,7 +2157,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         while token < stop_token:
             try:
                 rows = self._execute_metadata(
-                    select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+                    select, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
                 )
 
                 # Empty results means that we've reached the end.

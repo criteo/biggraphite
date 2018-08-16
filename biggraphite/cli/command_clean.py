@@ -80,7 +80,7 @@ class CommandClean(command.BaseCommand):
         if on_progress is None:
 
             def _on_progress(done, total):
-                self.pbar.max_value = total
+                self.pbar.max_value = max(total, done)
                 self.pbar.update(done)
 
             on_progress = _on_progress
@@ -109,6 +109,7 @@ class CommandClean(command.BaseCommand):
             )
 
         if opts.clean_corrupted:
+            # Remove corrupt metrics.
             now = time.time()
 
             def callback(metric, done, total):
@@ -130,11 +131,11 @@ class CommandClean(command.BaseCommand):
 
             logging.info("Cleaning corrupted metrics")
             accessor.map(
+                callback,
                 shard=opts.shard,
                 nshards=opts.nshards,
                 start_key=opts.start_key,
                 end_key=opts.end_key,
-                callback=callback,
                 errback=errback,
             )
 

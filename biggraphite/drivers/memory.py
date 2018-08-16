@@ -42,6 +42,8 @@ class InvalidArgumentError(Error, bg_accessor.InvalidArgumentError):
 class _MemoryAccessor(bg_accessor.Accessor):
     """A memory acessor that doubles as a memory MetadataCache."""
 
+    TYPE = "memory"
+
     Row = collections.namedtuple(
         "Row", ["time_start_ms", "offset", "shard", "value", "count"]
     )
@@ -65,6 +67,10 @@ class _MemoryAccessor(bg_accessor.Accessor):
     @property
     def _metric_names(self):
         return self._name_to_metric.keys()
+
+    def get_accessor_name(self):
+        """Return the name of the accessor."""
+        return "memory"
 
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -207,45 +213,48 @@ class _MemoryAccessor(bg_accessor.Accessor):
         super(_MemoryAccessor, self).touch_metric(metric)
 
         # TODO Implements the function
-        log.warn("%s is not implemented" % self.touch_metric.__name__)
+        log.warning("%s is not implemented" % self.touch_metric.__name__)
         pass
 
     def repair(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).repair(*args, **kwargs)
-        callback_on_progress = kwargs.pop("callback_on_progress")
 
-        def _callback(m, i, t):
-            callback_on_progress(i, t)
-            # TODO Implements the function
-            log.warn("%s is not implemented" % self.repair.__name__)
+        def _callback(_, __, ___):
+            log.warning("%s is not implemented" % self.repair.__name__)
 
         self.map(_callback, *args, **kwargs)
 
     def clean(self, *args, **kwargs):
         """See bg_accessor.Accessor."""
         super(_MemoryAccessor, self).clean(*args, **kwargs)
-        callback_on_progress = kwargs.pop("callback_on_progress")
         kwargs.pop("max_age", None)
 
-        def _callback(m, i, t):
-            callback_on_progress(i, t)
-            # TODO Implements the function
-            log.warn("%s is not implemented" % self.clean.__name__)
+        def _callback(_, __, ___):
+            log.warning("%s is not implemented" % self.clean.__name__)
 
         self.map(_callback, *args, **kwargs)
 
     def map(
-        self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None
+        self,
+        callback,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        errback=None,
+        callback_on_progress=None,
     ):
         """See bg_accessor.Accessor."""
         super(_MemoryAccessor, self).map(
-            callback, start_key, end_key, shard, nshards, errback
+            callback, start_key, end_key, shard, nshards, callback_on_progress
         )
 
         metrics = self._name_to_metric
         total = len(metrics)
         for i, metric in enumerate(metrics.values()):
+            if callback_on_progress:
+                callback_on_progress(i, total)
             callback(metric, i, total)
 
 

@@ -19,11 +19,18 @@ from biggraphite import accessor as bg_accessor
 class HybridAccessor(bg_accessor.Accessor):
     """Hybrid accessor, using one for metadata and one for data."""
 
+    TYPE = "hybrid"
+
     def __init__(self, backend_name, metadata_accessor, data_accessor):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).__init__(backend_name)
         self._metadata_accessor = metadata_accessor
         self._data_accessor = data_accessor
+        self.TYPE = metadata_accessor.TYPE + "+" + data_accessor.TYPE
+
+    def get_accessor_name(self):
+        """Return the name of the accessor."""
+        return "hybrid"
 
     def connect(self):
         """See the real Accessor for a description."""
@@ -80,6 +87,11 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).get_metric(metric_name)
         return self._metadata_accessor.get_metric(metric_name)
 
+    def touch_metric(self, metric):
+        """See the real Accessor for a description."""
+        super(HybridAccessor, self).touch_metric(metric)
+        self._metadata_accessor.touch_metric(metric)
+
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).glob_metric_names(glob)
@@ -117,14 +129,14 @@ class HybridAccessor(bg_accessor.Accessor):
         self._data_accessor.insert_downsampled_points_async(metric, datapoints, on_done)
 
     def map(
-        self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None
+        self, namespaces, start_key=None, end_key=None, shard=0, nshards=1, errback=None
     ):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).map(
-            callback, start_key, end_key, shard, nshards, errback
+            namespaces, start_key, end_key, shard, nshards, errback
         )
         return self._metadata_accessor.map(
-            callback, start_key, end_key, shard, nshards, errback
+            namespaces, start_key, end_key, shard, nshards, errback
         )
 
     def repair(
@@ -143,17 +155,6 @@ class HybridAccessor(bg_accessor.Accessor):
             start_key, end_key, shard, nshards, callback_on_progress
         )
 
-    def shutdown(self):
-        """See the real Accessor for a description."""
-        super(HybridAccessor, self).shutdown()
-        self._metadata_accessor.shutdown()
-        self._data_accessor.shutdown()
-
-    def touch_metric(self, metric):
-        """See the real Accessor for a description."""
-        super(HybridAccessor, self).touch_metric(metric)
-        self._metadata_accessor.touch_metric(metric)
-
     def clean(
         self,
         max_age=None,
@@ -170,3 +171,9 @@ class HybridAccessor(bg_accessor.Accessor):
         self._metadata_accessor.clean(
             max_age, start_key, end_key, shard, nshards, callback_on_progress
         )
+
+    def shutdown(self):
+        """See the real Accessor for a description."""
+        super(HybridAccessor, self).shutdown()
+        self._metadata_accessor.shutdown()
+        self._data_accessor.shutdown()
