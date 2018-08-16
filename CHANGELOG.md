@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.4] - 2018-08-16
+
+### Fixed
+- Don't install ipython as requirement.
+
 ## [0.13.3] - 2018-08-14
 
 ### Added
