@@ -131,6 +131,11 @@ class Accessor(object):
         self.cache_metadata_ttl = metadata_ttl
 
     @abc.abstractmethod
+    def get_accessor_name(self):
+        """Return the name of the accessor."""
+        pass
+
+    @abc.abstractmethod
     def connect(self):
         """Establish a connection, idempotent.
 
@@ -315,7 +320,14 @@ class Accessor(object):
 
     @abc.abstractmethod
     def map(
-        self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None
+        self,
+        callback,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        errback=None,
+        callback_on_progress=None,
     ):
         """Call callback on each metric.
 
@@ -326,16 +338,13 @@ class Accessor(object):
 
         Args:
           callback: callable(metric: Metric, done: int, total: int)
-          errback: callable(metric: string) when a corrupted metric is found
           start_key: string, start at key >= start_key.
           end_key: string, stop at key < end_key.
           shard: int, shard to repair.
           nshards: int, number of shards.
-
+          errback: callable(metric: string) when a corrupted metric is found
+          callback_on_progress: Take 2 parameters, work done so far, total work to do.
         """
-        assert shard >= 0
-        assert nshards > 0
-        assert shard < nshards
         self._check_connected()
 
     @abc.abstractmethod
@@ -351,7 +360,7 @@ class Accessor(object):
 
         This operation can potentially be very slow.
 
-        During the repair the keyspace is split in n shards and
+        During the repair the metric space is split in n shards and
         this function will only take care of 1/n th of the data
         as specified by shard. This allows the caller to parallelize
         the repair if needed.
@@ -370,6 +379,19 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
+    def clean(
+        self,
+        max_age=None,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
+        """Remove metrics older than @max_age, considered to have expired (not used anymore)."""
+        self._check_connected()
+
+    @abc.abstractmethod
     def shutdown(self):
         """Close the connection.
 
@@ -380,19 +402,6 @@ class Accessor(object):
     @abc.abstractmethod
     def touch_metric(self, metric):
         """Update a metric to refresh its last write timestamp."""
-        self._check_connected()
-
-    @abc.abstractmethod
-    def clean(
-        self,
-        max_age=None,
-        start_key=None,
-        end_key=None,
-        shard=1,
-        nshards=0,
-        callback_on_progress=None,
-    ):
-        """Remove metrics that have expired (not used anymore)."""
         self._check_connected()
 
 

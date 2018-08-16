@@ -31,7 +31,9 @@ DEFAULT_GLOB = "foo.bar.**"
 class TestHybridAccessor(unittest.TestCase):
     def setUp(self):
         self._metadata_accessor = Mock()
+        self._metadata_accessor.TYPE = 'mock'
         self._data_accessor = Mock()
+        self._data_accessor.TYPE = 'mock'
         self._accessor = hybrid.HybridAccessor(
             "test_hybrid", self._metadata_accessor, self._data_accessor
         )
@@ -198,3 +200,7 @@ class TestHybridAccessor(unittest.TestCase):
 
         self._metadata_accessor.clean.assert_called_with(None, None, None, 1, 0, None)
         self._data_accessor.clean.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()

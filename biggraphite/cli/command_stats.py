@@ -91,6 +91,7 @@ class CommandStats(command.BaseCommand):
     def __init__(self, *args, **kwargs):
         """Initialize."""
         super(CommandStats, self).__init__(*args, **kwargs)
+        self.ns = None
         self._n_metrics = collections.defaultdict(int)
         self._n_points = collections.defaultdict(int)
 
@@ -109,6 +110,8 @@ class CommandStats(command.BaseCommand):
         parser.add_argument(
             "-f", "--format", help="Format: %s" % ", ".join(formats), dest="fmt"
         )
+        self._n_metrics = collections.defaultdict(int)
+        self._n_points = collections.defaultdict(int)
 
     def run(self, accessor, opts):
         """Disk usage of metrics.
@@ -117,13 +120,21 @@ class CommandStats(command.BaseCommand):
         """
         self.ns = Namespaces(opts.conf)
         accessor.connect()
-        accessor.map(
-            self.stats,
-            start_key=opts.start_key,
-            end_key=opts.end_key,
-            shard=opts.shard,
-            nshards=opts.nshards,
-        )
+
+        if accessor.TYPE.startswith("elasticsearch+"):
+            accessor = accessor._metadata_accessor
+
+        if accessor.TYPE == "elasticsearch":
+            # Elasticsearch has a better implementation.
+            self._n_metrics, self._n_points = accessor.metric_stats(self.ns)
+        else:
+            accessor.map(
+                self.stats,
+                start_key=opts.start_key,
+                end_key=opts.end_key,
+                shard=opts.shard,
+                nshards=opts.nshards,
+            )
 
         columns = ("Namespace", "Metrics", "Points")
         rows = [columns]
