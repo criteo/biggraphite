@@ -31,5 +31,5 @@ prometheus_client
 # Metadata cache
 lmdb
 
-# For bgutil shell
-ipython
+# Optional, for bgutil shell:
+# ipython
