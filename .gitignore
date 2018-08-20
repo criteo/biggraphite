@@ -15,6 +15,7 @@
 # IDEs
 **/.idea/
 **/*.iml
+.vscode/
 *~
 
 # dev virtualenvs
