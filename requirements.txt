@@ -7,7 +7,6 @@ tabulate
 
 # Command line web
 gourde
-futures
 
 # Memory driver
 sortedcontainers

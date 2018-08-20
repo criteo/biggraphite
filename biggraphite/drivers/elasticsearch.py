@@ -652,10 +652,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def repair(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).repair(*args, **kwargs)
-        callback_on_progress = kwargs.pop("callback_on_progress")
+        callback_on_progress = kwargs.pop("callback_on_progress", None)
 
         def _callback(m, i, t):
-            callback_on_progress(i, t)
+            if callback_on_progress:
+                callback_on_progress(i, t)
             # TODO Implements the function
             log.warn("%s is not implemented" % self.repair.__name__)
 
@@ -664,11 +665,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def clean(self, *args, **kwargs):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).clean(*args, **kwargs)
-        callback_on_progress = kwargs.pop("callback_on_progress")
+        callback_on_progress = kwargs.pop("callback_on_progress", None)
         kwargs.pop("max_age", None)
 
         def _callback(m, i, t):
-            callback_on_progress(i, t)
+            if callback_on_progress:
+                callback_on_progress(i, t)
             # TODO Implements the function
             log.warn("%s is not implemented" % self.clean.__name__)
 

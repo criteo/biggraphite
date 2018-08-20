@@ -4,8 +4,10 @@
 
 {% block content %}
     <h1>Workers</h1>
+    <ul class="list-group">
     {% for i, task in tasks %}
-        <h2>{{ task.label }}</h2>
+        <li class="list-group-item">
+            {{task.started_on|datetime}} - <code>{{ task.label }}</code> <span class="badge badge-secondary pull-right">{{task.status.value}}</span>
         <button class="btn btn-link"
                 type="button"
                 data-toggle="collapse"
@@ -37,6 +39,8 @@
                 <pre>{{task.result}}</pre>
             </div>
         </div>
+        </li>
     {% endfor %}
+    </ul>
 
 {% endblock %}
