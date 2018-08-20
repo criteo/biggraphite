@@ -20,11 +20,11 @@ from biggraphite.drivers import hybrid as bg_hybrid
 from biggraphite.drivers import memory as bg_memory
 
 
-DRIVERS = frozenset([
-    ("cassandra", bg_cassandra),
-    ("elasticsearch", bg_elasticsearch),
-    ("memory", bg_memory),
-])
+__DRIVERS = {
+    "cassandra": bg_cassandra,
+    "elasticsearch": bg_elasticsearch,
+    "memory": bg_memory,
+}
 DEFAULT_DRIVER = "cassandra"
 
 
@@ -48,14 +48,18 @@ def add_argparse_arguments(parser):
     """
     parser.add_argument(
         "--driver",
-        help="BigGraphite driver (%s)" % ', '.join([v[0] for v in DRIVERS]),
+        help="BigGraphite driver (%s)" % __get_driver_names(),
         default=DEFAULT_DRIVER)
     parser.add_argument(
         "--metadata_driver",
-        help="BigGraphite metadata driver (%s)" % ', '.join([v[0] for v in DRIVERS]))
+        help="BigGraphite metadata driver (%s)" % __get_driver_names())
     parser.add_argument(
         "--data_driver",
-        help="BigGraphite data driver (%s)" % ', '.join([v[0] for v in DRIVERS]))
+        help="BigGraphite data driver (%s)" % __get_driver_names())
+
+
+def __get_driver_names():
+    return ', '.join(__DRIVERS.keys())
 
 
 def accessor_from_settings(settings):
@@ -72,15 +76,15 @@ def accessor_from_settings(settings):
     data_driver = settings.get('data_driver', None)
 
     if metadata_driver is None and data_driver is None:
-        return _build_simple_accessor(driver_name, settings)
+        return _build_driver(driver_name, settings)
     else:
         if metadata_driver is None:
             raise ConfigError("Metadata driver is not provided. Please specify --metadata_driver")
         if data_driver is None:
             raise ConfigError("Data driver is not provided. Please specify --data_driver")
 
-        metadata_accessor = _build_simple_accessor(metadata_driver, settings)
-        data_accessor = _build_simple_accessor(data_driver, settings)
+        metadata_accessor = _build_driver(metadata_driver, settings)
+        data_accessor = _build_driver(data_driver, settings)
 
         return bg_hybrid.HybridAccessor(
             "%s_%s" % (metadata_driver, data_driver),
@@ -91,24 +95,28 @@ def accessor_from_settings(settings):
 
 def add_driver_options(options):
     """Add options from drivers."""
-    for name, driver in DRIVERS:
+    for name, driver in __DRIVERS.iteritems():
         options.update(
             {('%s_' % name) + k: v for k, v in driver.OPTIONS.items()})
     return options
 
 
-def _build_simple_accessor(driver_name, settings):
-    driver_settings = {}
+def _build_driver(driver_name, settings):
+    driver = __DRIVERS.get(driver_name)
+    if driver is None:
+        raise ConfigError("Invalid driver '%s'." % driver_name)
+    driver_settings = __get_driver_settings(driver_name, settings)
 
+    return driver.build(**driver_settings)
+
+
+def __get_driver_settings(driver_name, settings):
+    driver_settings = {}
     # Get driver specific settings.
     prefix = driver_name + '_'
     for key, value in settings.items():
         if key.startswith(prefix):
             key = key[len(prefix):]
             driver_settings[key] = value
+    return driver_settings
 
-    for name, driver in DRIVERS:
-        if name == driver_name:
-            return driver.build(**driver_settings)
-
-    raise ConfigError("Invalid driver '%s'." % driver_name)
