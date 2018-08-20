@@ -788,12 +788,10 @@ class _LazyPreparedStatements(object):
     def prepare_select(
         self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset
     ):
-        limit = (row_max_offset - row_min_offset) * bg_accessor.SHARD_MAX_REPLICAS
-        args = (metric_id, row_start_ms, row_min_offset, row_max_offset, limit)
-
-        # Don't execute useless queries.
-        if limit <= 0:
-            return None
+        # Don't set any limit. We have no idea how much we should limit since
+        # we don't know how many writers were used. In addition there already
+        # are Cassandra server-side protection like timeout and paging.
+        args = (metric_id, row_start_ms, row_min_offset, row_max_offset)
 
         statement = self.__stage_to_select.get(stage)
         if statement:
@@ -809,8 +807,7 @@ class _LazyPreparedStatements(object):
             "SELECT %(columns)s FROM %(table)s"
             " WHERE metric=? AND time_start_ms=?"
             " AND offset >= ? AND offset < ? "
-            " ORDER BY offset"
-            " LIMIT ?;"
+            " ORDER BY offset;"
         ) % {"columns": ", ".join(columns), "table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = self._data_read_consistency
