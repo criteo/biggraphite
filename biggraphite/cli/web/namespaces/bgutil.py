@@ -22,6 +22,8 @@ import flask_restplus as rp
 
 from biggraphite.cli.web import context
 from biggraphite.cli.web.capture import Capture
+from biggraphite import settings as bg_settings
+
 
 api = rp.Namespace("bgutil", description="bgutil as a service")
 
@@ -59,6 +61,7 @@ def parse_command(command_name, payload):
         default=argparse.SUPPRESS,
         help="Show this help message and exit.",
     )
+    bg_settings.add_argparse_arguments(parser)
     cmd.add_arguments(parser)
 
     args = [a for a in payload["arguments"]]
@@ -157,7 +160,7 @@ class BgUtilAsyncResource(rp.Resource):
 
         context.accessor.flush()
 
-        return None, 201
+        return "Running in background.", 201
 
     @staticmethod
     def _make_label(command_name):

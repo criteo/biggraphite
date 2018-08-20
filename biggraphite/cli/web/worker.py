@@ -41,14 +41,16 @@ class TaskRunner:
             try:
                 result = f.result()
                 task.completed(result)
-            except futures.CancelledError:
-                task.cancelled()
-            except futures.TimeoutError:
-                task.timed_out()
+            except futures.CancelledError as e:
+                task.cancelled(e)
+            except futures.TimeoutError as e:
+                task.timed_out(e)
+            except Exception as e:
+                task.failed(e)
 
         future = self._executor.submit(self._wrap_command, task, context.accessor, command, opts)
-        future.add_done_callback(_done_callback)
         task.submitted()
+        future.add_done_callback(_done_callback)
 
     @staticmethod
     def _wrap_command(task, accessor, cmd, opts):
@@ -91,12 +93,19 @@ class BgUtilTask:
         self.completed_on = datetime.now()
         self.status = BgUtilTaskStatus.COMPLETED
 
-    def cancelled(self):
+    def failed(self, result=None):
+        """Mark the task as failed."""
+        self.result = result
+        self.status = BgUtilTaskStatus.FAILED
+
+    def cancelled(self, result=None):
         """Mark the task as cancelled."""
+        self.result = result
         self.status = BgUtilTaskStatus.CANCELLED
 
-    def timed_out(self):
+    def timed_out(self, result=None):
         """Mark the task as timed out."""
+        self.result = result
         self.status = BgUtilTaskStatus.TIMED_OUT
 
 
@@ -109,3 +118,4 @@ class BgUtilTaskStatus(enum.Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
+    FAILED = "failed"
