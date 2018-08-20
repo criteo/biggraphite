@@ -44,7 +44,8 @@ class TestAggregator(unittest.TestCase):
         for name, value_expected in expectations:
             aggregator = bg_metric.Aggregator.from_config_name(name)
             aggregated = aggregator.aggregate(
-                values=values, counts=counts, newest_first=True)
+                values=values, counts=counts, newest_first=True
+            )
             self.assertEqual(value_expected, aggregated)
 
     def test_aggregate_nan(self):
@@ -52,12 +53,13 @@ class TestAggregator(unittest.TestCase):
         counts = [0, 0]
         for aggregator in bg_metric.Aggregator:
             aggregated = aggregator.aggregate(
-                values=values, counts=counts, newest_first=True)
+                values=values, counts=counts, newest_first=True
+            )
             self.assertTrue(math.isnan(aggregated), aggregator)
 
     def test_aggregate_newest_last(self):
         aggregator = bg_metric.Aggregator.last
-        values = [10, 20, _NAN, ]
+        values = [10, 20, _NAN]
         aggregated = aggregator.aggregate(values=values, newest_first=False)
         self.assertEqual(20, aggregated)
 
@@ -154,50 +156,36 @@ class TestRetention(unittest.TestCase):
             "60*1s:15*2s",  # 60*1>15*2
         ]
         for s in strings:
-            self.assertRaises(bg_metric.InvalidArgumentError,
-                              bg_metric.Retention.from_string, s)
+            self.assertRaises(
+                bg_metric.InvalidArgumentError, bg_metric.Retention.from_string, s
+            )
 
     def test_align_time_window(self):
         retention = self._TEST
 
         self.assertNotEqual(
             retention.align_time_window(0, 0, 0),
-            (0, 0, bg_metric.Stage(precision=60, points=60))
+            (0, 0, bg_metric.Stage(precision=60, points=60)),
         )
         stage0 = bg_metric.Stage(precision=60, points=60, stage0=True)
-        self.assertEqual(
-            retention.align_time_window(0, 0, 0),
-            (0, 0, stage0)
-        )
-        self.assertEqual(
-            retention.align_time_window(60, 120, 1200),
-            (60, 120, stage0)
-        )
-        self.assertEqual(
-            retention.align_time_window(61, 119, 1200),
-            (60, 120, stage0)
-        )
-        self.assertEqual(
-            retention.align_time_window(59, 121, 1200),
-            (0, 180, stage0)
-        )
+        self.assertEqual(retention.align_time_window(0, 0, 0), (0, 0, stage0))
+        self.assertEqual(retention.align_time_window(60, 120, 1200), (60, 120, stage0))
+        self.assertEqual(retention.align_time_window(61, 119, 1200), (60, 120, stage0))
+        self.assertEqual(retention.align_time_window(59, 121, 1200), (0, 180, stage0))
         self.assertEqual(
             retention.align_time_window(59, 3601, 8000),
-            (0, 7200, bg_metric.Stage(precision=3600, points=24))
+            (0, 7200, bg_metric.Stage(precision=3600, points=24)),
         )
 
 
 class TestMetricMetadata(unittest.TestCase):
-
     def test_setattr(self):
         m = bg_test_utils.make_metric("test")
         self.assertTrue(hasattr(m, "carbon_xfilesfactor"))
-        self.assertRaises(AttributeError, setattr, m,
-                          "carbon_xfilesfactor", 0.5)
+        self.assertRaises(AttributeError, setattr, m, "carbon_xfilesfactor", 0.5)
 
 
 class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_context_manager(self):
         self.accessor.shutdown()
         self.assertFalse(self.accessor.is_connected)
@@ -207,6 +195,7 @@ class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_insert_error(self):
         """Check that errors propagate from asynchronous API calls to synchronous ones."""
+
         class CustomException(Exception):
             pass
 
@@ -214,10 +203,11 @@ class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
             on_done(CustomException("fake failure"))
             return mock.DEFAULT
 
-        with mock.patch.object(self.accessor, "insert_points_async", side_effect=async_mock):
+        with mock.patch.object(
+            self.accessor, "insert_points_async", side_effect=async_mock
+        ):
             self.assertRaises(
-                CustomException,
-                self.accessor.insert_points, _METRIC, (0, 42),
+                CustomException, self.accessor.insert_points, _METRIC, (0, 42)
             )
 
     def test_map(self):
@@ -234,7 +224,6 @@ class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
 
 
 class TestPointGrouper(unittest.TestCase):
-
     def test_basic(self):
         """Test that we can read simple stages."""
         stage = _METRIC.metadata.retention.stage0
@@ -249,7 +238,8 @@ class TestPointGrouper(unittest.TestCase):
         stage1 = _METRIC.metadata.retention.stages[1]
         data = [(True, [(0, 0, 1), (0, 1, 2)]), (True, [(0, 2, 3)])]
         results = bg_accessor.PointGrouper(
-            _METRIC, 0, 3600, stage1, data, source_stage=stage0)
+            _METRIC, 0, 3600, stage1, data, source_stage=stage0
+        )
         expected_results = [(0.0, 2.0)]
         self.assertEqual(list(results), expected_results)
 
@@ -259,7 +249,8 @@ class TestPointGrouper(unittest.TestCase):
         stage1 = _METRIC.metadata.retention.stages[1]
         data = [(True, [(0, 0, 1), (0, 1, 2)]), (True, [(0, 2, 3)])]
         results = bg_accessor.PointGrouper(
-            _METRIC, 0, 3600, stage1, data, source_stage=stage0, aggregated=False)
+            _METRIC, 0, 3600, stage1, data, source_stage=stage0, aggregated=False
+        )
         expected_results = [(0.0, 6.0, 3.0)]
         self.assertEqual(list(results), expected_results)
 
@@ -269,7 +260,7 @@ class TestPointGrouper(unittest.TestCase):
         replica0, replica1 = 0xFFFF, 0x0000
         data = [
             (True, [(0, 0, replica0, 1, 1), (0, 1, replica0, 2, 2)]),
-            (True, [(0, 1, replica1, 2, 4)])
+            (True, [(0, 1, replica1, 2, 4)]),
         ]
         results = bg_accessor.PointGrouper(_METRIC, 0, 86000, stage1, data)
         expected_results = [(0.0, 1.0), (60.0, 0.5)]
@@ -277,7 +268,6 @@ class TestPointGrouper(unittest.TestCase):
 
 
 class TestReplicasAndShard(unittest.TestCase):
-
     def test_pack_shard(self):
         self.assertEqual(bg_accessor.pack_shard(0, 0), 0)
         self.assertEqual(bg_accessor.pack_shard(0, 1), 1)

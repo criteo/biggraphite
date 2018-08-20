@@ -73,7 +73,7 @@ class MemoryCache(AccessorCache):
         self.__cache = cachetools.TTLCache(maxsize=self.__size, ttl=self.__ttl)
 
     def _make_key(self, key, version):
-        return str(version) + '-' + key
+        return str(version) + "-" + key
 
     def set(self, key, value, timeout=None, version=None):
         """Set a key in the cache."""

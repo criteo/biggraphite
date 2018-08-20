@@ -20,7 +20,8 @@ import biggraphite.cli.web.namespaces.bgutil as bg_web
 
 
 class TestBgUtil(unittest.TestCase):
-
-    def test_parse_command_should_raise_UnknownCommandException_for_unknown_command(self):
+    def test_parse_command_should_raise_UnknownCommandException_for_unknown_command(
+        self
+    ):
         with self.assertRaises(bg_web.UnknownCommandException):
             bg_web.parse_command("foo", {})

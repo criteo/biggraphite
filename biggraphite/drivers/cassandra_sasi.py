@@ -34,23 +34,23 @@ DIRECTORY_SEPARATOR = cassandra_common.DIRECTORY_SEPARATOR
 
 
 METADATA_CREATION_CQL_PARENT_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (parent)"
+    'CREATE CUSTOM INDEX IF NOT EXISTS ON "%%(keyspace)s".%(table)s (parent)'
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
     "  };" % {"table": t}
-    for t in ('metrics', 'directories')
+    for t in ("metrics", "directories")
 ]
 
 METADATA_CREATION_CQL_PATH_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (component_%(component)d)"
+    'CREATE CUSTOM INDEX IF NOT EXISTS ON "%%(keyspace)s".%(table)s (component_%(component)d)'
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer',"
     "    'case_sensitive': 'true'"
     "  };" % {"table": t, "component": n}
-    for t in ('metrics', 'directories')
+    for t in ("metrics", "directories")
     for n in range(_COMPONENTS_MAX_LEN)
 ]
 
@@ -143,14 +143,12 @@ class CassandraSASI(object):
                 else:
                     suffix.append(ANYSEQUENCE)
 
-            values = ['']
+            values = [""]
             for part in component:
                 if bg_glob.is_fixed_sequence(part):
                     values = [x + part for x in values]
                 elif isinstance(part, bg_glob.SequenceIn):
-                    values = [x + y
-                              for x in values
-                              for y in part.values]
+                    values = [x + y for x in values for y in part.values]
                 else:
                     break
 
@@ -176,27 +174,22 @@ class CassandraSASI(object):
         # certain depth (_COMPONENTS_MAX_LEN - #components).
         gs_index = components.index(GLOBSTAR)
         if gs_index == len(components) - 1:
-            return [
-                self.__build_select_names_query(table, components[:gs_index])
-            ]
+            return [self.__build_select_names_query(table, components[:gs_index])]
 
         prefix = components[:gs_index]
-        suffix = components[gs_index + 1:] + [[_LAST_COMPONENT]]
-        max_wildcards = min(self.max_queries_per_pattern,
-                            _COMPONENTS_MAX_LEN - len(components))
+        suffix = components[gs_index + 1 :] + [[_LAST_COMPONENT]]
+        max_wildcards = min(
+            self.max_queries_per_pattern, _COMPONENTS_MAX_LEN - len(components)
+        )
         return [
             self.__build_select_names_query(
-                table,
-                prefix + wildcards * [[bg_glob.AnySequence()]] + suffix,
+                table, prefix + wildcards * [[bg_glob.AnySequence()]] + suffix
             )
             for wildcards in range(1, max_wildcards)
         ]
 
     def __build_select_names_query(self, table, components):
-        query_select = "SELECT name FROM \"%s\".\"%s\"" % (
-            self.keyspace_metadata,
-            table,
-        )
+        query_select = 'SELECT name FROM "%s"."%s"' % (self.keyspace_metadata, table)
         query_limit = "LIMIT %d" % (self.max_metrics_per_pattern + 1)
 
         if len(components) == 0:
@@ -210,10 +203,8 @@ class CassandraSASI(object):
         #
         # We are not using prefix search on the parent because it appears to be
         # too slow/costly at the moment (see #174 for details).
-        if (
-                components[-1] == [_LAST_COMPONENT] and  # Not a prefix globstar
-                all(len(c) == 1 and bg_glob.is_fixed_sequence(c[0])
-                    for c in components[:-2])
+        if components[-1] == [_LAST_COMPONENT] and all(  # Not a prefix globstar
+            len(c) == 1 and bg_glob.is_fixed_sequence(c[0]) for c in components[:-2]
         ):
             last = components[-2]
             if len(last) == 1 and bg_glob.is_fixed_sequence(last[0]):
@@ -221,7 +212,8 @@ class CassandraSASI(object):
                 #                and using it here; because this is invalid in
                 #                cases where the glob contains braces.
                 name = DIRECTORY_SEPARATOR.join(
-                    itertools.chain.from_iterable(components[:-1]))
+                    itertools.chain.from_iterable(components[:-1])
+                )
                 return "%s WHERE name = %s %s;" % (
                     query_select,
                     c_encoder.cql_quote(name),
@@ -231,12 +223,12 @@ class CassandraSASI(object):
                 if len(last) > 0 and bg_glob.is_fixed_sequence(last[0]):
                     prefix_filter = "AND component_%d LIKE %s" % (
                         len(components) - 2,
-                        c_encoder.cql_quote(last[0] + '%'),
+                        c_encoder.cql_quote(last[0] + "%"),
                     )
                     allow_filtering = "ALLOW FILTERING"
                 else:
-                    prefix_filter = ''
-                    allow_filtering = ''
+                    prefix_filter = ""
+                    allow_filtering = ""
 
                 parent = itertools.chain.from_iterable(components[:-2])
                 parent = DIRECTORY_SEPARATOR.join(parent) + DIRECTORY_SEPARATOR
@@ -262,10 +254,10 @@ class CassandraSASI(object):
                 continue
 
             if len(component) == 1:
-                op = '='
+                op = "="
             else:
                 op = "LIKE"
-                value += '%'
+                value += "%"
 
             clause = "component_%d %s %s" % (n, op, c_encoder.cql_quote(value))
             where_clauses.append(clause)
@@ -276,5 +268,5 @@ class CassandraSASI(object):
         return "%s WHERE %s %s ALLOW FILTERING;" % (
             query_select,
             " AND ".join(where_clauses),
-            query_limit
+            query_limit,
         )

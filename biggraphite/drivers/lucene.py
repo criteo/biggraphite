@@ -48,19 +48,12 @@ def translate_to_lucene_filter(components):
 
     Return an Lucene filter json string.
     """
-    lucene_filter = {
-        "filter": {
-            "type": "boolean",
-            "must": []
-        }
-    }
+    lucene_filter = {"filter": {"type": "boolean", "must": []}}
     must_list = []
     globstars = components.count(GLOBSTAR)
 
     if globstars > 1:
-        raise GlobError(
-            "Contains more than one globstar (**) operator"
-        )
+        raise GlobError("Contains more than one globstar (**) operator")
 
     if globstars:
         gs_index = components.index(GLOBSTAR)
@@ -71,25 +64,29 @@ def translate_to_lucene_filter(components):
         else:
             # GLOBSTAR is only supported at the end of a glob syntax
             raise GlobError(
-                "Metric pattern syntax only supports '%s' at the end" % GLOBSTAR)
+                "Metric pattern syntax only supports '%s' at the end" % GLOBSTAR
+            )
     elif (  # Parent query
-            len(components) > 1
-            and
-            all(len(c) == 1 and glob_utils.is_fixed_sequence(
-                c[0]) for c in components[:-1])
-            and
-            isinstance(components[-1][0], glob_utils.AnySequence)
+        len(components) > 1
+        and all(
+            len(c) == 1 and glob_utils.is_fixed_sequence(c[0]) for c in components[:-1]
+        )
+        and isinstance(components[-1][0], glob_utils.AnySequence)
     ):
         parent = ""
         for component in components[:-1]:
             parent += component[0] + "."
-        must_list.append(
-            {"field": "parent", "type": "match", "value": parent})
+        must_list.append({"field": "parent", "type": "match", "value": parent})
     else:
         must_list = _build_filters(components)
         # Restrict length by matching the END_MARK
         must_list.append(
-            {"field": _component_name(len(components)), "type": "match", "value": END_MARK})
+            {
+                "field": _component_name(len(components)),
+                "type": "match",
+                "value": END_MARK,
+            }
+        )
 
     if not must_list:
         return None
@@ -111,8 +108,9 @@ def _build_filters(components):
     for idx, component in enumerate(components):
         if len(component) == 0:
             # FIXME: When can this happen ?
-            raise GlobError("Illegal glob component %s in glob %s" %
-                            (component, components))
+            raise GlobError(
+                "Illegal glob component %s in glob %s" % (component, components)
+            )
         elif len(component) == 1:
             must_list.append(_build_simple_field_constrain(idx, component[0]))
         else:  # len(component) > 1
@@ -128,20 +126,27 @@ def _build_simple_field_constrain(index, value):
     if isinstance(value, glob_utils.AnySequence):
         return None  # No constrain
     elif isinstance(value, six.string_types):
-        field = {"field": _component_name(index),
-                 "type": "match", "value": value}
+        field = {"field": _component_name(index), "type": "match", "value": value}
     elif isinstance(value, glob_utils.CharNotIn):
-        field = {"field": _component_name(index),
-                 "type": "regexp", "value": '[^' + ''.join(value.values) + ']'}
+        field = {
+            "field": _component_name(index),
+            "type": "regexp",
+            "value": "[^" + "".join(value.values) + "]",
+        }
     elif isinstance(value, glob_utils.CharIn):
-        field = {"field": _component_name(index),
-                 "type": "regexp", "value": '[' + ''.join(value.values) + ']'}
+        field = {
+            "field": _component_name(index),
+            "type": "regexp",
+            "value": "[" + "".join(value.values) + "]",
+        }
     elif isinstance(value, glob_utils.SequenceIn):
-        field = {"field": _component_name(index),
-                 "type": "contains", "values": value.values}
+        field = {
+            "field": _component_name(index),
+            "type": "contains",
+            "values": value.values,
+        }
     elif isinstance(value, glob_utils.AnyChar):
-        field = {"field": _component_name(index),
-                 "type": "regexp", "value": '.'}
+        field = {"field": _component_name(index), "type": "regexp", "value": "."}
     else:
         raise GlobError("Unhandled type '%s'" % value)
     return field
@@ -156,17 +161,16 @@ def _build_regex_field_constrain(index, component):
         elif isinstance(subcomponent, six.string_types):
             regex += subcomponent
         elif isinstance(subcomponent, glob_utils.CharNotIn):
-            regex += '[^' + ''.join(subcomponent.values) + ']'
+            regex += "[^" + "".join(subcomponent.values) + "]"
         elif isinstance(subcomponent, glob_utils.CharIn):
-            regex += '[' + ''.join(subcomponent.values) + ']'
+            regex += "[" + "".join(subcomponent.values) + "]"
         elif isinstance(subcomponent, glob_utils.SequenceIn):
             if subcomponent.negated:
-                regex += '.*'
+                regex += ".*"
             else:
-                regex += '(' + '|'.join(subcomponent.values) + ')'
+                regex += "(" + "|".join(subcomponent.values) + ")"
         elif isinstance(subcomponent, glob_utils.AnyChar):
-            regex += '.'
+            regex += "."
         else:
             raise GlobError("Unhandled type '%s'" % subcomponent)
-    return {"field": _component_name(index),
-            "type": "regexp", "value": regex}
+    return {"field": _component_name(index), "type": "regexp", "value": regex}

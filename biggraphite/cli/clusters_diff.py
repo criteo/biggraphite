@@ -165,16 +165,17 @@ class DiffableTarget(Diffable):
     def measure_dissymmetry(self, other):
         """Return measure of difference as a Dissymmetry."""
         other_ts_to_val = other.ts_to_val if other else {}
-        all_ts_set = six.viewkeys(
-            self.ts_to_val) | six.viewkeys(other_ts_to_val)
+        all_ts_set = six.viewkeys(self.ts_to_val) | six.viewkeys(other_ts_to_val)
 
         if not all_ts_set:
             return None
 
-        val_tuples = [(self.ts_to_val.get(ts), other_ts_to_val.get(ts))
-                      for ts in all_ts_set]
-        diff_measures = [self._measure_relative_gap(
-            val1, val2) for val1, val2 in val_tuples]
+        val_tuples = [
+            (self.ts_to_val.get(ts), other_ts_to_val.get(ts)) for ts in all_ts_set
+        ]
+        diff_measures = [
+            self._measure_relative_gap(val1, val2) for val1, val2 in val_tuples
+        ]
 
         return Dissymmetry(self.name, diff_measures)
 
@@ -188,13 +189,14 @@ class DiffableQuery(Diffable):
         self.threshold = threshold
         self.diffable_targets = diffable_targets
 
-    def _measure_non_equal_pts_percentage(self, diffable_targets1, diffable_targets2, threshold):
+    def _measure_non_equal_pts_percentage(
+        self, diffable_targets1, diffable_targets2, threshold
+    ):
         if not diffable_targets1 or not diffable_targets2:
             return 1.0
 
         # if target_dissymmetry is None, both host responses were empty for this target name
-        target_dissymmetry = diffable_targets1.measure_dissymmetry(
-            diffable_targets2)
+        target_dissymmetry = diffable_targets1.measure_dissymmetry(diffable_targets2)
         if not target_dissymmetry:
             return 0.0
 
@@ -211,15 +213,18 @@ class DiffableQuery(Diffable):
         # For each couple of diffable_target it calls measure_dissymmetries
         # and measure the percentage of non-equal points using a threshold.
         diffable_target_tuples = _outer_join_diffables(
-            self.diffable_targets, other.diffable_targets)
+            self.diffable_targets, other.diffable_targets
+        )
 
         if not diffable_target_tuples:
             return None
 
-        diff_measures = [self._measure_non_equal_pts_percentage(diffable_target1,
-                                                                diffable_target2,
-                                                                self.threshold)
-                         for diffable_target1, diffable_target2 in diffable_target_tuples]
+        diff_measures = [
+            self._measure_non_equal_pts_percentage(
+                diffable_target1, diffable_target2, self.threshold
+            )
+            for diffable_target1, diffable_target2 in diffable_target_tuples
+        ]
         return Dissymmetry(self.name, diff_measures)
 
 
@@ -255,8 +260,9 @@ class Printer(object):
         pass
 
     @abc.abstractmethod
-    def print_dissymetry_results(self, query_dissymmetries, query_to_target_dissymmetries,
-                                 verbosity, show_max):
+    def print_dissymetry_results(
+        self, query_dissymmetries, query_to_target_dissymmetries, verbosity, show_max
+    ):
         """Print all percentiles per query and per target.
 
         The list is limited with the show_max parameter
@@ -265,7 +271,9 @@ class Printer(object):
         pass
 
     @abc.abstractmethod
-    def print_errors(self, hosts, error_counts_tuple, error_to_queries_tuple, verbosity):
+    def print_errors(
+        self, hosts, error_counts_tuple, error_to_queries_tuple, verbosity
+    ):
         """Print per host the number of errors and the number of occurrences of errors.
 
         If the verbose parameter is True,
@@ -274,7 +282,9 @@ class Printer(object):
         pass
 
     @abc.abstractmethod
-    def print_times(self, hosts, timing_pctls_tuple, query_to_time_s_tuple, verbosity, show_max):
+    def print_times(
+        self, hosts, timing_pctls_tuple, query_to_time_s_tuple, verbosity, show_max
+    ):
         """Print per host the durations percentiles for fetching queries.
 
         If the verbose parameter is True, the list of the slowest queries is printed,
@@ -296,11 +306,7 @@ class TxtPrinter(Printer):
         print(*args, **kwargs)
 
     def _format_header(self, header_title):
-        seq = [
-            "",
-            "".center(30, "="),
-            header_title.upper().center(30, "=")
-        ]
+        seq = ["", "".center(30, "="), header_title.upper().center(30, "=")]
         return "\n".join(seq)
 
     def _format_pctl(self, pctls, nth, unit):
@@ -314,8 +320,7 @@ class TxtPrinter(Printer):
         seq = [
             self._format_header("Parameters"),
             "|",
-            "| netrc_filename : %s" % (
-                opts.netrc_filename or "$HOME/$USER/.netrc"),
+            "| netrc_filename : %s" % (opts.netrc_filename or "$HOME/$USER/.netrc"),
             "|",
             "| hosts :",
             "| \t- %s" % opts.hosts[0],
@@ -340,14 +345,13 @@ class TxtPrinter(Printer):
             return
         for k in pctls.iterkeys():
             if prefix == "host":
-                self._print("\t%s %s" %
-                            (delay, self._format_pctl(pctls, k, unit="s")))
+                self._print("\t%s %s" % (delay, self._format_pctl(pctls, k, unit="s")))
             else:
-                self._print("\t%s %s" %
-                            (delay, self._format_pctl(pctls, k, unit="%")))
+                self._print("\t%s %s" % (delay, self._format_pctl(pctls, k, unit="%")))
 
-    def print_dissymetry_results(self, query_dissymmetries, query_to_target_dissymmetries,
-                                 verbosity, show_max):
+    def print_dissymetry_results(
+        self, query_dissymmetries, query_to_target_dissymmetries, verbosity, show_max
+    ):
         """See Printer. Print all percentiles per query and per target.
 
         The list is limited with the show_max parameter
@@ -356,32 +360,45 @@ class TxtPrinter(Printer):
         self._print(self._format_header("Comparison results"))
 
         all_query_dissymmetries_count = len(query_dissymmetries)
-        query_dissymmetries = [query_dissymmetry
-                               for query_dissymmetry in query_dissymmetries if query_dissymmetry]
-        self._print("\nThere was %s queries with empty response on both clusters." % (
-            all_query_dissymmetries_count - len(query_dissymmetries)))
+        query_dissymmetries = [
+            query_dissymmetry
+            for query_dissymmetry in query_dissymmetries
+            if query_dissymmetry
+        ]
+        self._print(
+            "\nThere was %s queries with empty response on both clusters."
+            % (all_query_dissymmetries_count - len(query_dissymmetries))
+        )
 
         query_dissymmetries = sorted(
-            query_dissymmetries, key=Dissymmetry.get_99th, reverse=True)
+            query_dissymmetries, key=Dissymmetry.get_99th, reverse=True
+        )
         del query_dissymmetries[show_max:]
 
         self._print("\nThe %s most dissymmetrical queries : " % show_max)
         self._print("%s for : " % Printer.QUERY_PCTLS_DESCRIPTION)
         for query_dissymmetry in query_dissymmetries:
-            self._print_pctls(query_dissymmetry.name,
-                              query_dissymmetry.pctls,
-                              "query", chip=">")
+            self._print_pctls(
+                query_dissymmetry.name, query_dissymmetry.pctls, "query", chip=">"
+            )
 
             if verbosity >= 1:
-                self._print(
-                    "\n\tThe %s most dissymmetrical targets : " % show_max)
+                self._print("\n\tThe %s most dissymmetrical targets : " % show_max)
                 self._print("\t%s for : " % Printer.TARGET_PCTLS_DESCRIPTION)
-                for target_dissymmetry in query_to_target_dissymmetries[query_dissymmetry.name]:
-                    self._print_pctls(target_dissymmetry.name,
-                                      target_dissymmetry.pctls,
-                                      "target", chip=">>", delay="\t")
+                for target_dissymmetry in query_to_target_dissymmetries[
+                    query_dissymmetry.name
+                ]:
+                    self._print_pctls(
+                        target_dissymmetry.name,
+                        target_dissymmetry.pctls,
+                        "target",
+                        chip=">>",
+                        delay="\t",
+                    )
 
-    def print_errors(self, hosts, error_counts_tuple, error_to_queries_tuple, verbosity):
+    def print_errors(
+        self, hosts, error_counts_tuple, error_to_queries_tuple, verbosity
+    ):
         """See Printer. Print per host the number of errors and the number of occurrences of errors.
 
         If the verbose parameter is True,
@@ -394,8 +411,7 @@ class TxtPrinter(Printer):
             for error, count in error_counts:
                 total_errors += count
 
-            self._print("\nThere was %s error(s) for %s" %
-                        (total_errors, host))
+            self._print("\nThere was %s error(s) for %s" % (total_errors, host))
 
             if error_counts:
                 error_to_queries = error_to_queries_tuple[i]
@@ -407,7 +423,9 @@ class TxtPrinter(Printer):
                         for query in error_to_queries[error]:
                             self._print("\t\t >> %s " % query)
 
-    def print_times(self, hosts, timing_pctls_tuple, query_to_time_s_tuple, verbosity, show_max):
+    def print_times(
+        self, hosts, timing_pctls_tuple, query_to_time_s_tuple, verbosity, show_max
+    ):
         """See Printer. Print per host the durations percentiles for fetching queries.
 
         If the verbose parameter is True, the list of the slowest queries is printed,
@@ -424,7 +442,8 @@ class TxtPrinter(Printer):
             if verbosity >= 1:
                 query_to_time_s = query_to_time_s_tuple[i]
                 query_time_s = sorted(
-                    query_to_time_s.items(), key=operator.itemgetter(1), reverse=True)
+                    query_to_time_s.items(), key=operator.itemgetter(1), reverse=True
+                )
                 del query_time_s[show_max:]
                 self._print("\n\tThe %s slowest queries : " % show_max)
                 for (query, time_s) in query_time_s:
@@ -453,12 +472,25 @@ def _get_url_from_query(host, prefix, query, from_param, until_param):
         query = parse.quote(query)
 
     url = "http://%s/render/?noCache&format=json&from=%s&until=%s&target=%s" % (
-        host, from_param, until_param, prefix + query)
+        host,
+        from_param,
+        until_param,
+        prefix + query,
+    )
     return url
 
 
-def fetch_queries(host, prefix, auth_key, queries,
-                  from_param, until_param, timeout_s, threshold, progress_cb):
+def fetch_queries(
+    host,
+    prefix,
+    auth_key,
+    queries,
+    from_param,
+    until_param,
+    timeout_s,
+    threshold,
+    progress_cb,
+):
     """Return a list of HostResult."""
     host_result = HostResult(host)
     for n, query in enumerate(queries):
@@ -468,7 +500,8 @@ def fetch_queries(host, prefix, auth_key, queries,
             diffable_targets, time_s = request.execute()
             host_result.add_time_s(query, time_s)
             host_result.add_diffable_query(
-                DiffableQuery(query, diffable_targets, threshold))
+                DiffableQuery(query, diffable_targets, threshold)
+            )
         except RequestError as e:
             host_result.add_error(query, e)
             host_result.add_diffable_query(DiffableQuery(query, [], threshold))
@@ -523,47 +556,108 @@ def _outer_join_diffables(diffables_a, diffables_b):
 def _parse_opts(args):
     parser = argparse.ArgumentParser(
         description="Compare two Graphite clusters for a given list of queries.",
-        epilog="Through this module, a \"query\" is \"the name of a query\", a string.")
+        epilog='Through this module, a "query" is "the name of a query", a string.',
+    )
 
     # authentication
     authentication = parser.add_argument_group("authentication")
-    authentication.add_argument("--netrc-file", metavar="FILENAME", dest="netrc_filename",
-                                action="store", help="a netrc file (default: $HOME/$USER/.netrc)",
-                                default="")
+    authentication.add_argument(
+        "--netrc-file",
+        metavar="FILENAME",
+        dest="netrc_filename",
+        action="store",
+        help="a netrc file (default: $HOME/$USER/.netrc)",
+        default="",
+    )
 
     # clusters parameters
     comparison_params = parser.add_argument_group("comparison parameters")
-    comparison_params.add_argument("--hosts", metavar="HOST", dest="hosts", action="store",
-                                   nargs=2, help="hosts to compare", required=True)
-    comparison_params.add_argument("--prefixes", metavar="PREFIX", dest="prefixes",
-                                   action="store", nargs=2, help="prefix for each host.",
-                                   required=False, default=["", ""])
-    comparison_params.add_argument("--input-file", metavar="FILENAME", dest="input_filename",
-                                   action="store", help="text file containing one query per line",
-                                   required=True)
-    comparison_params.add_argument("--from", metavar="FROM_PARAM", dest="from_param",
-                                   action="store", default="-24hours",
-                                   help="from param for Graphite API (default: %(default)s)")
-    comparison_params.add_argument("--until", metavar="UNTIL_PARAM", dest="until_param",
-                                   action="store", default="-2minutes",
-                                   help="until param for Graphite API (default: %(default)s)")
     comparison_params.add_argument(
-        "--timeout", metavar="SECONDS", dest="timeout_s", action="store", type=float,
-        help="timeout in seconds used to fetch queries (default: %(default)ss)", default=5)
+        "--hosts",
+        metavar="HOST",
+        dest="hosts",
+        action="store",
+        nargs=2,
+        help="hosts to compare",
+        required=True,
+    )
     comparison_params.add_argument(
-        "--threshold", metavar="PERCENT", action="store", type=float, default=1,
-        help="percent threshold to evaluate equality between two values (default: %(default)s%%)")
+        "--prefixes",
+        metavar="PREFIX",
+        dest="prefixes",
+        action="store",
+        nargs=2,
+        help="prefix for each host.",
+        required=False,
+        default=["", ""],
+    )
+    comparison_params.add_argument(
+        "--input-file",
+        metavar="FILENAME",
+        dest="input_filename",
+        action="store",
+        help="text file containing one query per line",
+        required=True,
+    )
+    comparison_params.add_argument(
+        "--from",
+        metavar="FROM_PARAM",
+        dest="from_param",
+        action="store",
+        default="-24hours",
+        help="from param for Graphite API (default: %(default)s)",
+    )
+    comparison_params.add_argument(
+        "--until",
+        metavar="UNTIL_PARAM",
+        dest="until_param",
+        action="store",
+        default="-2minutes",
+        help="until param for Graphite API (default: %(default)s)",
+    )
+    comparison_params.add_argument(
+        "--timeout",
+        metavar="SECONDS",
+        dest="timeout_s",
+        action="store",
+        type=float,
+        help="timeout in seconds used to fetch queries (default: %(default)ss)",
+        default=5,
+    )
+    comparison_params.add_argument(
+        "--threshold",
+        metavar="PERCENT",
+        action="store",
+        type=float,
+        default=1,
+        help="percent threshold to evaluate equality between two values (default: %(default)s%%)",
+    )
 
     # outputs parameters
     outputs_params = parser.add_argument_group("outputs parameters")
-    outputs_params.add_argument("--output-file", metavar="FILENAME", dest="output_filename",
-                                action="store", help="file containing outputs (default: stdout)",
-                                default="")
-    outputs_params.add_argument("-v", "--verbosity", action="count",  default=0,
-                                help="increases verbosity, can be passed multiple times")
     outputs_params.add_argument(
-        "--show-max", metavar="N_LINES", dest="show_max", type=int, default=5,
-        help="truncate the number of shown dissymmetry in outputs (default: %(default)s)")
+        "--output-file",
+        metavar="FILENAME",
+        dest="output_filename",
+        action="store",
+        help="file containing outputs (default: stdout)",
+        default="",
+    )
+    outputs_params.add_argument(
+        "-v",
+        "--verbosity",
+        action="count",
+        default=0,
+        help="increases verbosity, can be passed multiple times",
+    )
+    outputs_params.add_argument(
+        "--show-max",
+        metavar="N_LINES",
+        dest="show_max",
+        type=int,
+        default=5,
+        help="truncate the number of shown dissymmetry in outputs (default: %(default)s)",
+    )
 
     # TODO (t.chataigner) enable several kind of outputs : txt, csv, html...
 
@@ -576,11 +670,11 @@ def _parse_opts(args):
         if auth is not None:
             username = auth[0]
             password = auth[2]
-            opts.auth_keys.append(base64.encodestring(
-                username + ":" + password).replace("\n", ""))
+            opts.auth_keys.append(
+                base64.encodestring(username + ":" + password).replace("\n", "")
+            )
         else:
-            logging.info(netrc.NetrcParseError(
-                "No authenticators for %s" % host))
+            logging.info(netrc.NetrcParseError("No authenticators for %s" % host))
 
     opts.threshold /= 100
 
@@ -598,27 +692,47 @@ def main(args=None):
 
     # host_result_1
     pbar = progressbar.ProgressBar(maxval=len(queries)).start()
-    host_result_1 = fetch_queries(opts.hosts[0], opts.prefixes[0], opts.auth_keys[0],
-                                  queries, opts.from_param,
-                                  opts.until_param, opts.timeout_s, opts.threshold, pbar.update)
+    host_result_1 = fetch_queries(
+        opts.hosts[0],
+        opts.prefixes[0],
+        opts.auth_keys[0],
+        queries,
+        opts.from_param,
+        opts.until_param,
+        opts.timeout_s,
+        opts.threshold,
+        pbar.update,
+    )
     pbar.finish()
     # host_result_2
     pbar = progressbar.ProgressBar(maxval=len(queries)).start()
-    host_result_2 = fetch_queries(opts.hosts[1], opts.prefixes[1], opts.auth_keys[1],
-                                  queries, opts.from_param,
-                                  opts.until_param, opts.timeout_s, opts.threshold, pbar.update)
+    host_result_2 = fetch_queries(
+        opts.hosts[1],
+        opts.prefixes[1],
+        opts.auth_keys[1],
+        queries,
+        opts.from_param,
+        opts.until_param,
+        opts.timeout_s,
+        opts.threshold,
+        pbar.update,
+    )
     pbar.finish()
 
     # compute outputs
     query_dissymmetries = compute_dissymmetries(
-        host_result_1.diffable_queries, host_result_2.diffable_queries)
+        host_result_1.diffable_queries, host_result_2.diffable_queries
+    )
 
     diffable_query_tuples = _outer_join_diffables(
-        host_result_1.diffable_queries, host_result_2.diffable_queries)
+        host_result_1.diffable_queries, host_result_2.diffable_queries
+    )
     query_to_target_dissymmetries = {
         diffable_query_1.name: compute_dissymmetries(
-            diffable_query_1.diffable_targets, diffable_query_2.diffable_targets)
-        for diffable_query_1, diffable_query_2 in diffable_query_tuples}
+            diffable_query_1.diffable_targets, diffable_query_2.diffable_targets
+        )
+        for diffable_query_1, diffable_query_2 in diffable_query_tuples
+    }
 
     timing_pctls_tuple = (
         host_result_1.compute_timing_pctls(),
@@ -626,37 +740,45 @@ def main(args=None):
     )
     query_to_time_s_tuple = (
         host_result_1.query_to_time_s,
-        host_result_2.query_to_time_s
+        host_result_2.query_to_time_s,
     )
 
     error_counts_tuple = (
-        collections.Counter(
-            host_result_1.query_to_error.values()).most_common(),
-        collections.Counter(
-            host_result_2.query_to_error.values()).most_common()
+        collections.Counter(host_result_1.query_to_error.values()).most_common(),
+        collections.Counter(host_result_2.query_to_error.values()).most_common(),
     )
     error_to_queries_tuple = (
         host_result_1.get_error_to_query(),
-        host_result_2.get_error_to_query()
+        host_result_2.get_error_to_query(),
     )
 
     # print outputs
     if not opts.output_filename:
         fp = sys.stdout
     else:
-        fp = open(opts.output_filename, 'w')
+        fp = open(opts.output_filename, "w")
 
     printer = TxtPrinter(fp=fp)
     printer.print_parameters(opts)
 
     printer.print_times(
-        opts.hosts, timing_pctls_tuple, query_to_time_s_tuple, opts.verbosity, opts.show_max)
+        opts.hosts,
+        timing_pctls_tuple,
+        query_to_time_s_tuple,
+        opts.verbosity,
+        opts.show_max,
+    )
 
     printer.print_errors(
-        opts.hosts, error_counts_tuple, error_to_queries_tuple, opts.verbosity)
+        opts.hosts, error_counts_tuple, error_to_queries_tuple, opts.verbosity
+    )
 
     printer.print_dissymetry_results(
-        query_dissymmetries, query_to_target_dissymmetries, opts.verbosity, opts.show_max)
+        query_dissymmetries,
+        query_to_target_dissymmetries,
+        opts.verbosity,
+        opts.show_max,
+    )
 
 
 if __name__ == "__main__":

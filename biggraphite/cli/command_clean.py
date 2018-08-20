@@ -40,32 +40,27 @@ class CommandClean(command.BaseCommand):
 
     def add_arguments(self, parser):
         """Add custom arguments."""
+        parser.add_argument("--clean-cache", help="clean cache", action="store_true")
         parser.add_argument(
-            "--clean-cache",
-            help="clean cache",
-            action='store_true'
+            "--clean-backend", help="clean backend", action="store_true"
         )
         parser.add_argument(
-            "--clean-backend",
-            help="clean backend",
-            action='store_true'
+            "--clean-corrupted", help="clean corrupted metrics", action="store_true"
         )
         parser.add_argument(
-            "--clean-corrupted",
-            help="clean corrupted metrics",
-            action='store_true'
-        )
-        parser.add_argument(
-            "--quiet", action="store_const", default=False, const=True,
-            help="Show no output unless there are problems."
+            "--quiet",
+            action="store_const",
+            default=False,
+            const=True,
+            help="Show no output unless there are problems.",
         )
         parser.add_argument(
             "--max-age",
             help="Specify the age of metrics in seconds to evict"
-                 " (ie: 3600 to delete older than one hour metrics)",
+            " (ie: 3600 to delete older than one hour metrics)",
             type=int,
             default=3 * 24 * 60 * 60,
-            action='store'
+            action="store",
         )
         command.add_sharding_arguments(parser)
 
@@ -79,14 +74,15 @@ class CommandClean(command.BaseCommand):
             out_fd = _DEV_NULL
 
         if self.pbar is None:
-            self.pbar = progressbar.ProgressBar(fd=out_fd,
-                                                redirect_stderr=False)
+            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=False)
         self.pbar.start()
 
         if on_progress is None:
+
             def _on_progress(done, total):
                 self.pbar.max_value = total
                 self.pbar.update(done)
+
             on_progress = _on_progress
 
         accessor.connect()
@@ -99,17 +95,18 @@ class CommandClean(command.BaseCommand):
                 with metadata_cache.DiskCache(accessor, settings) as cache:
                     cache.clean()
             else:
-                logging.error('Cannot clean disk cache because storage_dir'
-                              ' is empty')
+                logging.error("Cannot clean disk cache because storage_dir" " is empty")
 
         if opts.clean_backend:
-            logging.info("Cleaning backend, removing things before %d",
-                         opts.max_age)
-            accessor.clean(max_age=opts.max_age,
-                           shard=opts.shard, nshards=opts.nshards,
-                           start_key=opts.start_key,
-                           end_key=opts.end_key,
-                           callback_on_progress=on_progress)
+            logging.info("Cleaning backend, removing things before %d", opts.max_age)
+            accessor.clean(
+                max_age=opts.max_age,
+                shard=opts.shard,
+                nshards=opts.nshards,
+                start_key=opts.start_key,
+                end_key=opts.end_key,
+                callback_on_progress=on_progress,
+            )
 
         if opts.clean_corrupted:
             now = time.time()
@@ -132,10 +129,13 @@ class CommandClean(command.BaseCommand):
                 accessor.delete_metric(metric)
 
             logging.info("Cleaning corrupted metrics")
-            accessor.map(shard=opts.shard, nshards=opts.nshards,
-                         start_key=opts.start_key,
-                         end_key=opts.end_key,
-                         callback=callback,
-                         errback=errback)
+            accessor.map(
+                shard=opts.shard,
+                nshards=opts.nshards,
+                start_key=opts.start_key,
+                end_key=opts.end_key,
+                callback=callback,
+                errback=errback,
+            )
 
         self.pbar.finish()

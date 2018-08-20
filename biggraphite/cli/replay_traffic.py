@@ -49,8 +49,9 @@ def handle_packet(timestamp, packet):
 
     # Make sure the Ethernet data contains an IP packet
     if not isinstance(eth.data, dpkt.ip.IP):
-        logging.info('Non IP Packet type not supported %s\n'
-                     % eth.data.__class__.__name__)
+        logging.info(
+            "Non IP Packet type not supported %s\n" % eth.data.__class__.__name__
+        )
         return None
 
     # Now grab the data within the Ethernet frame (the IP packet)
@@ -95,7 +96,7 @@ class _Worker(object):
     def _sleep(self, timestamp):
         if self._last_played_timestamp and self._opts.time_factor:
             delta = (timestamp - self._last_played_timestamp).total_seconds()
-            delta -= (time.time() - self._last_request)
+            delta -= time.time() - self._last_request
             delta /= self._opts.time_factor
             if delta > 0:
                 time.sleep(delta)
@@ -105,8 +106,8 @@ class _Worker(object):
     def do_request(self, orig_request):
         timestamp, orig_request = orig_request
         self._sleep(timestamp)
-        url = 'http://%s%s' % (self._opts.host, orig_request.uri)
-        auth_key = ''
+        url = "http://%s%s" % (self._opts.host, orig_request.uri)
+        auth_key = ""
         timeout_s = self._opts.timeout
         if orig_request.body:
             data = orig_request.body
@@ -124,7 +125,7 @@ class _Worker(object):
             query = parse.urlparse(url).query
         query = parse.parse_qs(query)
 
-        logging.debug("%s: %s (%s)", url, data, query['target'])
+        logging.debug("%s: %s (%s)", url, data, query["target"])
 
         request = clusters_diff.Request(url, auth_key, timeout_s, data)
         request.execute()
@@ -150,28 +151,45 @@ def _parse_opts(args):
         epilog=(
             "Capture traffic with:"
             "sudo tcpdump -i any dst port 80 -s 0 -w graphite.pcap"
-        )
+        ),
     )
-    parser.add_argument("pcap_files", metavar="PCAP_FILE", nargs="*",
-                        help="pcap files to read packets from.")
-    parser.add_argument("--process", metavar="N", type=int,
-                        help="number of concurrent process",
-                        default=multiprocessing.cpu_count())
-    parser.add_argument("--time_factor", type=int,
-                        help="Speed up time by this factor. 0 to disable.",
-                        default=1)
-    parser.add_argument("--host", metavar="host", type=str, required=True,
-                        help="Host to execute queries on.")
-    parser.add_argument("--exclude", metavar="exclude", type=str,
-                        required=False, default="",
-                        help="Exclude queries matching.")
-    parser.add_argument("--timeout", type=int,
-                        help="Request timeout",
-                        default=60)
-    parser.add_argument("--verbose",
-                        action='store_true', default=False)
-    parser.add_argument("--progress",
-                        action='store_true', default=False)
+    parser.add_argument(
+        "pcap_files",
+        metavar="PCAP_FILE",
+        nargs="*",
+        help="pcap files to read packets from.",
+    )
+    parser.add_argument(
+        "--process",
+        metavar="N",
+        type=int,
+        help="number of concurrent process",
+        default=multiprocessing.cpu_count(),
+    )
+    parser.add_argument(
+        "--time_factor",
+        type=int,
+        help="Speed up time by this factor. 0 to disable.",
+        default=1,
+    )
+    parser.add_argument(
+        "--host",
+        metavar="host",
+        type=str,
+        required=True,
+        help="Host to execute queries on.",
+    )
+    parser.add_argument(
+        "--exclude",
+        metavar="exclude",
+        type=str,
+        required=False,
+        default="",
+        help="Exclude queries matching.",
+    )
+    parser.add_argument("--timeout", type=int, help="Request timeout", default=60)
+    parser.add_argument("--verbose", action="store_true", default=False)
+    parser.add_argument("--progress", action="store_true", default=False)
 
     opts = parser.parse_args(args)
     if opts.verbose:
@@ -204,8 +222,7 @@ def main():
     pool_factory = multiprocessing.Pool
     if opts.process == 1:
         pool_factory = multiprocessing_dummy.Pool
-    pool = pool_factory(
-        opts.process, initializer=_setup_process, initargs=(opts,))
+    pool = pool_factory(opts.process, initializer=_setup_process, initargs=(opts,))
 
     if opts.progress:
         pbar = progressbar.ProgressBar(max_value=len(requests))

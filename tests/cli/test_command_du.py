@@ -29,15 +29,16 @@ from tests import test_utils as bg_test_utils
 
 class TestCommandDu(bg_test_utils.TestCaseWithFakeAccessor):
 
-    metrics = ['metric1', 'metric2']
-    metadata = MetricMetadata(retention=Retention.from_string('1440*60s'))
+    metrics = ["metric1", "metric2"]
+    metadata = MetricMetadata(retention=Retention.from_string("1440*60s"))
 
-    @patch('sys.stdout', new_callable=StringIO)
+    @patch("sys.stdout", new_callable=StringIO)
     def get_output(self, args, mock_stdout):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
             self.accessor.create_metric(
-                bg_test_utils.make_metric(metric, self.metadata))
+                bg_test_utils.make_metric(metric, self.metadata)
+            )
 
         cmd = command_du.CommandDu()
 
@@ -50,27 +51,29 @@ class TestCommandDu(bg_test_utils.TestCaseWithFakeAccessor):
         return mock_stdout.getvalue()
 
     def test_1_metric_default_args(self):
-        output = self.get_output(['-h', '-s', 'metric1'])
-        self.assertIn('metric1', output)
-        self.assertIn('33.8K', output)
+        output = self.get_output(["-h", "-s", "metric1"])
+        self.assertIn("metric1", output)
+        self.assertIn("33.8K", output)
 
     def test_glob_default_args(self):
-        output = self.get_output(['-h', '-s', '*'])
-        for elmt in self.metrics + ['33.8K', '67.5K', 'TOTAL']:
+        output = self.get_output(["-h", "-s", "*"])
+        for elmt in self.metrics + ["33.8K", "67.5K", "TOTAL"]:
             self.assertIn(elmt, output)
 
     def test_glob_no_unit_no_total(self):
-        output = self.get_output(['*'])
-        self.assertIn('34560', output)
-        self.assertNotIn('TOTAL', output)
+        output = self.get_output(["*"])
+        self.assertIn("34560", output)
+        self.assertNotIn("TOTAL", output)
 
     def test_human_size(self):
         du = command_du.CommandDu()
-        self.assertEqual(du._human_size_of_points(1), '24B')
-        self.assertEqual(du._human_size_of_points(
-            1023 // command_du._BYTES_PER_POINT), '1008B')
-        self.assertEqual(du._human_size_of_points(
-            1024 // (command_du._BYTES_PER_POINT - 1)), '1.0K')
+        self.assertEqual(du._human_size_of_points(1), "24B")
+        self.assertEqual(
+            du._human_size_of_points(1023 // command_du._BYTES_PER_POINT), "1008B"
+        )
+        self.assertEqual(
+            du._human_size_of_points(1024 // (command_du._BYTES_PER_POINT - 1)), "1.0K"
+        )
 
 
 if __name__ == "__main__":

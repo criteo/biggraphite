@@ -68,16 +68,20 @@ def add_argparse_arguments(parser):
       parser: argparse.ArgumentParser()
     """
     parser.add_argument(
-        "--storage_dir", metavar="PATH",
-        help="Storage path (cache, etc..)")
+        "--storage_dir", metavar="PATH", help="Storage path (cache, etc..)"
+    )
     parser.add_argument(
-        "--loglevel", metavar="LEVEL",
+        "--loglevel",
+        metavar="LEVEL",
         help="Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
-        default=DEFAULT_LOG_LEVEL)
+        default=DEFAULT_LOG_LEVEL,
+    )
     parser.add_argument(
-        "--admin_port", metavar="PORT",
+        "--admin_port",
+        metavar="PORT",
         help="Admin port with /metrics",
-        default=DEFAULT_ADMIN_PORT)
+        default=DEFAULT_ADMIN_PORT,
+    )
     bg_accessor_factory.add_argparse_arguments(parser)
     bg_cache_factory.add_argparse_arguments(parser)
     bg_cassandra.add_argparse_arguments(parser)

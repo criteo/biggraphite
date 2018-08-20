@@ -22,7 +22,6 @@ from biggraphite.cli.web.capture import Capture
 
 
 class TestCapture(TestCase):
-
     def test_capture_should_get_stdout_content_from_outside_context(self):
         content = "foo"
         with Capture() as capture:
@@ -60,13 +59,13 @@ class TestCapture(TestCase):
         logger = logging.getLogger("test-logger")
         with Capture() as capture:
             logger.info(content)
-        self.assertEqual(capture.get_content(), content + '\n')
+        self.assertEqual(capture.get_content(), content + "\n")
 
     def test_capture_should_get_print_content(self):
         content = "Hello"
         with Capture() as capture:
             print(content)
-        self.assertEqual(capture.get_content(), content + '\n')
+        self.assertEqual(capture.get_content(), content + "\n")
 
     def test_capture_should_handle_line_breaks(self):
         content_line_1 = "Hello"

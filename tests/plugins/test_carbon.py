@@ -31,7 +31,6 @@ _TEST_METRIC = "mytestmetric"
 
 
 class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
-
     def setUp(self):
         super(TestCarbonDatabase, self).setUp()
         self.fake_drivers()
@@ -111,8 +110,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
         # See if we can update.
         metric = bg_test_utils.make_metric(metric_name)
-        metric.metadata.retention = bg_metric.Retention(
-            [bg_metric.Stage(1, 1)])
+        metric.metadata.retention = bg_metric.Retention([bg_metric.Stage(1, 1)])
         self._plugin._createAsyncOrig(metric, metric_name)
         self._plugin._createOneMetric()
         retention = self._plugin.getMetadata(metric_name, "retention")
@@ -122,41 +120,61 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         other_metric = _TEST_METRIC + "-nosuchmetric"
         self.assertRaises(
             ValueError,
-            self._plugin.setMetadata, other_metric, "aggregationMethod", "avg")
+            self._plugin.setMetadata,
+            other_metric,
+            "aggregationMethod",
+            "avg",
+        )
         self.assertRaises(
-            ValueError,
-            self._plugin.getMetadata, other_metric, "aggregationMethod")
+            ValueError, self._plugin.getMetadata, other_metric, "aggregationMethod"
+        )
 
     def test_getMetadata(self):
-        self.assertEqual(self._plugin.getMetadata(
-            _TEST_METRIC, "carbon_xfilesfactor"), 0.5)
+        self.assertEqual(
+            self._plugin.getMetadata(_TEST_METRIC, "carbon_xfilesfactor"), 0.5
+        )
         self.assertRaises(
-            ValueError,
-            self._plugin.getMetadata, _TEST_METRIC, "unsupportedMetadata")
+            ValueError, self._plugin.getMetadata, _TEST_METRIC, "unsupportedMetadata"
+        )
         # Specific behavior for aggregationMethod metadata
-        self.assertEqual(self._plugin.getMetadata(
-            _TEST_METRIC, "aggregationMethod"), "sum")
+        self.assertEqual(
+            self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum"
+        )
 
     def test_setMetadata(self):
         # Setting the same value should work
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
-        self.assertEqual(self._plugin.getMetadata(
-            _TEST_METRIC, "aggregationMethod"), "sum")
         self.assertEqual(
-            self._plugin.accessor.get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "sum")
+            self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum"
+        )
+        self.assertEqual(
+            self._plugin.accessor.get_metric(
+                _TEST_METRIC
+            ).metadata.aggregator.carbon_name,
+            "sum",
+        )
 
         # Setting a different value should work
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "avg")
-        self.assertEqual(self._plugin.getMetadata(
-            _TEST_METRIC, "aggregationMethod"), "avg")
         self.assertEqual(
-            self._plugin.accessor.get_metric(_TEST_METRIC).metadata.aggregator.carbon_name, "avg")
+            self._plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "avg"
+        )
+        self.assertEqual(
+            self._plugin.accessor.get_metric(
+                _TEST_METRIC
+            ).metadata.aggregator.carbon_name,
+            "avg",
+        )
         self._plugin.setMetadata(_TEST_METRIC, "aggregationMethod", "sum")
 
         # Setting a name that is not in MetricMetadata.__slots__ should fail
         self.assertRaises(
             ValueError,
-            self._plugin.setMetadata, _TEST_METRIC, "unsupportedMetadata", 42)
+            self._plugin.setMetadata,
+            _TEST_METRIC,
+            "unsupportedMetadata",
+            42,
+        )
 
     def test_write(self):
         points = [(1, 42)]
@@ -166,7 +184,8 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.flush()
         metric = self.accessor.get_metric(_TEST_METRIC)
         actual_points = self.accessor.fetch_points(
-            metric, 1, 2, stage=metric.retention[0])
+            metric, 1, 2, stage=metric.retention[0]
+        )
         self.assertEqual(points, list(actual_points))
 
     def test_write_doubledots(self):
@@ -181,15 +200,16 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))
 
         actual_points = self.accessor.fetch_points(
-            metric, 1, 2, stage=metric.retention[0])
+            metric, 1, 2, stage=metric.retention[0]
+        )
         self.assertEqual(points, list(actual_points))
         actual_points = self.accessor.fetch_points(
-            metric_1, 1, 2, stage=metric.retention[0])
+            metric_1, 1, 2, stage=metric.retention[0]
+        )
         self.assertEqual(points, list(actual_points))
 
 
 class TestMultiDatabase(bg_test_utils.TestCaseWithFakeAccessor):
-
     def setUp(self):
         super(TestMultiDatabase, self).setUp()
         self.fake_drivers()
@@ -211,8 +231,7 @@ class TestMultiDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         )
         self.assertTrue(plugin.exists(_TEST_METRIC))
         plugin.write(_TEST_METRIC, [(1, 1), (2, 2)])
-        self.assertEqual(
-            plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
+        self.assertEqual(plugin.getMetadata(_TEST_METRIC, "aggregationMethod"), "sum")
 
     def test_whisper_and_biggraphite(self):
         self._test_plugin(bg_carbon.WhisperAndBigGraphiteDatabase)
@@ -222,9 +241,9 @@ class TestMultiDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_plugin_registration(self):
         plugins = database.TimeSeriesDatabase.plugins.keys()
-        self.assertTrue('whisper+biggraphite' in plugins)
-        self.assertTrue('biggraphite+whisper' in plugins)
-        self.assertTrue('biggraphite' in plugins)
+        self.assertTrue("whisper+biggraphite" in plugins)
+        self.assertTrue("biggraphite+whisper" in plugins)
+        self.assertTrue("biggraphite" in plugins)
 
 
 if __name__ == "__main__":

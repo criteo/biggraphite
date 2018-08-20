@@ -28,12 +28,16 @@ from biggraphite.cli import command
 # Hack to add some more formats.
 # TODO: Add Graphite support.
 # TODO: Remove padding.
-tabulate._table_formats['csv'] = tabulate.TableFormat(
-    lineabove=None, linebelowheader=None,
-    linebetweenrows=None, linebelow=None,
+tabulate._table_formats["csv"] = tabulate.TableFormat(
+    lineabove=None,
+    linebelowheader=None,
+    linebetweenrows=None,
+    linebelow=None,
     headerrow=tabulate.DataRow("", ";", ""),
     datarow=tabulate.DataRow("", ";", ""),
-    padding=0, with_header_hide=None)
+    padding=0,
+    with_header_hide=None,
+)
 
 tabulate.tabulate_formats = list(sorted(tabulate._table_formats.keys()))
 
@@ -67,7 +71,7 @@ class Namespaces(object):
 
         self.config.read(filename)
         for section in self.config.sections():
-            pattern = re.compile(self.config.get(section, 'pattern'))
+            pattern = re.compile(self.config.get(section, "pattern"))
             self.patterns[pattern] = section
 
     def lookup(self, metric_name):
@@ -75,7 +79,7 @@ class Namespaces(object):
         for pattern, section in self.patterns.items():
             if pattern.match(metric_name):
                 return section, self.config.items(section)
-        return 'none', None
+        return "none", None
 
 
 class CommandStats(command.BaseCommand):
@@ -97,17 +101,13 @@ class CommandStats(command.BaseCommand):
         """
         command.add_sharding_arguments(parser)
         parser.add_argument(
-            "-c", "--conf",
-            help="Configuration file for namespaces",
-            dest="conf",
+            "-c", "--conf", help="Configuration file for namespaces", dest="conf"
         )
 
         formats = tabulate.tabulate_formats
         formats.append("graphite")
         parser.add_argument(
-            "-f", "--format",
-            help="Format: %s" % ", ".join(formats),
-            dest="fmt",
+            "-f", "--format", help="Format: %s" % ", ".join(formats), dest="fmt"
         )
 
     def run(self, accessor, opts):
@@ -119,8 +119,10 @@ class CommandStats(command.BaseCommand):
         accessor.connect()
         accessor.map(
             self.stats,
-            start_key=opts.start_key, end_key=opts.end_key,
-            shard=opts.shard, nshards=opts.nshards
+            start_key=opts.start_key,
+            end_key=opts.end_key,
+            shard=opts.shard,
+            nshards=opts.nshards,
         )
 
         columns = ("Namespace", "Metrics", "Points")
@@ -135,9 +137,7 @@ class CommandStats(command.BaseCommand):
             return
 
         for k in self._n_metrics.keys():
-            data = (
-                k, self._n_metrics.get(k), self._n_points.get(k)
-            )
+            data = (k, self._n_metrics.get(k), self._n_points.get(k))
             rows.append(data)
 
         print(tabulate.tabulate(rows, headers="firstrow", tablefmt=opts.fmt))

@@ -34,8 +34,15 @@ class AlwaysRetryPolicy(policies.RetryPolicy):
         """Creates the policy."""
         self.max_retries = max_retries or self.MAX_RETRIES
 
-    def on_read_timeout(self, query, consistency, required_responses,
-                        received_responses, data_retrieved, retry_num):
+    def on_read_timeout(
+        self,
+        query,
+        consistency,
+        required_responses,
+        received_responses,
+        data_retrieved,
+        retry_num,
+    ):
         """Called when a read operation times out."""
         if retry_num > self.max_retries:
             return self.RETHROW, None
@@ -43,7 +50,9 @@ class AlwaysRetryPolicy(policies.RetryPolicy):
             # It's usually a good idea to retry on another host.
             return self.RETRY_NEXT_HOST, consistency
 
-    def on_unavailable(self, query, consistency, required_replicas, alive_replicas, retry_num):
+    def on_unavailable(
+        self, query, consistency, required_replicas, alive_replicas, retry_num
+    ):
         """Called when the operation cannot be successful."""
         if retry_num > self.max_retries:
             return self.RETHROW, None

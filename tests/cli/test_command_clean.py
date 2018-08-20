@@ -23,19 +23,21 @@ from tests import test_utils as bg_test_utils
 
 
 class TestCommandClean(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_run(self):
         cmd = command_clean.CommandClean()
 
         parser = argparse.ArgumentParser()
         bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args([
-            '--shard=0', '--nshards=5',
-            '--clean-cache',
-            '--clean-backend',
-            '--clean-corrupted',
-        ])
+        opts = parser.parse_args(
+            [
+                "--shard=0",
+                "--nshards=5",
+                "--clean-cache",
+                "--clean-backend",
+                "--clean-corrupted",
+            ]
+        )
         cmd.run(self.accessor, opts)
 
 

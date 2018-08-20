@@ -24,40 +24,26 @@ from tests import test_utils as bg_test_utils
 
 
 class TestGlobUtilsInternals(unittest.TestCase):
-
     def test_is_graphite_glob(self):
-        is_glob = [
-            "a*",
-            "a.b*",
-            "a.b?",
-            "a.b[a-z]?",
-            "a{b,c,d}.a",
-            "a.*.a",
-            "{a}",
-        ]
+        is_glob = ["a*", "a.b*", "a.b?", "a.b[a-z]?", "a{b,c,d}.a", "a.*.a", "{a}"]
         for x in is_glob:
             self.assertTrue(bg_glob._is_graphite_glob(x))
 
-        not_glob = [
-            "a.a",
-            "a-z",
-        ]
+        not_glob = ["a.a", "a-z"]
         for x in not_glob:
             self.assertFalse(bg_glob._is_graphite_glob(x))
 
     def test_is_valid_glob(self):
-        valid_glob = [
-            "a",
-            "a.b",
-            "{a}.b",
-            "{a,{b,c}}.d",
-            "{a,b}.{c,d}.e",
-        ]
+        valid_glob = ["a", "a.b", "{a}.b", "{a,{b,c}}.d", "{a,b}.{c,d}.e"]
         for x in valid_glob:
             self.assertTrue(bg_glob._is_valid_glob(x))
 
         invalid_glob = [
-            "{", "{{}", "{}}", "}{", "}{}",
+            "{",
+            "{{}",
+            "{}}",
+            "}{",
+            "}{}",
             "{a.}.b",
             "{a,{.b,c}}.d",
             "{a,b.}.{.c,d}.e",
@@ -72,26 +58,47 @@ class TestGlobUtilsInternals(unittest.TestCase):
             return list(filter(glob_re.match, metrics))
 
         scenarii = [
-            (['a', 'a.b', 'a.cc'], 'a.*', ['a.b', 'a.cc']),
-            (['a.b', 'a.cc'], 'a.?', ['a.b']),
-            (['a.b', 'a.cc', 'y.z'], '?.*', ['a.b', 'a.cc', 'y.z']),
-            (['a.bd', 'a.cd', 'y.z'], '?.{b,c}?', ['a.bd', 'a.cd']),
-            (['a.b_', 'a.0_', 'a.1_'], '?.[0-9]?', ['a.0_', 'a.1_']),
-            (['a.b', 'a.b.c', 'a.x.y'], 'a.*.*', ['a.b.c', 'a.x.y']),
-            (['a.b', 'a.b.c', 'a.x.y'], 'a.{b,x}.*', ['a.b.c', 'a.x.y']),
-            (['a.b', 'a.b.c', 'a.x.y'], 'a.{b,x}.{c,y}', ['a.b.c', 'a.x.y']),
-            (['a.b', 'a.b.c', 'a.x.y', 'a.x.z'],
-             'a.{b,x}.{c,{y,z}}',
-             ['a.b.c', 'a.x.y', 'a.x.z']),
+            (["a", "a.b", "a.cc"], "a.*", ["a.b", "a.cc"]),
+            (["a.b", "a.cc"], "a.?", ["a.b"]),
+            (["a.b", "a.cc", "y.z"], "?.*", ["a.b", "a.cc", "y.z"]),
+            (["a.bd", "a.cd", "y.z"], "?.{b,c}?", ["a.bd", "a.cd"]),
+            (["a.b_", "a.0_", "a.1_"], "?.[0-9]?", ["a.0_", "a.1_"]),
+            (["a.b", "a.b.c", "a.x.y"], "a.*.*", ["a.b.c", "a.x.y"]),
+            (["a.b", "a.b.c", "a.x.y"], "a.{b,x}.*", ["a.b.c", "a.x.y"]),
+            (["a.b", "a.b.c", "a.x.y"], "a.{b,x}.{c,y}", ["a.b.c", "a.x.y"]),
+            (
+                ["a.b", "a.b.c", "a.x.y", "a.x.z"],
+                "a.{b,x}.{c,{y,z}}",
+                ["a.b.c", "a.x.y", "a.x.z"],
+            ),
             # issue 240
-            (['fib.bar', 'fib.bart', 'foo.baaa', 'foo.bar', 'foo.bart', 'foo.bli', 'foo.blo'],
-             'foo.{bar*,bli}',
-             ['foo.bar', 'foo.bart', 'foo.bli']),
+            (
+                [
+                    "fib.bar",
+                    "fib.bart",
+                    "foo.baaa",
+                    "foo.bar",
+                    "foo.bart",
+                    "foo.bli",
+                    "foo.blo",
+                ],
+                "foo.{bar*,bli}",
+                ["foo.bar", "foo.bart", "foo.bli"],
+            ),
             # issue 290
-            (['fib.bar.la', 'fib.bart.la', 'foo.baaa.la', 'foo.bar.la',
-              'foo.bart.la', 'foo.blit.la', 'foo.blo.la'],
-             'foo.{bar*,bli*}.la',
-             ['foo.bar.la', 'foo.bart.la', 'foo.blit.la']),
+            (
+                [
+                    "fib.bar.la",
+                    "fib.bart.la",
+                    "foo.baaa.la",
+                    "foo.bar.la",
+                    "foo.bart.la",
+                    "foo.blit.la",
+                    "foo.blo.la",
+                ],
+                "foo.{bar*,bli*}.la",
+                ["foo.bar.la", "foo.bart.la", "foo.blit.la"],
+            ),
         ]
         for (full, glob, filtered) in scenarii:
             self.assertEqual(filtered, filter_metrics(full, glob))
@@ -99,39 +106,64 @@ class TestGlobUtilsInternals(unittest.TestCase):
     def test_graphite_glob_parser(self):
         scenarii = [
             # Positive examples
-            ("a.b", [['a'], ['b']], True),
-            ("a.{b}", [['a'], ['b']], True),
-            ("a?b.c", [['a', bg_glob.AnyChar(), 'b'], ['c']], False),
-            ("a.b*c", [['a'], ['b', bg_glob.AnySequence(), 'c']], False),
-            ("a.b**c", [['a'], ['b'], bg_glob.Globstar(), ['c']], False),
-            ("a.**.c", [['a'], bg_glob.Globstar(), ['c']], False),
-            ("a.**", [['a'], bg_glob.Globstar()], False),
-            ("a[xyz].b", [['a', bg_glob.CharIn(['x', 'y', 'z'])], ['b']], False),
-            ("a[!rat].b", [['a', bg_glob.CharNotIn(['r', 'a', 't'])], ['b']], False),
-            ("pl[a-ox]p", [['pl', bg_glob.CharIn(['a-o', 'x']), 'p']], False),
-            ("a[b-dopx-z]b.c",
-             [['a', bg_glob.CharIn(['b-d', 'o', 'p', 'x-z']), 'b'], ['c']], False),
-            ("b[i\\]m", [['b', bg_glob.CharIn(['\\', 'i']), 'm']], False),
-            ("a[x-xy]b", [['a', bg_glob.CharIn(['x-x', 'y']), 'b']], False),
-            ("a[y-xz]b", [['a', bg_glob.CharIn(['y-x', 'z']), 'b']], False),
-            ("a.b.{c,d}", [['a'], ['b'], [
-             bg_glob.SequenceIn(['c', 'd'])]], False),
-            ("a.b.{c,d}-{e,f}",
-             [['a'], ['b'],
-              [bg_glob.SequenceIn(['c', 'd']), '-',
-               bg_glob.SequenceIn(['e', 'f'])]], False),
-            ("a.b.oh{c{d,e,}{a,b},f{g,h}i}ah",
-             [['a'], ['b'],
-              ['oh', bg_glob.SequenceIn(['ca', 'cb', 'cda', 'cdb', 'cea',
-                                         'ceb', 'fgi', 'fhi']), 'ah']], False),
-            ("a.b{some, x{chars[!xyz], plop}}c",
-             [['a'], ['b', bg_glob.AnySequence(), 'c']], False),
+            ("a.b", [["a"], ["b"]], True),
+            ("a.{b}", [["a"], ["b"]], True),
+            ("a?b.c", [["a", bg_glob.AnyChar(), "b"], ["c"]], False),
+            ("a.b*c", [["a"], ["b", bg_glob.AnySequence(), "c"]], False),
+            ("a.b**c", [["a"], ["b"], bg_glob.Globstar(), ["c"]], False),
+            ("a.**.c", [["a"], bg_glob.Globstar(), ["c"]], False),
+            ("a.**", [["a"], bg_glob.Globstar()], False),
+            ("a[xyz].b", [["a", bg_glob.CharIn(["x", "y", "z"])], ["b"]], False),
+            ("a[!rat].b", [["a", bg_glob.CharNotIn(["r", "a", "t"])], ["b"]], False),
+            ("pl[a-ox]p", [["pl", bg_glob.CharIn(["a-o", "x"]), "p"]], False),
+            (
+                "a[b-dopx-z]b.c",
+                [["a", bg_glob.CharIn(["b-d", "o", "p", "x-z"]), "b"], ["c"]],
+                False,
+            ),
+            ("b[i\\]m", [["b", bg_glob.CharIn(["\\", "i"]), "m"]], False),
+            ("a[x-xy]b", [["a", bg_glob.CharIn(["x-x", "y"]), "b"]], False),
+            ("a[y-xz]b", [["a", bg_glob.CharIn(["y-x", "z"]), "b"]], False),
+            ("a.b.{c,d}", [["a"], ["b"], [bg_glob.SequenceIn(["c", "d"])]], False),
+            (
+                "a.b.{c,d}-{e,f}",
+                [
+                    ["a"],
+                    ["b"],
+                    [
+                        bg_glob.SequenceIn(["c", "d"]),
+                        "-",
+                        bg_glob.SequenceIn(["e", "f"]),
+                    ],
+                ],
+                False,
+            ),
+            (
+                "a.b.oh{c{d,e,}{a,b},f{g,h}i}ah",
+                [
+                    ["a"],
+                    ["b"],
+                    [
+                        "oh",
+                        bg_glob.SequenceIn(
+                            ["ca", "cb", "cda", "cdb", "cea", "ceb", "fgi", "fhi"]
+                        ),
+                        "ah",
+                    ],
+                ],
+                False,
+            ),
+            (
+                "a.b{some, x{chars[!xyz], plop}}c",
+                [["a"], ["b", bg_glob.AnySequence(), "c"]],
+                False,
+            ),
             # Negative examples
-            ("a[.b", [['a['], ['b']], True),
-            ("a{.b", [['a{'], ['b']], True),
-            ("a{.b.c}", [['a{'], ['b'], ['c}']], True),
-            ("a.", [['a']], True),
-            ("a..b", [['a'], ['b']], True),
+            ("a[.b", [["a["], ["b"]], True),
+            ("a{.b", [["a{"], ["b"]], True),
+            ("a{.b.c}", [["a{"], ["b"], ["c}"]], True),
+            ("a.", [["a"]], True),
+            ("a..b", [["a"], ["b"]], True),
         ]
         parser = bg_glob.GraphiteGlobParser()
         for i, (glob, expected, fully_defined) in enumerate(scenarii):
@@ -160,20 +192,14 @@ class TestGlobUtilsInternals(unittest.TestCase):
         not_matching_name_2 = "bar.foo.quux"
 
         filtered = bg_glob.filter_from_glob(
-            [matching_name, not_matching_name_1, not_matching_name_2],
-            regexp
+            [matching_name, not_matching_name_1, not_matching_name_2], regexp
         )
 
         self.assertEqual([matching_name], filtered)
 
 
 class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
-    _metric_names = sorted([
-        "a", "aa", "aaa",
-        "b",
-        "a.a.a", "a.b.c", "a.b.d",
-        "x.y.c"
-    ])
+    _metric_names = sorted(["a", "aa", "aaa", "b", "a.a.a", "a.b.c", "a.b.d", "x.y.c"])
 
     _metrics_by_length = defaultdict(list)
     for metric in _metric_names:

@@ -64,7 +64,9 @@ DEFAULT_TIMEOUT = 10
 DEFAULT_USERNAME = os.getenv("BG_ELASTICSEARCH_USERNAME")
 DEFAULT_PASSWORD = os.getenv("BG_ELASTICSEARCH_PASSWORD")
 
-DEFAULT_ES_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), 'elasticsearch_schema.json')
+DEFAULT_ES_SCHEMA_PATH = os.path.join(
+    os.path.dirname(__file__), "elasticsearch_schema.json"
+)
 
 MAX_QUERY_SIZE = 10000
 
@@ -138,20 +140,19 @@ def document_from_metric(metric):
     components = _components_from_name(metric.name)
     name = bg_metric.sanitize_metric_name(metric.name)
 
-    data = {
-        "depth": len(components) - 1,
-        "name": name,
-    }
+    data = {"depth": len(components) - 1, "name": name}
 
     for i, component in enumerate(components):
         data["p%d" % i] = component
-    data.update({
-        "uuid": metric.id,
-        "created_on": metric.created_on or datetime.datetime.now(),
-        "updated_on": metric.updated_on or datetime.datetime.now(),
-        "read_on": metric.read_on or None,
-        "config": config,
-    })
+    data.update(
+        {
+            "uuid": metric.id,
+            "created_on": metric.created_on or datetime.datetime.now(),
+            "updated_on": metric.updated_on or datetime.datetime.now(),
+            "read_on": metric.read_on or None,
+            "config": config,
+        }
+    )
     return data
 
 
@@ -172,7 +173,7 @@ def _parse_wildcard_component(component):
         elif isinstance(subcomponent, six.string_types):
             value += subcomponent
         elif isinstance(subcomponent, bg_glob.AnyChar):
-            value += '?'
+            value += "?"
         else:
             raise Error("Unhandled type '%s'" % subcomponent)
     return value
@@ -191,16 +192,16 @@ def _parse_regexp_component(component):
         elif isinstance(subcomponent, six.string_types):
             regex += subcomponent
         elif isinstance(subcomponent, bg_glob.CharNotIn):
-            regex += '[^' + ''.join(subcomponent.values) + ']'
+            regex += "[^" + "".join(subcomponent.values) + "]"
         elif isinstance(subcomponent, bg_glob.CharIn):
-            regex += '[' + ''.join(subcomponent.values) + ']'
+            regex += "[" + "".join(subcomponent.values) + "]"
         elif isinstance(subcomponent, bg_glob.SequenceIn):
             if subcomponent.negated:
-                regex += '[^.]*'
+                regex += "[^.]*"
             else:
-                regex += '(' + '|'.join(subcomponent.values) + ')'
+                regex += "(" + "|".join(subcomponent.values) + ")"
         elif isinstance(subcomponent, bg_glob.AnyChar):
-            regex += '[^.]'
+            regex += "[^.]"
         else:
             raise Error("Unhandled type '%s'" % subcomponent)
     return regex
@@ -208,15 +209,20 @@ def _parse_regexp_component(component):
 
 def parse_complex_component(component):
     """Given a complex component, this builds a constraint."""
-    if all([
-            any([
-                 isinstance(sub_c, bg_glob.AnySequence),
-                 isinstance(sub_c, bg_glob.AnyChar),
-                 isinstance(sub_c, six.string_types),
-            ]) for sub_c in component
-            ]):
-        return 'wildcard', _parse_wildcard_component(component)
-    return 'regexp', _parse_regexp_component(component)
+    if all(
+        [
+            any(
+                [
+                    isinstance(sub_c, bg_glob.AnySequence),
+                    isinstance(sub_c, bg_glob.AnyChar),
+                    isinstance(sub_c, six.string_types),
+                ]
+            )
+            for sub_c in component
+        ]
+    ):
+        return "wildcard", _parse_wildcard_component(component)
+    return "regexp", _parse_regexp_component(component)
 
 
 def _contains_regexp_wildcard(values):
@@ -229,18 +235,18 @@ def parse_simple_component(component):
     if isinstance(value, bg_glob.AnySequence):
         return None, None  # No constrain
     elif isinstance(value, six.string_types):
-        return 'term', value
+        return "term", value
     elif isinstance(value, bg_glob.CharNotIn):
-        return 'regexp', '[^' + ''.join(value.values) + ']'
+        return "regexp", "[^" + "".join(value.values) + "]"
     elif isinstance(value, bg_glob.CharIn):
-        return 'regexp', '[' + ''.join(value.values) + ']'
+        return "regexp", "[" + "".join(value.values) + "]"
     elif isinstance(value, bg_glob.SequenceIn):
         if _contains_regexp_wildcard(value.values):
-            return 'regexp', '(' + '|'.join(value.values) + ')'
+            return "regexp", "(" + "|".join(value.values) + ")"
         else:
-            return 'terms', value.values
+            return "terms", value.values
     elif isinstance(value, bg_glob.AnyChar):
-        return 'wildcard', '?'
+        return "wildcard", "?"
     else:
         raise Error("Unhandled type '%s'" % value)
 
@@ -273,7 +279,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         timeout=DEFAULT_TIMEOUT,
         updated_on_ttl_sec=ttls.DEFAULT_UPDATED_ON_TTL_SEC,
         read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
-        schema_path=DEFAULT_ES_SCHEMA_PATH
+        schema_path=DEFAULT_ES_SCHEMA_PATH,
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
@@ -292,8 +298,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.client = None
         self.schema = None
         log.debug(
-            "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'" %
-            (self._index_prefix, self._index_suffix)
+            "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'"
+            % (self._index_prefix, self._index_suffix)
         )
 
     def connect(self, *args, **kwargs):
@@ -313,21 +319,18 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             http_auth = None
 
         kwargs = {
-            'sniff_on_start': True,
-            'sniff_on_connection_fail': True,
-            'retry_on_timeout': True,
-            'max_retries': 3,
-            'timeout': self._timeout,
+            "sniff_on_start": True,
+            "sniff_on_connection_fail": True,
+            "retry_on_timeout": True,
+            "max_retries": 3,
+            "timeout": self._timeout,
         }
         if self._port:
-            kwargs['port'] = self._port
+            kwargs["port"] = self._port
         if http_auth:
-            kwargs['http_auth'] = http_auth
+            kwargs["http_auth"] = http_auth
 
-        es = elasticsearch.Elasticsearch(
-            self._hosts,
-            **kwargs
-        )
+        es = elasticsearch.Elasticsearch(self._hosts, **kwargs)
 
         log.info("Connected: %s" % es.info())
         self.client = es
@@ -370,13 +373,13 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """Get the index where a metric should be stored."""
         # Here the index could be sharded further by looking at the
         # metric metadata, for example, per owner.
-        index_name = self._index_prefix + datetime.datetime.now().strftime(self._index_suffix)
+        index_name = self._index_prefix + datetime.datetime.now().strftime(
+            self._index_suffix
+        )
         if index_name not in self._known_indices:
             if not self.client.indices.exists(index=index_name):
                 self.client.indices.create(
-                    index=index_name,
-                    body=self.schema,
-                    ignore=409
+                    index=index_name, body=self.schema, ignore=409
                 )
                 self.client.indices.flush()
             self._known_indices[index_name] = True
@@ -431,15 +434,14 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             updated_metadata,
             created_on=metric.created_on,
             updated_on=datetime.datetime.now(),
-            read_on=metric.read_on
+            read_on=metric.read_on,
         )
         self.create_metric(updated_metric)
 
     def delete_metric(self, name):
         name = bg_metric.sanitize_metric_name(name)
 
-        query = self._create_search_query() \
-            .filter('term', name=name)
+        query = self._create_search_query().filter("term", name=name)
 
         log.debug(json.dumps(query.to_dict(), default=str))
         query.delete()
@@ -450,8 +452,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         query = self._create_search_query()
         for index, component in enumerate(components):
-            query = query.filter('term', **{"p%d" % index: component})
-        query = query.filter('range', depth={'gte': depth})
+            query = query.filter("term", **{"p%d" % index: component})
+        query = query.filter("range", depth={"gte": depth})
 
         log.debug(json.dumps(query.to_dict(), default=str))
         query.delete()
@@ -459,21 +461,23 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     # TODO (t.chataigner) Add unittest.
     def _search_metrics_from_components(self, glob, components, search=None):
         search = self._create_search_query() if search is None else search
-        search = search.source('name')
+        search = search.source("name")
 
         # Handle glob with globstar(s).
         globstars = components.count(bg_glob.Globstar())
         if globstars:
             name_regexp = "\\.".join([_parse_regexp_component(c) for c in components])
-            return True, search.filter('regexp', **{"name": name_regexp})
+            return True, search.filter("regexp", **{"name": name_regexp})
 
         # TODO (t.chataigner) Handle fully defined prefix (like a.b.c.*.*.*)
         # with a wildcard on name.
 
         # Handle fully defined glob.
         if self.__glob_parser.is_fully_defined(components):
-            return False, search.filter(
-                'term', **{"name": bg_metric.sanitize_metric_name(glob)})
+            return (
+                False,
+                search.filter("term", **{"name": bg_metric.sanitize_metric_name(glob)}),
+            )
 
         # Handle all other use cases.
         for i, c in enumerate(components):
@@ -488,7 +492,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
-        super(_ElasticSearchAccessor, self).glob_metric_names(glob, start_time, end_time)
+        super(_ElasticSearchAccessor, self).glob_metric_names(
+            glob, start_time, end_time
+        )
         if glob == "":
             return []
 
@@ -496,11 +502,13 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         glob_depth = _get_depth_from_components(components)
         search = self._create_search_query(start_time, end_time)
 
-        has_globstar, search = self._search_metrics_from_components(glob, components, search)
+        has_globstar, search = self._search_metrics_from_components(
+            glob, components, search
+        )
         if has_globstar:
-            search = search.filter('range', depth={'gte': glob_depth})
+            search = search.filter("range", depth={"gte": glob_depth})
         else:
-            search = search.filter('term', depth=glob_depth)
+            search = search.filter("term", depth=glob_depth)
         search = search.extra(from_=0, size=MAX_QUERY_SIZE)
 
         # TODO (t.chataigner) try to move the sort in the ES search and return a generator.
@@ -511,7 +519,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     def glob_directory_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
-        super(_ElasticSearchAccessor, self).glob_directory_names(glob, start_time, end_time)
+        super(_ElasticSearchAccessor, self).glob_directory_names(
+            glob, start_time, end_time
+        )
         if glob == "":
             return []
 
@@ -520,9 +530,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # There are no "directory" documents, only "metric" documents. Hence appending the
         # AnySequence after the provided glob: we search for metrics under that path.
         has_globstar, search = self._search_metrics_from_components(
-            glob,
-            components + [[bg_glob.AnySequence()]],
-            search
+            glob, components + [[bg_glob.AnySequence()]], search
         )
         if has_globstar:
             # TODO (t.chataigner) Add a log or raise exception.
@@ -531,10 +539,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         glob_depth = _get_depth_from_components(components)
         # Use (glob_depth + 1) to filter only directories and
         # exclude metrics whose depth is glob_depth.
-        search = search.filter('range', depth={'gte': glob_depth + 1})
+        search = search.filter("range", depth={"gte": glob_depth + 1})
         search = search.extra(from_=0, size=0)  # Do not return metrics.
 
-        search.aggs.bucket('distinct_dirs', 'terms', field="p%d" % glob_depth, size=MAX_QUERY_SIZE)
+        search.aggs.bucket(
+            "distinct_dirs", "terms", field="p%d" % glob_depth, size=MAX_QUERY_SIZE
+        )
 
         log.debug(json.dumps(search.to_dict(), default=str))
         response = search.execute()
@@ -549,7 +559,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if glob_depth == 0:
             results = [b.key for b in buckets]
         else:
-            glob_base = glob.rsplit('.', 1)[0]
+            glob_base = glob.rsplit(".", 1)[0]
             results = ["%s.%s" % (glob_base, b.key) for b in buckets]
         results.sort()
         return iter(results)
@@ -572,9 +582,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         return self._document_to_metric(document)
 
     def _document_to_metric(self, document):
-        metadata = bg_metric.MetricMetadata.from_string_dict(
-            document.config.to_dict()
-        )
+        metadata = bg_metric.MetricMetadata.from_string_dict(document.config.to_dict())
         # TODO: Have a look at dsl doc to avoid parsing strings to dates
         # https://github.com/elastic/elasticsearch-dsl-py/blob/master/docs/persistence.rst
         return bg_metric.make_metric(
@@ -582,14 +590,16 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             metadata,
             created_on=ttls.str_to_datetime(document.created_on),
             updated_on=ttls.str_to_datetime(document.updated_on),
-            read_on=ttls.str_to_datetime(document.read_on)
+            read_on=ttls.str_to_datetime(document.read_on),
         )
 
     def __get_document(self, metric_name):
-        search = self._create_search_query() \
-            .source(['uuid', 'name', 'config', 'created_on', 'updated_on', 'read_on']) \
-            .filter('term', name=metric_name) \
-            .sort({'updated_on': {'order': 'desc'}})
+        search = (
+            self._create_search_query()
+            .source(["uuid", "name", "config", "created_on", "updated_on", "read_on"])
+            .filter("term", name=metric_name)
+            .sort({"updated_on": {"order": "desc"}})
+        )
 
         log.debug(json.dumps(search.to_dict(), default=str))
         response = search[:1].execute()
@@ -641,11 +651,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         index = document.meta.index
         document_id = document.uuid
         updated_on = datetime.datetime.now()
-        data = {
-            "doc": {
-                "updated_on": updated_on
-            }
-        }
+        data = {"doc": {"updated_on": updated_on}}
         self.__update_document(data, index, document_id)
         document.updated_on = ttls.datetime_to_str(updated_on)
 
@@ -706,11 +712,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def __update_read_on(self, metric):
         # TODO: state if we should move the document from its index to
         # the current (today) index
-        data = {
-            "doc": {
-                "read_on": datetime.datetime.now()
-            }
-        }
+        data = {"doc": {"read_on": datetime.datetime.now()}}
         index = self.get_index(metric.name)
         self.__update_document(data, index, metric.id)
 
@@ -720,13 +722,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             doc_type=INDEX_DOC_TYPE,
             id=document_id,
             body=data,
-            ignore=[404, 409]
+            ignore=[404, 409],
         )
 
     def _create_search_query(self, start_time=None, end_time=None):
-        search = elasticsearch_dsl.Search() \
-            .using(self.client) \
+        search = (
+            elasticsearch_dsl.Search()
+            .using(self.client)
             .index("%s*" % self._index_prefix)
+        )
         if start_time is not None:
             # `updated_on` field has a delay before it is updated, so a metric can still be active
             # without having this value up to date.
@@ -746,11 +750,14 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             #
             #   updated_on >= start_time - ttl
             #
-            updated_on_lower_bound = \
-                start_time - datetime.timedelta(seconds=self.__updated_on_ttl_sec)
-            search = search.filter('range', updated_on={"gte": updated_on_lower_bound.isoformat()})
+            updated_on_lower_bound = start_time - datetime.timedelta(
+                seconds=self.__updated_on_ttl_sec
+            )
+            search = search.filter(
+                "range", updated_on={"gte": updated_on_lower_bound.isoformat()}
+            )
         if end_time is not None:
-            search = search.filter('range', created_on={"lte": end_time.isoformat()})
+            search = search.filter("range", created_on={"lte": end_time.isoformat()})
         return search
 
 

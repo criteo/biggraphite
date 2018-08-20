@@ -36,20 +36,13 @@ class CommandDu(command.BaseCommand):
         See command.CommandBase.
         """
         parser.add_argument(
-            "-h",
-            help="Human readable units",
-            action='store_true',
-            dest='unit'
+            "-h", help="Human readable units", action="store_true", dest="unit"
         )
         parser.add_argument(
-            "-s",
-            help="Summary, i.e. total size",
-            action='store_true',
-            dest='total'
+            "-s", help="Summary, i.e. total size", action="store_true", dest="total"
         )
         parser.add_argument(
-            "metrics",
-            help="One metric name or globbing on metrics names"
+            "metrics", help="One metric name or globbing on metrics names"
         )
 
     def run(self, accessor, opts):
@@ -63,10 +56,11 @@ class CommandDu(command.BaseCommand):
             points = metric.metadata.retention.points
             total += points
             self._display_metric_size(
-                metric.name, metric.metadata.retention.points, opts.unit)
+                metric.name, metric.metadata.retention.points, opts.unit
+            )
 
         if opts.total:
-            self._display_metric_size('TOTAL', total, opts.unit)
+            self._display_metric_size("TOTAL", total, opts.unit)
 
     @staticmethod
     def _human_size_of_points(nb_points, use_unit=True):

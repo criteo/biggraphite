@@ -39,10 +39,7 @@ def list_metrics(accessor, pattern, graphite=True):
         metrics_names = accessor.glob_metric_names(pattern)
     else:
         metrics_names, _ = graphite_glob(
-            accessor,
-            pattern,
-            metrics=True,
-            directories=False
+            accessor, pattern, metrics=True, directories=False
         )
 
     for metric in metrics_names:
@@ -62,15 +59,12 @@ class CommandList(command.BaseCommand):
 
         See command.CommandBase.
         """
-        parser.add_argument(
-            "glob",
-            help="One metric name or globbing on metrics names"
-        )
+        parser.add_argument("glob", help="One metric name or globbing on metrics names")
         parser.add_argument(
             "--graphite",
             default=False,
-            action='store_true',
-            help="Enable Graphite globbing"
+            action="store_true",
+            help="Enable Graphite globbing",
         )
 
     def run(self, accessor, opts):
@@ -84,16 +78,10 @@ class CommandList(command.BaseCommand):
             directories_names = accessor.glob_directory_names(opts.glob)
         else:
             _, directories_names = graphite_glob(
-                accessor,
-                opts.glob,
-                metrics=False,
-                directories=True
+                accessor, opts.glob, metrics=False, directories=True
             )
         for directory in directories_names:
             print("d %s" % directory)
         for metric in list_metrics(accessor, opts.glob, opts.graphite):
             if metric:
-                print("m %s %s" % (
-                    metric.name,
-                    metric.metadata.as_string_dict()
-                ))
+                print("m %s %s" % (metric.name, metric.metadata.as_string_dict()))

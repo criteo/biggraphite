@@ -29,8 +29,9 @@ class TaskRunner:
     def __init__(self):
         """Init TaskRunner."""
         self.tasks = []
-        self._executor = futures.ThreadPoolExecutor(max_workers=10,
-                                                    thread_name_prefix="bgutil_worker")
+        self._executor = futures.ThreadPoolExecutor(
+            max_workers=10, thread_name_prefix="bgutil_worker"
+        )
 
     def submit(self, label, command, opts):
         """Submit a bgutil command to run it asynchronously."""
@@ -48,7 +49,9 @@ class TaskRunner:
             except Exception as e:
                 task.failed(e)
 
-        future = self._executor.submit(self._wrap_command, task, context.accessor, command, opts)
+        future = self._executor.submit(
+            self._wrap_command, task, context.accessor, command, opts
+        )
         task.submitted()
         future.add_done_callback(_done_callback)
 
@@ -63,12 +66,9 @@ class TaskRunner:
 class BgUtilTask:
     """BgUtil task."""
 
-    def __init__(self,
-                 label,
-                 submitted_on,
-                 started_on=None,
-                 completed_on=None,
-                 result=None):
+    def __init__(
+        self, label, submitted_on, started_on=None, completed_on=None, result=None
+    ):
         """Init a bgutil task."""
         self.label = label
         self.submitted_on = submitted_on

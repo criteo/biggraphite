@@ -27,20 +27,24 @@ from biggraphite.cli import bg_carbon_aggregator_cache
 
 
 class TestMain(unittest.TestCase):
-
     def test_runs(self):
         sys_path = []
-        with mock.patch.object(carbon_util, "run_twistd_plugin",
-                               return_value=None) as run_twisted:
+        with mock.patch.object(
+            carbon_util, "run_twistd_plugin", return_value=None
+        ) as run_twisted:
             bg_carbon_aggregator_cache.main(
-                "/a/b/c/bin/bg-carbon-aggregator-cache", sys_path)
+                "/a/b/c/bin/bg-carbon-aggregator-cache", sys_path
+            )
         run_twisted.assert_called_once()
         self.assertEqual(1, len(sys_path))
         self.assertEqual("/a/b/c/lib", sys_path[0])
 
     def test_carbon_fails(self):
-        with mock.patch.object(carbon_util, "run_twistd_plugin",
-                               side_effect=carbon_exceptions.CarbonConfigException) as run_twisted:
+        with mock.patch.object(
+            carbon_util,
+            "run_twistd_plugin",
+            side_effect=carbon_exceptions.CarbonConfigException,
+        ) as run_twisted:
             self.assertRaises(SystemExit, bg_carbon_aggregator_cache.main)
         run_twisted.assert_called_once()
 

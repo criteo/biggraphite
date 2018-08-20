@@ -38,7 +38,9 @@ class UnknownCommandException(Exception):
 
     def __init__(self, command_name):
         """Init UnknownCommandException."""
-        super(UnknownCommandException, self).__init__("Unknown command: %s" % command_name)
+        super(UnknownCommandException, self).__init__(
+            "Unknown command: %s" % command_name
+        )
 
 
 def parse_command(command_name, payload):
@@ -74,11 +76,11 @@ class _HelpAction(argparse.Action):
     """Help Action that sends an exception."""
 
     def __init__(
-            self,
-            option_strings,
-            dest=argparse.SUPPRESS,
-            default=argparse.SUPPRESS,
-            help=None,
+        self,
+        option_strings,
+        dest=argparse.SUPPRESS,
+        default=argparse.SUPPRESS,
+        help=None,
     ):
         """Constructor."""
         super(_HelpAction, self).__init__(
@@ -145,7 +147,7 @@ class BgUtilAsyncResource(rp.Resource):
 
     @api.doc("Run a bgutil command.")
     @api.expect(command)
-    @api.response(201, 'Created')
+    @api.response(201, "Created")
     def post(self, command_name):
         """Run asynchronously a BgUtil command."""
         # TODO: monitor background tasks and feed /workers with it
@@ -164,7 +166,7 @@ class BgUtilAsyncResource(rp.Resource):
 
     @staticmethod
     def _make_label(command_name):
-        return "%s %s" % (command_name, ' '.join(api.payload["arguments"]))
+        return "%s %s" % (command_name, " ".join(api.payload["arguments"]))
 
 
 @api.route("/tasks/")
@@ -184,7 +186,7 @@ class BgUtilTasksResource(rp.Resource):
             "started_on": BgUtilTasksResource._format_date(task.started_on),
             "completed_on": BgUtilTasksResource._format_date(task.completed_on),
             "status": task.status.value,
-            "result": task.result
+            "result": task.result,
         }
 
     @staticmethod

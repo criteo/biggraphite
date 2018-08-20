@@ -34,7 +34,7 @@ if HAS_ELASTICSEARCH:
     from testing import elasticsearch as testing_elasticsearch
 
 
-class ElasticsearchHelper():
+class ElasticsearchHelper:
     """Helper for an ephemeral Elasticsearch cluster."""
 
     INDEX = "testindex"
@@ -46,7 +46,7 @@ class ElasticsearchHelper():
             "elasticsearch_index": cls.INDEX,
             "elasticsearch_hosts": cls.hosts,
             "elasticsearch_port": cls.port,
-            "elasticsearch_timeout": 60
+            "elasticsearch_timeout": 60,
         }
 
     @classmethod
@@ -55,7 +55,7 @@ class ElasticsearchHelper():
         cls.elasticsearch = None
         if ES_HOSTPORT:
             # Use existing and running instance.
-            host, cls.port = ES_HOSTPORT.split(':')
+            host, cls.port = ES_HOSTPORT.split(":")
             cls.hosts = [host]
         else:
             # Setup a new instance, and dynamically get its host and port.
@@ -64,27 +64,35 @@ class ElasticsearchHelper():
     @classmethod
     def setUpElasticsearch(cls):
         """Start Elasticsearch."""
-        cls.elasticsearch = testing_elasticsearch.Elasticsearch(
-            auto_start=False,
-        )
+        cls.elasticsearch = testing_elasticsearch.Elasticsearch(auto_start=False)
         try:
             cls.elasticsearch.setup()
             cls.elasticsearch.start()
         except Exception as e:
             logging.exception(e)
-            print("fail to starting elasticsearch, logging potentially useful debug info",
-                  file=sys.stderr)
-            for attr in ["elasticsearch_home", "elasticsearch_yaml", "elasticsearch_major_version",
-                         "base_dir", "settings"]:
-                print(attr, ":", getattr(cls.elasticsearch,
-                                         attr, "Unknown"), file=sys.stderr)
+            print(
+                "fail to starting elasticsearch, logging potentially useful debug info",
+                file=sys.stderr,
+            )
+            for attr in [
+                "elasticsearch_home",
+                "elasticsearch_yaml",
+                "elasticsearch_major_version",
+                "base_dir",
+                "settings",
+            ]:
+                print(
+                    attr,
+                    ":",
+                    getattr(cls.elasticsearch, attr, "Unknown"),
+                    file=sys.stderr,
+                )
             cls.elasticsearch.cleanup()
             raise
 
         # testing.elasticsearch is meant to be used with the Thrift API, so we need to
         # extract the IPs and native port for use with the native driver.
-        cls.hosts = [s.split(":")[0]
-                     for s in cls.elasticsearch.dsn()['hosts']]
+        cls.hosts = [s.split(":")[0] for s in cls.elasticsearch.dsn()["hosts"]]
         cls.port = cls.elasticsearch.elasticsearch_yaml["http.port"]
 
     @classmethod

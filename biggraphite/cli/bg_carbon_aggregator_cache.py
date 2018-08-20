@@ -31,8 +31,10 @@ def main(_executable=sys.argv[0], _sys_path=sys.path):
     bg_utils.manipulate_paths_like_upstream(_executable, _sys_path)
     from carbon import util as carbon_util
     from carbon import exceptions as carbon_exceptions
+
     # Importing the plugin registers it.
     from biggraphite.plugins import carbon as unused_carbon  # noqa
+
     try:
         # The carbon code tries to guess GRAPHITE_ROOT from the filename
         # given to run_twistd_plugin() to set GRAPHITE_ROOT. This is then

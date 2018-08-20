@@ -40,18 +40,14 @@ class CommandCopy(command.BaseCommand):
 
         See command.CommandBase.
         """
-        parser.add_argument(
-            "src",
-            help="One source metric or subdirectory name"
-        )
-        parser.add_argument(
-            "dst",
-            help="One destination metric or subdirectory name"
-        )
+        parser.add_argument("src", help="One source metric or subdirectory name")
+        parser.add_argument("dst", help="One destination metric or subdirectory name")
         parser.add_argument(
             "-r",
             "--recursive",
-            action="store_const", default=False, const=True,
+            action="store_const",
+            default=False,
+            const=True,
             help="Copy points for all metrics as a subtree",
         )
         parser.add_argument(
@@ -70,7 +66,9 @@ class CommandCopy(command.BaseCommand):
         )
         parser.add_argument(
             "--dry-run",
-            action="store_const", default=False, const=True,
+            action="store_const",
+            default=False,
+            const=True,
             help="Only show commands to create/upgrade the schema.",
             required=False,
         )
@@ -94,8 +92,14 @@ class CommandCopy(command.BaseCommand):
         accessor.connect()
 
         metric_tuples = self._get_metric_tuples(
-            accessor, opts.src, opts.dst, opts.recursive,
-            opts.src_retention, opts.dst_retention, opts.dry_run)
+            accessor,
+            opts.src,
+            opts.dst,
+            opts.recursive,
+            opts.src_retention,
+            opts.dst_retention,
+            opts.dry_run,
+        )
 
         if opts.dry_run:
             for m, _ in metric_tuples:
@@ -106,12 +110,12 @@ class CommandCopy(command.BaseCommand):
         time_end = time.mktime(opts.time_end.timetuple())
 
         for src_metric, dst_metric in metric_tuples:
-            self._copy_metric(accessor, src_metric,
-                              dst_metric, time_start, time_end)
+            self._copy_metric(accessor, src_metric, dst_metric, time_start, time_end)
 
     @staticmethod
-    def _get_metric_tuples(accessor, src, dst, recursive,
-                           src_retention, dst_retention, dry_run=True):
+    def _get_metric_tuples(
+        accessor, src, dst, recursive, src_retention, dst_retention, dry_run=True
+    ):
         pattern = "%s.**" % src if recursive else src
         try:
             src_metrics = list_metrics(accessor, pattern)
@@ -133,22 +137,23 @@ class CommandCopy(command.BaseCommand):
             dst_metric = accessor.get_metric(dst_metric_name)
 
             if dst_metric is None:
-                log.debug("Metric '%s' was not found and will be created" %
-                          dst_metric_name)
+                log.debug(
+                    "Metric '%s' was not found and will be created" % dst_metric_name
+                )
                 dst_metadata = copy.deepcopy(src_metric.metadata)
                 if dst_retention:
                     dst_metadata.retention = dst_retention
-                dst_metric = bg_metric.make_metric(
-                    dst_metric_name, dst_metadata)
+                dst_metric = bg_metric.make_metric(dst_metric_name, dst_metadata)
                 if not dry_run:
                     accessor.create_metric(dst_metric)
             elif dst_retention and dst_metric.metadata.retention != dst_retention:
-                log.debug("Metric '%s' was found without '%s' retention and will be updated" % (
-                    dst_metric_name, dst_retention.as_string))
+                log.debug(
+                    "Metric '%s' was found without '%s' retention and will be updated"
+                    % (dst_metric_name, dst_retention.as_string)
+                )
                 dst_metric.metadata.retention = dst_retention
                 if not dry_run:
-                    accessor.update_metric(
-                        dst_metric_name, dst_metric.metadata)
+                    accessor.update_metric(dst_metric_name, dst_metric.metadata)
 
             yield (src_metric, dst_metric)
 
@@ -158,10 +163,10 @@ class CommandCopy(command.BaseCommand):
 
         Points are copied only from a given stage to a stage with the same precision
         """
-        log.info("Copying points from '%s' to '%s'" %
-                 (src_metric.name, dst_metric.name))
-        src_precision_to_stage = {
-            s.precision: s for s in src_metric.retention.stages}
+        log.info(
+            "Copying points from '%s' to '%s'" % (src_metric.name, dst_metric.name)
+        )
+        src_precision_to_stage = {s.precision: s for s in src_metric.retention.stages}
         for dst_stage in dst_metric.retention.stages:
             if dst_stage.precision not in src_precision_to_stage:
                 continue
@@ -171,7 +176,12 @@ class CommandCopy(command.BaseCommand):
             rounded_time_end = src_stage.round_up(time_end)
 
             res = accessor.fetch_points(
-                src_metric, rounded_time_start, rounded_time_end, src_stage, aggregated=False)
+                src_metric,
+                rounded_time_start,
+                rounded_time_end,
+                src_stage,
+                aggregated=False,
+            )
 
             points = []
             for timestamp, value, count in res:

@@ -38,16 +38,17 @@ def set_thread_names():
             orig_start(self)
             try:
                 name = self.name
-                if not name or name.startswith('Thread-'):
+                if not name or name.startswith("Thread-"):
                     name = self.__class__.__name__
-                    if name == 'Thread':
+                    if name == "Thread":
                         name = self.name
                 if name:
                     if isinstance(name, six.text_type):
-                        name = name.encode('ascii', 'replace')
+                        name = name.encode("ascii", "replace")
                     ident = getattr(self, "ident", None)
                     if ident is not None:
                         pthread_setname_np(ident, name[:15])
             except Exception:
                 pass  # Don't care about failure to set name
+
         threading.Thread.start = new_start

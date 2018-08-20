@@ -22,6 +22,7 @@ from six.moves import queue
 try:
     from graphite.tags import utils as tags_utils
     from biggraphite.plugins import tags
+
     # TODO: change this once the code actually works.
     HAVE_TAGS = False
 except ImportError:
@@ -41,16 +42,18 @@ from biggraphite import metric as bg_metric
 # pylama:ignore=D102
 
 WRITE_TIME = prometheus_client.Histogram(
-    "bg_write_latency_seconds", "write latency in seconds",
-    buckets=(0.005, .01, .025, .05, .075,
-             .1, .25, .5, .75,
-             1.0, 2.5, 5.0, 7.5))
+    "bg_write_latency_seconds",
+    "write latency in seconds",
+    buckets=(0.005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5),
+)
 
 CREATE_TIME = prometheus_client.Summary(
-    "bg_create_latency_seconds", "create latency in seconds")
+    "bg_create_latency_seconds", "create latency in seconds"
+)
 
 EXISTS_TIME = prometheus_client.Summary(
-    "bg_exists_latency_seconds", "create latency in seconds")
+    "bg_exists_latency_seconds", "create latency in seconds"
+)
 
 CREATES = prometheus_client.Counter("bg_creates", "metric creations")
 
@@ -67,8 +70,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     """
 
     plugin_name = "biggraphite"
-    aggregationMethods = [
-        member.value for member in list(bg_metric.Aggregator)]
+    aggregationMethods = [member.value for member in list(bg_metric.Aggregator)]
 
     # See class pydoc for the rational.
     _SYNC_EVERY_N_WRITES = 10
@@ -88,19 +90,20 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._metricsToCreate = queue.Queue()
         self._sync_countdown = 0
         self._sync_every_n_writes = settings.get(
-            'BG_SYNC_EVERY_N_WRITES', self._SYNC_EVERY_N_WRITES
+            "BG_SYNC_EVERY_N_WRITES", self._SYNC_EVERY_N_WRITES
         )
 
         utils.start_admin(bg_settings.settings_from_confattr(settings))
-        self.reactor.addSystemEventTrigger('before', 'shutdown', self._flush)
+        self.reactor.addSystemEventTrigger("before", "shutdown", self._flush)
         self.reactor.callInThread(self._createMetrics)
         self._lc = task.LoopingCall(self._background)
-        self._lc.start(settings['CARBON_METRIC_INTERVAL'], now=False)
+        self._lc.start(settings["CARBON_METRIC_INTERVAL"], now=False)
 
     @property
     def reactor(self):
         # We are included first, but we don't want to create the reactor.
         from twisted.internet import reactor
+
         return reactor
 
     @property
@@ -131,7 +134,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     def cache(self):
         if not self._cache:
             cache = graphite_utils.cache_from_settings(
-                self.accessor, self._settings, 'carbon')
+                self.accessor, self._settings, "carbon"
+            )
             cache.open()
             self._cache = cache
 
@@ -150,11 +154,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         # Get a Metric object from metric name.
         metric = self.cache.get_metric(metric_name=metric_name)
         if not metric:
-            raise Exception('Could not find %s' % (metric_name))
+            raise Exception("Could not find %s" % (metric_name))
 
         # Round down timestamp because inner functions expect integers.
-        datapoints = [(int(timestamp), value)
-                      for timestamp, value in datapoints]
+        datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
 
         # Writing every point synchronously increase CPU usage by ~300% as per https://goo.gl/xP5fD9
         if self._sync_countdown < 1:
@@ -162,8 +165,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             self._sync_countdown = self._sync_every_n_writes
         else:
             self._sync_countdown -= 1
-            self.accessor.insert_points_async(
-                metric=metric, datapoints=datapoints)
+            self.accessor.insert_points_async(metric=metric, datapoints=datapoints)
 
     @EXISTS_TIME.time()
     def exists(self, metric_name):
@@ -175,8 +177,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         metric_name = self.encode(metric_name)
 
         metadata = bg_metric.MetricMetadata(
-            aggregator=bg_metric.Aggregator.from_carbon_name(
-                aggregation_method),
+            aggregator=bg_metric.Aggregator.from_carbon_name(aggregation_method),
             retention=bg_metric.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
@@ -212,8 +213,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         metric_name = self.encode(metric_name)
         old_value = self.getMetadata(metric_name, key)
         if old_value != value:
-            metadata = self.cache.get_metric(
-                metric_name=metric_name)
+            metadata = self.cache.get_metric(metric_name=metric_name)
             if not metadata:
                 raise ValueError("%s: No such metric" % metric_name)
 
@@ -248,8 +248,11 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
                 name = name
                 if labels:
                     name += "." + ".".join(
-                        ["%s.%s" % (k, v.replace('.', '_'))
-                         for k, v in sorted(labels.items())])
+                        [
+                            "%s.%s" % (k, v.replace(".", "_"))
+                            for k, v in sorted(labels.items())
+                        ]
+                    )
                 instrumentation.cache_record(name, value)
         if self._accessor:
             self.reactor.callInThread(self.accessor.background)
@@ -296,8 +299,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         if existing_metric:
             # The retention policy is different, update it.
-            log.creates("updating database metric %s (%s)" % (
-                metric.name, metric.metadata.as_string_dict()))
+            log.creates(
+                "updating database metric %s (%s)"
+                % (metric.name, metric.metadata.as_string_dict())
+            )
         else:
             # The metric doesn't exists, create it.
             log.creates("creating database metric %s" % metric.name)
@@ -328,14 +333,14 @@ class MultiDatabase(database.TimeSeriesDatabase):
         # Support the intersection of both.
         self.aggregationMethods = []
         for db in dbs:
-            if not hasattr(db, 'aggregationMethods'):
+            if not hasattr(db, "aggregationMethods"):
                 continue
             if not self.aggregationMethods:
                 self.aggregationMethods = db.aggregationMethods
             else:
                 self.aggregationMethods = list(
-                    set(self.aggregationMethods) &
-                    set(db.aggregationMethods))
+                    set(self.aggregationMethods) & set(db.aggregationMethods)
+                )
 
     def write(self, metric_name, datapoints):
         for db in self._dbs:
@@ -351,8 +356,7 @@ class MultiDatabase(database.TimeSeriesDatabase):
         for db in self._dbs:
             if db.exists(metric_name):
                 continue
-            db.create(
-                metric_name, retentions, xfilesfactor, aggregation_method)
+            db.create(metric_name, retentions, xfilesfactor, aggregation_method)
 
     def getMetadata(self, metric_name, key):
         return self._dbs[0].getMetadata(metric_name, key)
@@ -368,7 +372,8 @@ class MultiDatabase(database.TimeSeriesDatabase):
             db.validateArchiveList(archiveList)
 
 
-if hasattr(database, 'WhisperDatabase'):
+if hasattr(database, "WhisperDatabase"):
+
     class WhisperAndBigGraphiteDatabase(MultiDatabase):
         """Whisper then BigGraphite."""
 
@@ -379,8 +384,7 @@ if hasattr(database, 'WhisperDatabase'):
             """Create a WhisperAndBigGraphiteDatabase."""
             self._biggraphite = BigGraphiteDatabase(settings)
             self._whisper = database.WhisperDatabase(settings)
-            MultiDatabase.__init__(
-                self, settings, [self._whisper, self._biggraphite])
+            MultiDatabase.__init__(self, settings, [self._whisper, self._biggraphite])
 
     class BigGraphiteAndWhisperDatabase(MultiDatabase):
         """BigGraphite then Whisper."""
@@ -392,5 +396,4 @@ if hasattr(database, 'WhisperDatabase'):
             """Create a BigGraphiteDatabaseAndWhisper."""
             self._biggraphite = BigGraphiteDatabase(settings)
             self._whisper = database.WhisperDatabase(settings)
-            MultiDatabase.__init__(
-                self, settings, [self._biggraphite, self._whisper])
+            MultiDatabase.__init__(self, settings, [self._biggraphite, self._whisper])

@@ -26,18 +26,16 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
     _POINTS_START = 3600 * 24 * 10
     _POINTS_END = _POINTS_START + 3 * 3600
     _RETENTION = bg_metric.Retention.from_string("20*15s:1440*60s:48*3600s")
-    _RETENTION_BIS = bg_metric.Retention.from_string(
-        "20*10s:14400*60s:500*3600s")
+    _RETENTION_BIS = bg_metric.Retention.from_string("20*10s:14400*60s:500*3600s")
     _POINTS = bg_test_utils._make_easily_queryable_points(
-        start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
+        start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision
     )
     _METRIC_1_NAME = "test.origin.metric_1.toto"
     _METRIC_1 = bg_test_utils.make_metric(_METRIC_1_NAME, retention=_RETENTION)
     _METRIC_2_NAME = "test.origin.metric_2.tata"
     _METRIC_2 = bg_test_utils.make_metric(_METRIC_2_NAME, retention=_RETENTION)
     _METRIC_3_NAME = "test.origin.metric_3.tata"
-    _METRIC_3 = bg_test_utils.make_metric(
-        _METRIC_3_NAME, retention=_RETENTION_BIS)
+    _METRIC_3 = bg_test_utils.make_metric(_METRIC_3_NAME, retention=_RETENTION_BIS)
 
     def setUp(self):
         """Set up a subdirectory of metrics to copy."""
@@ -56,29 +54,37 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         for i in range(3):
             pts = self.accessor.fetch_points(
                 self._METRIC_2,
-                self._POINTS_START, self._POINTS_END,
-                stage=self._METRIC_2.retention[i]
+                self._POINTS_START,
+                self._POINTS_END,
+                stage=self._METRIC_2.retention[i],
             )
             self.assertEqual(list(pts), [])
 
         # Copy points from _METRIC_1 to _METRIC_2
-        cmd_copy._copy_metric(self.accessor, self._METRIC_1, self._METRIC_2,
-                              self._POINTS_START, self._POINTS_END)
+        cmd_copy._copy_metric(
+            self.accessor,
+            self._METRIC_1,
+            self._METRIC_2,
+            self._POINTS_START,
+            self._POINTS_END,
+        )
         self.accessor.flush()
 
         # Check that both metrics have same points
         for i in range(3):
             pts = self.accessor.fetch_points(
                 self._METRIC_1,
-                self._POINTS_START, self._POINTS_END,
+                self._POINTS_START,
+                self._POINTS_END,
                 stage=self._METRIC_1.retention[i],
-                aggregated=False
+                aggregated=False,
             )
             pts_copy = self.accessor.fetch_points(
                 self._METRIC_2,
-                self._POINTS_START, self._POINTS_END,
+                self._POINTS_START,
+                self._POINTS_END,
                 stage=self._METRIC_2.retention[i],
-                aggregated=False
+                aggregated=False,
             )
             self.assertEqual(list(pts), list(pts_copy))
 
@@ -89,21 +95,28 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         that have the same precision, or no point at all.
         """
         cmd_copy = command_copy.CommandCopy()
-        cmd_copy._copy_metric(self.accessor, self._METRIC_1, self._METRIC_3,
-                              self._POINTS_START, self._POINTS_END)
+        cmd_copy._copy_metric(
+            self.accessor,
+            self._METRIC_1,
+            self._METRIC_3,
+            self._POINTS_START,
+            self._POINTS_END,
+        )
         self.accessor.flush()
         for i in range(3):
             pts = self.accessor.fetch_points(
                 self._METRIC_1,
-                self._POINTS_START, self._POINTS_END,
+                self._POINTS_START,
+                self._POINTS_END,
                 stage=self._METRIC_1.retention[i],
-                aggregated=False
+                aggregated=False,
             )
             pts_copy = self.accessor.fetch_points(
                 self._METRIC_3,
-                self._POINTS_START, self._POINTS_END,
+                self._POINTS_START,
+                self._POINTS_END,
                 stage=self._METRIC_3.retention[i],
-                aggregated=False
+                aggregated=False,
             )
             if i == 0:
                 self.assertNotEqual(list(pts), list(pts_copy))
@@ -115,14 +128,15 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         cmd_copy = command_copy.CommandCopy()
 
         # Test with metric names arguments
-        expected_metric_tuples = [
-            (self._METRIC_1, self._METRIC_2)
-        ]
+        expected_metric_tuples = [(self._METRIC_1, self._METRIC_2)]
         metric_tuples = cmd_copy._get_metric_tuples(
             accessor=self.accessor,
-            src=self._METRIC_1_NAME, dst=self._METRIC_2_NAME,
-            src_retention="", dst_retention="",
-            recursive=False, dry_run=False
+            src=self._METRIC_1_NAME,
+            dst=self._METRIC_2_NAME,
+            src_retention="",
+            dst_retention="",
+            recursive=False,
+            dry_run=False,
         )
         self.assertEqual(list(metric_tuples), expected_metric_tuples)
 
@@ -133,9 +147,12 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(len(list(list_metrics(self.accessor, "*.**"))), 2)
         metric_tuples = cmd_copy._get_metric_tuples(
             accessor=self.accessor,
-            src="test", dst="copy",
-            src_retention="", dst_retention="",
-            recursive=True, dry_run=False
+            src="test",
+            dst="copy",
+            src_retention="",
+            dst_retention="",
+            recursive=True,
+            dry_run=False,
         )
         self.assertEqual(len(list(metric_tuples)), 2)
         self.assertEqual(len(list(list_metrics(self.accessor, "*.**"))), 4)
@@ -145,12 +162,14 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         cmd_copy = command_copy.CommandCopy()
         metric_tuples = cmd_copy._get_metric_tuples(
             accessor=self.accessor,
-            src=self._METRIC_1_NAME, dst=self._METRIC_2_NAME,
-            src_retention="18*42s", dst_retention="50*300s",
-            recursive=False, dry_run=False
+            src=self._METRIC_1_NAME,
+            dst=self._METRIC_2_NAME,
+            src_retention="18*42s",
+            dst_retention="50*300s",
+            recursive=False,
+            dry_run=False,
         )
-        retention_str = [m.metadata.retention.as_string for m in list(metric_tuples)[
-            0]]
+        retention_str = [m.metadata.retention.as_string for m in list(metric_tuples)[0]]
         self.assertEqual(len(retention_str), 2)
         self.assertIn("18*42s", retention_str)
         self.assertIn("50*300s", retention_str)

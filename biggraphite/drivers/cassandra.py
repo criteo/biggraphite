@@ -53,14 +53,16 @@ from biggraphite.drivers.ttls import DAY, HOUR, MINUTE
 from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
 
 PM_DELETED_DIRECTORIES = prometheus_client.Counter(
-    'bg_cassandra_deleted_directories',
-    'Number of directory that have been deleted so far')
+    "bg_cassandra_deleted_directories",
+    "Number of directory that have been deleted so far",
+)
 PM_REPAIRED_DIRECTORIES = prometheus_client.Counter(
-    'bg_cassandra_repaired_directories',
-    'Number of missing directory created')
+    "bg_cassandra_repaired_directories", "Number of missing directory created"
+)
 PM_EXPIRED_METRICS = prometheus_client.Counter(
-    'bg_cassandra_expired_metrics',
-    'Number of metrics that has been cleaned due to expiration')
+    "bg_cassandra_expired_metrics",
+    "Number of metrics that has been cleaned due to expiration",
+)
 
 UPDATED_ON = prometheus_client.Summary(
     "bg_cassandra_updated_on_latency_seconds", "create latency in seconds"
@@ -99,10 +101,7 @@ DEFAULT_USE_LUCENE = False
 
 # Exceptions that are not considered fatal during batch jobs.
 # The affected range will simply be ignored.
-BATCH_IGNORED_EXCEPTIONS = (
-    cassandra.cluster.NoHostAvailable,
-    cassandra.ReadTimeout
-)
+BATCH_IGNORED_EXCEPTIONS = (cassandra.cluster.NoHostAvailable, cassandra.ReadTimeout)
 BATCH_MAX_IGNORED_ERRORS = 100
 
 DIRECTORY_SEPARATOR = common.DIRECTORY_SEPARATOR
@@ -151,110 +150,150 @@ OPTIONS = {
 def add_argparse_arguments(parser):
     """Add Cassandra arguments to an argparse parser."""
     parser.add_argument(
-        "--cassandra_keyspace", metavar="NAME",
+        "--cassandra_keyspace",
+        metavar="NAME",
         help="Cassandra keyspace.",
-        default=DEFAULT_KEYSPACE)
+        default=DEFAULT_KEYSPACE,
+    )
     parser.add_argument(
-        "--cassandra_username",
-        help="Cassandra username.",
-        default=None)
+        "--cassandra_username", help="Cassandra username.", default=None
+    )
     parser.add_argument(
-        "--cassandra_password",
-        help="Cassandra password.",
-        default=None)
+        "--cassandra_password", help="Cassandra password.", default=None
+    )
     parser.add_argument(
-        "--cassandra_contact_points", metavar="HOST[,HOST,...]",
+        "--cassandra_contact_points",
+        metavar="HOST[,HOST,...]",
         help="Hosts used for discovery.",
-        default=DEFAULT_CONTACT_POINTS)
+        default=DEFAULT_CONTACT_POINTS,
+    )
     parser.add_argument(
-        "--cassandra_concurrent_connections", metavar="N", type=int,
+        "--cassandra_concurrent_connections",
+        metavar="N",
+        type=int,
         help="Maximum concurrent connections to the cluster.",
-        default=DEFAULT_MAX_CONCURRENT_CONNECTIONS)
+        default=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+    )
     parser.add_argument(
-        "--cassandra_contact_points_metadata", metavar="HOST[,HOST,...]",
+        "--cassandra_contact_points_metadata",
+        metavar="HOST[,HOST,...]",
         help="Hosts used for discovery.",
-        default=None)
+        default=None,
+    )
     parser.add_argument(
-        "--cassandra_port", metavar="PORT", type=int,
+        "--cassandra_port",
+        metavar="PORT",
+        type=int,
         help="The native port to connect to.",
-        default=DEFAULT_PORT)
+        default=DEFAULT_PORT,
+    )
     parser.add_argument(
-        "--cassandra_port_metadata", metavar="PORT", type=int,
+        "--cassandra_port_metadata",
+        metavar="PORT",
+        type=int,
         help="The native port to connect to.",
-        default=None)
+        default=None,
+    )
     parser.add_argument(
-        "--cassandra_timeout", metavar="TIMEOUT", type=int,
+        "--cassandra_timeout",
+        metavar="TIMEOUT",
+        type=int,
         help="Cassandra query timeout in seconds.",
-        default=DEFAULT_TIMEOUT)
+        default=DEFAULT_TIMEOUT,
+    )
     parser.add_argument(
-        "--cassandra_compression", metavar="COMPRESSION", type=str,
+        "--cassandra_compression",
+        metavar="COMPRESSION",
+        type=str,
         help="Cassandra network compression.",
-        default=DEFAULT_COMPRESSION)
+        default=DEFAULT_COMPRESSION,
+    )
     parser.add_argument(
         "--cassandra_max_metrics_per_pattern",
         help="Maximum number of metrics returned for a glob query.",
-        default=DEFAULT_MAX_METRICS_PER_PATTERN)
+        default=DEFAULT_MAX_METRICS_PER_PATTERN,
+    )
     parser.add_argument(
-        "--cassandra_max_queries_per_pattern", type=int,
+        "--cassandra_max_queries_per_pattern",
+        type=int,
         help="Maximum number of sub-queries for any pattern-based query.",
-        default=DEFAULT_MAX_QUERIES_PER_PATTERN)
+        default=DEFAULT_MAX_QUERIES_PER_PATTERN,
+    )
     parser.add_argument(
-        "--cassandra_max_concurrent_queries_per_pattern", type=int,
+        "--cassandra_max_concurrent_queries_per_pattern",
+        type=int,
         help="Maximum number of concurrently executed sub-queries for any pattern-based query.",
-        default=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN)
+        default=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN,
+    )
     parser.add_argument(
         "--cassandra_trace",
         help="Enable query traces",
         default=DEFAULT_TRACE,
-        action="store_true")
+        action="store_true",
+    )
     parser.add_argument(
-        "--cassandra_bulkimport", action="store_true",
-        help="Generate files needed for bulkimport.")
+        "--cassandra_bulkimport",
+        action="store_true",
+        help="Generate files needed for bulkimport.",
+    )
     parser.add_argument(
         "--cassandra_enable_metrics",
         help="should expose metrics",
-        action='store_true',
-        default=False)
+        action="store_true",
+        default=False,
+    )
     parser.add_argument(
-        "--cassandra_writer", type=int,
-        help="Cassandra writer",
-        default=None)
+        "--cassandra_writer", type=int, help="Cassandra writer", default=None
+    )
     parser.add_argument(
-        "--cassandra_replica", type=int,
-        help="Cassandra replica",
-        default=None)
+        "--cassandra_replica", type=int, help="Cassandra replica", default=None
+    )
     parser.add_argument(
-        "--cassandra_meta_write_consistency", metavar="META_WRITE_CONS",
+        "--cassandra_meta_write_consistency",
+        metavar="META_WRITE_CONS",
         help="Metadata write consistency",
-        default=DEFAULT_META_WRITE_CONSISTENCY)
+        default=DEFAULT_META_WRITE_CONSISTENCY,
+    )
     parser.add_argument(
-        "--cassandra_meta_read_consistency", metavar="META_READ_CONS",
+        "--cassandra_meta_read_consistency",
+        metavar="META_READ_CONS",
         help="Metadata read consistency",
-        default=DEFAULT_META_READ_CONSISTENCY)
+        default=DEFAULT_META_READ_CONSISTENCY,
+    )
     parser.add_argument(
-        "--cassandra_meta_serial_consistency", metavar="META_SERIAL_CONS",
+        "--cassandra_meta_serial_consistency",
+        metavar="META_SERIAL_CONS",
         help="Metadata serial consistency",
-        default=DEFAULT_META_SERIAL_CONSISTENCY)
+        default=DEFAULT_META_SERIAL_CONSISTENCY,
+    )
     parser.add_argument(
-        "--cassandra_meta_background_consistency", metavar="META_BACKGROUND_CONS",
+        "--cassandra_meta_background_consistency",
+        metavar="META_BACKGROUND_CONS",
         help="Metadata background consistency",
-        default=DEFAULT_META_BACKGROUND_CONSISTENCY)
+        default=DEFAULT_META_BACKGROUND_CONSISTENCY,
+    )
     parser.add_argument(
-        "--cassandra_data_write_consistency", metavar="DATA_WRITE_CONS",
+        "--cassandra_data_write_consistency",
+        metavar="DATA_WRITE_CONS",
         help="Data write consistency",
-        default=DEFAULT_DATA_WRITE_CONSISTENCY)
+        default=DEFAULT_DATA_WRITE_CONSISTENCY,
+    )
     parser.add_argument(
-        "--cassandra_data_read_consistency", metavar="DATA_READ_CONS",
+        "--cassandra_data_read_consistency",
+        metavar="DATA_READ_CONS",
         help="Data read consistency",
-        default=DEFAULT_DATA_READ_CONSISTENCY)
+        default=DEFAULT_DATA_READ_CONSISTENCY,
+    )
     parser.add_argument(
         "--cassandra_updated_on_ttl_sec",
         help="Update 'updated_on' field every x seconds.",
-        default=DEFAULT_UPDATED_ON_TTL_SEC)
+        default=DEFAULT_UPDATED_ON_TTL_SEC,
+    )
     parser.add_argument(
         "--cassandra_read_on_sampling_rate",
         help="Updated 'read_on' field every x calls.",
-        default=DEFAULT_READ_ON_SAMPLING_RATE),
+        default=DEFAULT_READ_ON_SAMPLING_RATE,
+    ),
     parser.add_argument(
         "--cassandra_use_lucene",
         help="Use the Stratio Lucene Index.",
@@ -336,7 +375,7 @@ _METADATA_CREATION_CQL_PATH_COMPONENTS = ", ".join(
 )
 
 _METADATA_CREATION_CQL_METRICS_METADATA = str(
-    "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics_metadata ("
+    'CREATE TABLE IF NOT EXISTS "%(keyspace)s".metrics_metadata ('
     "  name text,"
     "  created_on  timeuuid,"
     "  updated_on  timeuuid,"
@@ -348,31 +387,31 @@ _METADATA_CREATION_CQL_METRICS_METADATA = str(
 )
 
 _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (created_on)"
+    'CREATE CUSTOM INDEX IF NOT EXISTS ON "%%(keyspace)s".%(table)s (created_on)'
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'mode': 'SPARSE'"
-    "  };" % {"table": "metrics_metadata"},
+    "  };" % {"table": "metrics_metadata"}
 ]
 
 _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (updated_on)"
+    'CREATE CUSTOM INDEX IF NOT EXISTS ON "%%(keyspace)s".%(table)s (updated_on)'
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'mode': 'SPARSE'"
-    "  };" % {"table": "metrics_metadata"},
+    "  };" % {"table": "metrics_metadata"}
 ]
 
 _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (read_on)"
+    'CREATE CUSTOM INDEX IF NOT EXISTS ON "%%(keyspace)s".%(table)s (read_on)'
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'mode': 'SPARSE'"
-    "  };" % {"table": "metrics_metadata"},
+    "  };" % {"table": "metrics_metadata"}
 ]
 
 _METADATA_CREATION_CQL_METRICS = str(
-    "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".metrics ("
+    'CREATE TABLE IF NOT EXISTS "%(keyspace)s".metrics ('
     "  name text,"
     "  parent text,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
@@ -380,7 +419,7 @@ _METADATA_CREATION_CQL_METRICS = str(
     ");"
 )
 _METADATA_CREATION_CQL_DIRECTORIES = str(
-    "CREATE TABLE IF NOT EXISTS \"%(keyspace)s\".directories ("
+    'CREATE TABLE IF NOT EXISTS "%(keyspace)s".directories ('
     "  name text,"
     "  parent text,"
     "  " + _METADATA_CREATION_CQL_PATH_COMPONENTS + ","
@@ -388,38 +427,38 @@ _METADATA_CREATION_CQL_DIRECTORIES = str(
     ");"
 )
 _METADATA_CREATION_CQL_ID_INDEXES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS ON \"%%(keyspace)s\".%(table)s (id)"
+    'CREATE CUSTOM INDEX IF NOT EXISTS ON "%%(keyspace)s".%(table)s (id)'
     "  USING 'org.apache.cassandra.index.sasi.SASIIndex'"
     "  WITH OPTIONS = {"
     "    'mode': 'SPARSE'"
-    "  };" % {"table": "metrics_metadata"},
+    "  };" % {"table": "metrics_metadata"}
 ]
-_METADATA_CREATION_CQL = ([
-    _METADATA_CREATION_CQL_METRICS,
-    _METADATA_CREATION_CQL_DIRECTORIES,
-    _METADATA_CREATION_CQL_METRICS_METADATA,
-] + _METADATA_CREATION_CQL_ID_INDEXES
-  + _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX
-  + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
-  + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
+_METADATA_CREATION_CQL = (
+    [
+        _METADATA_CREATION_CQL_METRICS,
+        _METADATA_CREATION_CQL_DIRECTORIES,
+        _METADATA_CREATION_CQL_METRICS_METADATA,
+    ]
+    + _METADATA_CREATION_CQL_ID_INDEXES
+    + _METADATA_CREATION_CQL_METRICS_METADATA_CREATED_ON_INDEX
+    + _METADATA_CREATION_CQL_METRICS_METADATA_UPDATED_ON_INDEX
+    + _METADATA_CREATION_CQL_METRICS_METADATA_READ_ON_INDEX
     # FIXME: Use the correct index in clean/repair
-  + sasi.METADATA_CREATION_CQL_PARENT_INDEXES
+    + sasi.METADATA_CREATION_CQL_PARENT_INDEXES
 )
 
-_METADATA_CREATION_CQL_SASI = (
-    sasi.METADATA_CREATION_CQL_PATH_INDEXES
-)
+_METADATA_CREATION_CQL_SASI = sasi.METADATA_CREATION_CQL_PATH_INDEXES
 GLOBSTAR = bg_glob.Globstar()
 
 _METADATA_CREATION_CQL_LUCENE = lucene.CQL_CREATE_INDICES
 
 _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
-    "  metric uuid,"           # Metric UUID.
+    "  metric uuid,"  # Metric UUID.
     "  time_start_ms bigint,"  # Lower bound for this row.
-    "  offset smallint,"       # time_start_ms + offset * precision = timestamp
-    "  shard  smallint,"       # Writer shard to allow restarts.
-    "  value double,"          # Value for the point.
+    "  offset smallint,"  # time_start_ms + offset * precision = timestamp
+    "  shard  smallint,"  # Writer shard to allow restarts.
+    "  value double,"  # Value for the point.
     # If value is sum, divide by count to get the avg.
     "  count smallint,"
     "  PRIMARY KEY ((metric, time_start_ms), offset, shard)"
@@ -439,10 +478,10 @@ _DATAPOINTS_CREATION_CQL_TEMPLATE = str(
 # Special schema for first stages.
 _DATAPOINTS0_CREATION_CQL_TEMPLATE = str(
     "CREATE TABLE IF NOT EXISTS %(table)s ("
-    "  metric uuid,"           # Metric UUID.
+    "  metric uuid,"  # Metric UUID.
     "  time_start_ms bigint,"  # Lower bound for this row.
-    "  offset smallint,"       # time_start_ms + offset * precision = timestamp
-    "  value double,"          # Value for the point.
+    "  offset smallint,"  # time_start_ms + offset * precision = timestamp
+    "  value double,"  # Value for the point.
     "  PRIMARY KEY ((metric, time_start_ms), offset)"
     ")"
     "  WITH CLUSTERING ORDER BY (offset DESC)"
@@ -458,14 +497,14 @@ _DATAPOINTS0_CREATION_CQL_TEMPLATE = str(
 )
 
 _DATAPOINTS_CREATION_CQL_CS_TEMPLATE = {
-    "DateTieredCompactionStrategy":  str(
+    "DateTieredCompactionStrategy": str(
         "    'base_time_seconds': '%(base_time_seconds)d',"
         "    'max_window_size_seconds': %(max_window_size_seconds)d"
     ),
     "TimeWindowCompactionStrategy": str(
         "    'compaction_window_unit': '%(compaction_window_unit)s',"
         "    'compaction_window_size': %(compaction_window_size)d"
-    )
+    ),
 }
 
 
@@ -480,10 +519,7 @@ def _row_size_ms(stage):
     """
     row_size_ms = min(
         stage.precision_ms * _MAX_PARTITION_SIZE,
-        max(
-            stage.precision_ms * _EXPECTED_POINTS_PER_READ,
-            _MIN_PARTITION_SIZE_MS
-        )
+        max(stage.precision_ms * _EXPECTED_POINTS_PER_READ, _MIN_PARTITION_SIZE_MS),
     )
     return bg_utils.round_up(row_size_ms, _ROW_SIZE_PRECISION_MS)
 
@@ -500,21 +536,26 @@ def getConnectionClass():
 
     if REACTOR_TO_USE == "TWISTED":
         from cassandra.io import twistedreactor as c_reactor
+
         CONNECTION_CLASS = c_reactor.TwistedConnection
 
     elif REACTOR_TO_USE == "LIBEV":
         from cassandra.io import libevreactor as c_libevreactor
+
         CONNECTION_CLASS = c_libevreactor.LibevConnection
 
     elif REACTOR_TO_USE == "ASYNC":
         from cassandra.io import asyncorereactor as c_asyncorereactor
+
         CONNECTION_CLASS = c_asyncorereactor.AsyncoreConnection
     else:
         try:
             from cassandra.io import libevreactor as c_libevreactor
+
             CONNECTION_CLASS = c_libevreactor.LibevConnection
         except ImportError:
             from cassandra.io import asyncorereactor as c_asyncorereactor
+
             CONNECTION_CLASS = c_asyncorereactor.AsyncoreConnection
 
     class _CappedConnection(CONNECTION_CLASS):
@@ -554,13 +595,15 @@ class _LazyPreparedStatements(object):
     bulkimport data.
     """
 
-    def __init__(self,
-                 session,
-                 keyspace,
-                 shard,
-                 bulkimport=False,
-                 data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
-                 data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY):
+    def __init__(
+        self,
+        session,
+        keyspace,
+        shard,
+        bulkimport=False,
+        data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
+        data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY,
+    ):
         self._keyspace = keyspace
         self._session = session
         self._bulkimport = bulkimport
@@ -572,8 +615,8 @@ class _LazyPreparedStatements(object):
         self._data_read_consistency = consistency_name_to_value[data_read_consistency]
 
         release_version = list(session.get_pools())[0].host.release_version
-        if version.LooseVersion(release_version) >= version.LooseVersion('3.9'):
-            self._COMPACTION_STRATEGY = 'TimeWindowCompactionStrategy'
+        if version.LooseVersion(release_version) >= version.LooseVersion("3.9"):
+            self._COMPACTION_STRATEGY = "TimeWindowCompactionStrategy"
         else:
             self._COMPACTION_STRATEGY = _COMPACTION_STRATEGY
 
@@ -588,8 +631,7 @@ class _LazyPreparedStatements(object):
 
     def _bulkimport_write_schema(self, stage, statement_str):
         filename = self.__bulkimport_filename(stage.as_full_string + ".cql")
-        log.info("Writing schema for '%s' in '%s'" %
-                 (stage.as_full_string, filename))
+        log.info("Writing schema for '%s' in '%s'" % (stage.as_full_string, filename))
         fh = open(filename, "w")
         fh.write(statement_str)
         fh.flush()
@@ -621,10 +663,12 @@ class _LazyPreparedStatements(object):
         fresh_time = stage.precision * _EXPECTED_POINTS_PER_READ
 
         cs_template = _DATAPOINTS_CREATION_CQL_CS_TEMPLATE.get(
-            self._COMPACTION_STRATEGY)
+            self._COMPACTION_STRATEGY
+        )
         if not cs_template:
             raise InvalidArgumentError(
-                "Unknown compaction strategy '%s'" % self._COMPACTION_STRATEGY)
+                "Unknown compaction strategy '%s'" % self._COMPACTION_STRATEGY
+            )
         cs_kwargs = {}
 
         if self._COMPACTION_STRATEGY == "DateTieredCompactionStrategy":
@@ -650,16 +694,16 @@ class _LazyPreparedStatements(object):
                     # But we don't want multiple sstables per hour.
                     HOUR,
                     # Also try to optimize for reads
-                    fresh_time
-                )
+                    fresh_time,
+                ),
             )
 
             # Make it readable.
             if window_size > DAY:
-                unit = 'DAYS'
+                unit = "DAYS"
                 window_size /= DAY
             else:
-                unit = 'HOURS'
+                unit = "HOURS"
                 window_size /= HOUR
 
             cs_kwargs["compaction_window_unit"] = unit
@@ -699,14 +743,14 @@ class _LazyPreparedStatements(object):
             suffix = "_0"
         else:
             suffix = "_aggr"
-        return "\"{}\".\"datapoints_{}p_{}s{}\"".format(
-            self._keyspace, stage.points, stage.precision, suffix)
+        return '"{}"."datapoints_{}p_{}s{}"'.format(
+            self._keyspace, stage.points, stage.precision, suffix
+        )
 
     def prepare_insert(self, stage, metric_id, time_start_ms, offset, value, count):
         statement = self.__stage_to_insert.get(stage)
         if stage.aggregated():
-            args = (metric_id, time_start_ms, offset,
-                    self._shard, value, count)
+            args = (metric_id, time_start_ms, offset, self._shard, value, count)
         else:
             args = (metric_id, time_start_ms, offset, value)
 
@@ -737,9 +781,10 @@ class _LazyPreparedStatements(object):
         self.__stage_to_insert[stage] = statement
         return statement, args
 
-    def prepare_select(self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset):
-        limit = (row_max_offset - row_min_offset) * \
-            bg_accessor.SHARD_MAX_REPLICAS
+    def prepare_select(
+        self, stage, metric_id, row_start_ms, row_min_offset, row_max_offset
+    ):
+        limit = (row_max_offset - row_min_offset) * bg_accessor.SHARD_MAX_REPLICAS
         args = (metric_id, row_start_ms, row_min_offset, row_max_offset, limit)
 
         # Don't execute useless queries.
@@ -762,15 +807,14 @@ class _LazyPreparedStatements(object):
             " AND offset >= ? AND offset < ? "
             " ORDER BY offset"
             " LIMIT ?;"
-        ) % {"columns": ", ".join(columns),
-             "table": self._get_table_name(stage)}
+        ) % {"columns": ", ".join(columns), "table": self._get_table_name(stage)}
         statement = self._session.prepare(statement_str)
         statement.consistency_level = self._data_read_consistency
         self.__stage_to_select[stage] = statement
         return statement, args
 
 
-def expose_metrics(metrics, cluster_name=''):
+def expose_metrics(metrics, cluster_name=""):
     """Adaptor to notify prometheus of Cassandra's metrics change."""
     metrics_adp = {}
 
@@ -782,10 +826,9 @@ def expose_metrics(metrics, cluster_name=''):
         return inner
 
     for attr in dir(metrics):
-        if attr.startswith('on_'):
-            metric_name = 'bg_cassandra_' + \
-                cluster_name + '_' + attr[3:]
-            cpt = prometheus_client.Counter(metric_name, '')
+        if attr.startswith("on_"):
+            metric_name = "bg_cassandra_" + cluster_name + "_" + attr[3:]
+            cpt = prometheus_client.Counter(metric_name, "")
             metrics_adp[metric_name] = cpt
             setattr(metrics, attr, counter_adaptor(cpt, attr))
 
@@ -798,34 +841,36 @@ class _CassandraAccessor(bg_accessor.Accessor):
     Please refer to bg_accessor.Accessor.
     """
 
-    def __init__(self,
-                 keyspace=DEFAULT_KEYSPACE,
-                 username=None,
-                 password=None,
-                 contact_points=DEFAULT_CONTACT_POINTS,
-                 port=DEFAULT_PORT,
-                 contact_points_metadata=None,
-                 port_metadata=None,
-                 timeout=DEFAULT_TIMEOUT,
-                 compression=DEFAULT_COMPRESSION,
-                 max_metrics_per_pattern=DEFAULT_MAX_METRICS_PER_PATTERN,
-                 max_queries_per_pattern=DEFAULT_MAX_QUERIES_PER_PATTERN,
-                 max_concurrent_queries_per_pattern=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN,
-                 trace=DEFAULT_TRACE,
-                 max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
-                 enable_metrics=False,
-                 bulkimport=DEFAULT_BULKIMPORT,
-                 writer=None,
-                 replica=0,
-                 meta_write_consistency=DEFAULT_META_WRITE_CONSISTENCY,
-                 meta_read_consistency=DEFAULT_META_READ_CONSISTENCY,
-                 meta_serial_consistency=DEFAULT_META_SERIAL_CONSISTENCY,
-                 meta_background_consistency=DEFAULT_META_BACKGROUND_CONSISTENCY,
-                 data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
-                 data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY,
-                 updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
-                 read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
-                 use_lucene=DEFAULT_USE_LUCENE):
+    def __init__(
+        self,
+        keyspace=DEFAULT_KEYSPACE,
+        username=None,
+        password=None,
+        contact_points=DEFAULT_CONTACT_POINTS,
+        port=DEFAULT_PORT,
+        contact_points_metadata=None,
+        port_metadata=None,
+        timeout=DEFAULT_TIMEOUT,
+        compression=DEFAULT_COMPRESSION,
+        max_metrics_per_pattern=DEFAULT_MAX_METRICS_PER_PATTERN,
+        max_queries_per_pattern=DEFAULT_MAX_QUERIES_PER_PATTERN,
+        max_concurrent_queries_per_pattern=DEFAULT_MAX_CONCURRENT_QUERIES_PER_PATTERN,
+        trace=DEFAULT_TRACE,
+        max_concurrent_connections=DEFAULT_MAX_CONCURRENT_CONNECTIONS,
+        enable_metrics=False,
+        bulkimport=DEFAULT_BULKIMPORT,
+        writer=None,
+        replica=0,
+        meta_write_consistency=DEFAULT_META_WRITE_CONSISTENCY,
+        meta_read_consistency=DEFAULT_META_READ_CONSISTENCY,
+        meta_serial_consistency=DEFAULT_META_SERIAL_CONSISTENCY,
+        meta_background_consistency=DEFAULT_META_BACKGROUND_CONSISTENCY,
+        data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
+        data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY,
+        updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
+        read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
+        use_lucene=DEFAULT_USE_LUCENE,
+    ):
         """Record parameters needed to connect.
 
         Args:
@@ -895,28 +940,36 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__read_on_sampling_rate = read_on_sampling_rate
         self._meta_write_consistency = consistency_name_to_value[meta_write_consistency]
         self._meta_read_consistency = consistency_name_to_value[meta_read_consistency]
-        self._meta_serial_consistency = consistency_name_to_value[meta_serial_consistency]
-        self._meta_background_consistency = consistency_name_to_value[meta_background_consistency]
+        self._meta_serial_consistency = consistency_name_to_value[
+            meta_serial_consistency
+        ]
+        self._meta_background_consistency = consistency_name_to_value[
+            meta_background_consistency
+        ]
         self._data_write_consistency = consistency_name_to_value[data_write_consistency]
         self._data_read_consistency = consistency_name_to_value[data_read_consistency]
         if writer is None:
             # TODO: Currently a random shard is good enough.
             # We should use a counter stored in cassandra instead.
             writer = bg_accessor.pack_shard(
-                replica, random.getrandbits(bg_accessor.SHARD_WRITER_BITS))
+                replica, random.getrandbits(bg_accessor.SHARD_WRITER_BITS)
+            )
         # Cassandra expects a signed short, make sure we give it something
         # it understands.
         self.__shard = self.__shard = bg_accessor.pack_shard(replica, writer)
-        self.__shard = c_marshal.int16_unpack(
-            c_marshal.uint16_pack(self.__shard))
+        self.__shard = c_marshal.int16_unpack(c_marshal.uint16_pack(self.__shard))
 
         if self.use_lucene:
             self.metadata_query_generator = lucene.CassandraStratioLucene(
-                self.keyspace_metadata, self.max_queries_per_pattern, self.max_metrics_per_pattern
+                self.keyspace_metadata,
+                self.max_queries_per_pattern,
+                self.max_metrics_per_pattern,
             )
         else:
             self.metadata_query_generator = sasi.CassandraSASI(
-                self.keyspace_metadata, self.max_queries_per_pattern, self.max_metrics_per_pattern
+                self.keyspace_metadata,
+                self.max_queries_per_pattern,
+                self.max_metrics_per_pattern,
             )
 
     def connect(self):
@@ -945,99 +998,101 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         # Metadata (metrics and directories)
         components_names = ", ".join(
-            "component_%d" % n for n in range(_COMPONENTS_MAX_LEN))
+            "component_%d" % n for n in range(_COMPONENTS_MAX_LEN)
+        )
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
         self.__insert_metric_statement = __prepare(
-            "INSERT INTO \"%s\".metrics (name, parent, %s) VALUES (?, ?, %s);"
+            'INSERT INTO "%s".metrics (name, parent, %s) VALUES (?, ?, %s);'
             % (self.keyspace_metadata, components_names, components_marks)
         )
         self.__insert_directory_statement = __prepare(
-            "INSERT INTO \"%s\".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;"
+            'INSERT INTO "%s".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;'
             % (self.keyspace_metadata, components_names, components_marks)
         )
-        self.__insert_directory_statement.serial_consistency_level = self._meta_serial_consistency
+        self.__insert_directory_statement.serial_consistency_level = (
+            self._meta_serial_consistency
+        )
         # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_metadata_statement = __prepare(
             "SELECT id, config, toUnixTimestamp(updated_on)"
-            " FROM \"%s\".metrics_metadata WHERE name = ?;"
-            % self.keyspace_metadata,
-            self._meta_read_consistency
+            ' FROM "%s".metrics_metadata WHERE name = ?;' % self.keyspace_metadata,
+            self._meta_read_consistency,
         )
         self.__select_metric_statement = __prepare(
-            "SELECT * FROM \"%s\".metrics WHERE name = ?;"
-            % self.keyspace_metadata,
-            self._meta_read_consistency
+            'SELECT * FROM "%s".metrics WHERE name = ?;' % self.keyspace_metadata,
+            self._meta_read_consistency,
         )
         self.__select_directory_statement = __prepare(
-            "SELECT * FROM \"%s\".directories WHERE name = ?;"
-            % self.keyspace_metadata,
-            self._meta_read_consistency
+            'SELECT * FROM "%s".directories WHERE name = ?;' % self.keyspace_metadata,
+            self._meta_read_consistency,
         )
         self.__update_metric_metadata_statement = __prepare(
-            "UPDATE \"%s\".metrics_metadata SET config=?, updated_on=now()"
+            'UPDATE "%s".metrics_metadata SET config=?, updated_on=now()'
             " WHERE name=?;" % self.keyspace_metadata
         )
         self.__touch_metrics_metadata_statement = __prepare(
-            "UPDATE \"%s\".metrics_metadata SET updated_on=now()"
+            'UPDATE "%s".metrics_metadata SET updated_on=now()'
             " WHERE name=?;" % self.keyspace_metadata
         )
         self.__insert_metrics_metadata_statement = __prepare(
-            "INSERT INTO \"%s\".metrics_metadata (name, created_on, updated_on, id, config)"
+            'INSERT INTO "%s".metrics_metadata (name, created_on, updated_on, id, config)'
             " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
         )
         self.__update_metric_read_on_metadata_statement = __prepare(
-            "UPDATE \"%s\".metrics_metadata SET read_on=now()"
+            'UPDATE "%s".metrics_metadata SET read_on=now()'
             " WHERE name=?;" % self.keyspace_metadata
         )
         self.__delete_metric = __prepare(
-            "DELETE FROM \"%s\".metrics WHERE name=?;" % (
-                self.keyspace_metadata),
+            'DELETE FROM "%s".metrics WHERE name=?;' % (self.keyspace_metadata),
             consistency=cassandra.ConsistencyLevel.QUORUM,
         )
         self.__delete_directory = __prepare(
-            "DELETE FROM \"%s\".directories WHERE name=?;" % (
-                self.keyspace_metadata),
+            'DELETE FROM "%s".directories WHERE name=?;' % (self.keyspace_metadata),
             consistency=cassandra.ConsistencyLevel.QUORUM,
         )
         self.__delete_metric_metadata = __prepare(
-            "DELETE FROM \"%s\".metrics_metadata WHERE name=?;" % (
-                self.keyspace_metadata),
+            'DELETE FROM "%s".metrics_metadata WHERE name=?;'
+            % (self.keyspace_metadata),
             consistency=cassandra.ConsistencyLevel.QUORUM,
         )
 
     def _connect_clusters(self):
         self.__cluster_metadata, self.__session_metadata = self._connect(
-            self.__cluster_metadata, self.__session_metadata,
-            self.contact_points_metadata, self.port_metadata
+            self.__cluster_metadata,
+            self.__session_metadata,
+            self.contact_points_metadata,
+            self.port_metadata,
         )
         if self.contact_points_data != self.contact_points_metadata:
             self.__cluster_data, self.__session_data = self._connect(
-                self.__cluster_data, self.__session_data,
-                self.contact_points_data, self.port
+                self.__cluster_data,
+                self.__session_data,
+                self.contact_points_data,
+                self.port,
             )
         else:
             self.__session_data = self.__session_metadata
             self.__cluster_data = self.__cluster_metadata
 
         self.__lazy_statements = _LazyPreparedStatements(
-            self.__session_data, self.keyspace, self.__shard, self.__bulkimport)
+            self.__session_data, self.keyspace, self.__shard, self.__bulkimport
+        )
 
         if self.__enable_metrics:
             self.__metrics["metadata"] = expose_metrics(
-                self.__cluster_metadata.metrics, 'metadata')
-            self.__metrics["data"] = expose_metrics(
-                self.__cluster_data.metrics, 'data')
+                self.__cluster_metadata.metrics, "metadata"
+            )
+            self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, "data")
 
     def _connect(self, cluster, session, contact_points, port):
-        lb_policy = c_policies.TokenAwarePolicy(
-            c_policies.DCAwareRoundRobinPolicy()
-        )
+        lb_policy = c_policies.TokenAwarePolicy(c_policies.DCAwareRoundRobinPolicy())
         # See https://datastax-oss.atlassian.net/browse/PYTHON-643
         lb_policy.shuffle_replicas = True
 
         if not cluster:
             cluster = c_cluster.Cluster(
-                contact_points, port,
+                contact_points,
+                port,
                 compression=self.__compression,
                 auth_provider=self.auth_provider,
                 # Metrics are disabled because too expensive to compute.
@@ -1066,9 +1121,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             kwargs["trace"] = True
 
         if args:
-            log.debug(' '.join([str(arg) for arg in args]))
+            log.debug(" ".join([str(arg) for arg in args]))
         if kwargs:
-            log.debug(' '.join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
+            log.debug(" ".join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
         result = session.execute(*args, **kwargs)
 
         if self.__trace:
@@ -1086,18 +1141,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _execute_async(self, session, *args, **kwargs):
         """Wrapper for __session.execute_async()."""
         if self.__bulkimport:
+
             class _FakeFuture(object):
                 def add_callbacks(self, on_result, on_failure):
                     on_result(None)
+
             return _FakeFuture()
 
         if self.__trace:
             kwargs["trace"] = True
 
         if args:
-            log.debug(' '.join([str(arg) for arg in args]))
+            log.debug(" ".join([str(arg) for arg in args]))
         if kwargs:
-            log.debug(' '.join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
+            log.debug(" ".join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
         future = session.execute_async(*args, **kwargs)
 
         if self.__trace:
@@ -1121,7 +1178,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         if not self.__trace:
             return c_concurrent.execute_concurrent(
-                session, statements_and_parameters, **kwargs)
+                session, statements_and_parameters, **kwargs
+            )
 
         query_results = []
         for statement, params in statements_and_parameters:
@@ -1129,7 +1187,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 result = self._execute(session, statement, params, trace=True)
                 success = True
             except Exception as e:
-                if kwargs.get('raise_on_first_error') is True:
+                if kwargs.get("raise_on_first_error") is True:
                     raise e
                 result = e
                 success = False
@@ -1150,7 +1208,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         components = self._components_from_name(metric.name)
-        assert(metric.id is not None and metric.metadata is not None)
+        assert metric.id is not None and metric.metadata is not None
 
         queries = []
 
@@ -1165,27 +1223,27 @@ class _CassandraAccessor(bg_accessor.Accessor):
         padding_len = _COMPONENTS_MAX_LEN - len(components)
         padding = [c_query.UNSET_VALUE] * padding_len
         metadata_dict = metric.metadata.as_string_dict()
-        queries.append((
-            self.__insert_metric_statement,
-            [metric.name, parent_dir + "."] + components + padding,
-        ))
-        queries.append((
-            self.__insert_metrics_metadata_statement,
-            [metric.name, metric.id, metadata_dict],
-        ))
-
-        self._execute_concurrent_metadata(
-            queries,
-            raise_on_first_error=False,
+        queries.append(
+            (
+                self.__insert_metric_statement,
+                [metric.name, parent_dir + "."] + components + padding,
+            )
         )
+        queries.append(
+            (
+                self.__insert_metrics_metadata_statement,
+                [metric.name, metric.id, metadata_dict],
+            )
+        )
+
+        self._execute_concurrent_metadata(queries, raise_on_first_error=False)
 
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).update_metric(name, updated_metadata)
 
         if not self.has_metric(name):
-            raise InvalidArgumentError(
-                "Unknown metric '%s'" % name)
+            raise InvalidArgumentError("Unknown metric '%s'" % name)
 
         # Cleanup name (avoid double dots)
         name = ".".join(self._components_from_name(name)[:-1])
@@ -1194,7 +1252,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metadata_dict = updated_metadata.as_string_dict()
         self._execute_metadata(
             self.__update_metric_metadata_statement,
-            [metadata_dict, encoded_metric_name])
+            [metadata_dict, encoded_metric_name],
+        )
 
     def delete_metric(self, name):
         """See bg_accessor.Accessor."""
@@ -1210,7 +1269,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _create_parent_dirs_queries(self, components):
         queries = []
         path = []
-        parent = ''
+        parent = ""
         # Incrementally construct parents, till we reach the leaf component.
         # -2 skips leaf (metric name) and _LAST_COMPONENT marker.
         for component in components[:-2]:
@@ -1219,11 +1278,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
             path_components = path + [_LAST_COMPONENT]
             padding_len = _COMPONENTS_MAX_LEN - len(path_components)
             padding = [c_query.UNSET_VALUE] * padding_len
-            queries.append((
-                self.__insert_directory_statement,
-                [name, parent + DIRECTORY_SEPARATOR] +
-                path_components + padding,
-            ))
+            queries.append(
+                (
+                    self.__insert_directory_statement,
+                    [name, parent + DIRECTORY_SEPARATOR] + path_components + padding,
+                )
+            )
             parent = name
 
         return queries
@@ -1239,13 +1299,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).drop_all_metrics()
         for keyspace in self.keyspace, self.keyspace_metadata:
             session = self.__session_data if self.keyspace else self.__session_metadata
-            statement_str = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
-            tables = [r[0] for r in self._execute(
-                session, statement_str, (keyspace, ))]
+            statement_str = (
+                "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
+            )
+            tables = [r[0] for r in self._execute(session, statement_str, (keyspace,))]
 
             for table in tables:
-                self._execute(
-                    session, "TRUNCATE \"%s\".\"%s\";" % (keyspace, table))
+                self._execute(session, 'TRUNCATE "%s"."%s";' % (keyspace, table))
         if self.__downsampler:
             self.__downsampler.clear()
         if self.__delayed_writer:
@@ -1254,34 +1314,43 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).fetch_points(
-            metric, time_start, time_end, stage)
+            metric, time_start, time_end, stage
+        )
 
         self._update_metric_read_on(metric.name)
 
         log.debug(
             "fetch: [%s, start=%d, end=%d, stage=%s]",
-            metric.name, time_start, time_end, stage)
+            metric.name,
+            time_start,
+            time_end,
+            stage,
+        )
 
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
         time_start_ms = max(time_end_ms - stage.duration_ms, time_start_ms)
 
         statements_and_args = self._fetch_points_make_selects(
-            metric.id, time_start_ms, time_end_ms, stage)
+            metric.id, time_start_ms, time_end_ms, stage
+        )
         # Note: it's unclear if this returns as soon as the first
         # query has been executed or not. If yes, consider using execute_async
         # directly.
         query_results = self._execute_concurrent_data(
-            statements_and_args,
-            results_generator=True,
+            statements_and_args, results_generator=True
         )
 
         return bg_accessor.PointGrouper(
-            metric, time_start_ms, time_end_ms, stage, query_results, aggregated=aggregated
+            metric,
+            time_start_ms,
+            time_end_ms,
+            stage,
+            query_results,
+            aggregated=aggregated,
         )
 
-    def _fetch_points_make_selects(self, metric_id, time_start_ms,
-                                   time_end_ms, stage):
+    def _fetch_points_make_selects(self, metric_id, time_start_ms, time_end_ms, stage):
         # We fetch with ms precision, even though we only store with second
         # precision.
         row_size_ms_stage = _row_size_ms(stage)
@@ -1324,17 +1393,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         with READ_ON.time():
-            log.debug('updating read_on for %s' % metric_name)
+            log.debug("updating read_on for %s" % metric_name)
             self._execute_async_metadata(
-                self.__update_metric_read_on_metadata_statement,
-                (metric_name,)
+                self.__update_metric_read_on_metadata_statement, (metric_name,)
             )
 
     def _select_metric(self, metric_name):
         """Fetch metric metadata."""
         encoded_metric_name = bg_metric.encode_metric_name(metric_name)
-        result = list(self._execute_metadata(
-            self.__select_metric_metadata_statement, (encoded_metric_name, )))
+        result = list(
+            self._execute_metadata(
+                self.__select_metric_metadata_statement, (encoded_metric_name,)
+            )
+        )
         if not result:
             return None
 
@@ -1364,8 +1435,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def has_directory(self, directory):
         encoded_directory = bg_metric.encode_metric_name(directory)
-        result = list(self._execute_metadata(
-            self.__select_directory_statement, (encoded_directory, )))
+        result = list(
+            self._execute_metadata(
+                self.__select_directory_statement, (encoded_directory,)
+            )
+        )
         return bool(result)
 
     def __query_key(self, statement, params):
@@ -1387,7 +1461,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return None
         uid = result[0]
         config = result[1]
-        updated_on = datetime.datetime.fromtimestamp(result[2]/1000)
+        updated_on = datetime.datetime.fromtimestamp(result[2] / 1000)
 
         # Return None if any of the important column is missing.
         if not uid or not config:
@@ -1419,10 +1493,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         components = self.__glob_parser.parse(glob)
         if len(components) > _COMPONENTS_MAX_LEN:
             raise bg_accessor.InvalidGlobError(
-                "Contains %d components, but we support %d at most" % (
-                    len(components),
-                    _COMPONENTS_MAX_LEN,
-                )
+                "Contains %d components, but we support %d at most"
+                % (len(components), _COMPONENTS_MAX_LEN)
             )
 
         if self.__glob_parser.is_fully_defined(components):
@@ -1430,22 +1502,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # `glob` can't be used directly because, for example a.{b} would be a.b.
             # We could probably extract some code from cassandra_sasi to do this when globs
             # are combinations of fully defined paths.
-            if table == 'metrics':
+            if table == "metrics":
                 query = self.__select_metric_statement
             else:
                 query = self.__select_directory_statement
             path = DIRECTORY_SEPARATOR.join([c[0] for c in components])
             queries = [query.bind([path])]
         else:
-            queries = self.metadata_query_generator.generate_queries(
-                table, components)
+            queries = self.metadata_query_generator.generate_queries(table, components)
 
         statements_with_params = []
         for query in queries:
             if isinstance(query, six.string_types):
                 statement = c_query.SimpleStatement(
-                    query,
-                    consistency_level=self._meta_read_consistency,
+                    query, consistency_level=self._meta_read_consistency
                 )
             else:
                 statement = query
@@ -1455,7 +1525,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # As queries can be statements, we use the string representation
             # (which always contains the query and the parameters).
             # WARNING: With the current code PrepareStatement would not be cached.
-            keys_to_queries = {self.__query_key(*sp): sp for sp in statements_with_params}
+            keys_to_queries = {
+                self.__query_key(*sp): sp for sp in statements_with_params
+            }
             cached_results = self.cache.get_many(keys_to_queries.keys())
             for key in cached_results:
                 statements_with_params.remove(keys_to_queries[key])
@@ -1474,8 +1546,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             fetched_results = collections.defaultdict(list)
 
             too_many_metrics = TooManyMetrics(
-                "Query %s on %s yields more than %d results" %
-                (glob, table, self.max_metrics_per_pattern)
+                "Query %s on %s yields more than %d results"
+                % (glob, table, self.max_metrics_per_pattern)
             )
 
             for _, names in cached_results.items():
@@ -1498,12 +1570,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
                             raise too_many_metrics
                         yield name
             except cassandra.DriverException as e:
-                raise CassandraError(
-                    'Failed to glob: %s on %s' % (table, glob), e)
+                raise CassandraError("Failed to glob: %s on %s" % (table, glob), e)
 
             if self.cache and fetched_results:
-                self.cache.set_many(
-                    fetched_results, timeout=self.cache_metadata_ttl)
+                self.cache.set_many(fetched_results, timeout=self.cache_metadata_ttl)
 
         return _extract_results(query_results)
 
@@ -1523,8 +1593,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See bg_accessor.Accessor."""
-        super(_CassandraAccessor, self).insert_points_async(
-            metric, datapoints, on_done)
+        super(_CassandraAccessor, self).insert_points_async(metric, datapoints, on_done)
 
         log.debug("insert: [%s, %s]", metric.name, datapoints)
         datapoints = self.__downsampler.feed(metric, datapoints)
@@ -1550,8 +1619,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
             offset = stage.step_ms(time_offset_ms)
 
             statement, args = self.__lazy_statements.prepare_insert(
-                stage=stage, metric_id=metric.id, time_start_ms=time_start_ms,
-                offset=offset, value=value, count=count,
+                stage=stage,
+                metric_id=metric.id,
+                time_start_ms=time_start_ms,
+                offset=offset,
+                value=value,
+                count=count,
             )
 
             # We group by table/partition.
@@ -1565,7 +1638,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             else:
                 batch = c_query.BatchStatement(
                     consistency_level=self._data_write_consistency,
-                    batch_type=c_query.BatchType.UNLOGGED
+                    batch_type=c_query.BatchType.UNLOGGED,
                 )
                 for statement, args in statements_and_args:
                     if statement is not None:
@@ -1575,14 +1648,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 count = len(statements_and_args)
 
             future = self._execute_async(
-                session=self.__session_data, query=statement, parameters=args)
+                session=self.__session_data, query=statement, parameters=args
+            )
             if count_down:
                 if count > 1:
                     # If batched we will get less results.
                     count_down.count -= count - 1
                 future.add_callbacks(
-                    count_down.on_cassandra_result,
-                    count_down.on_cassandra_failure,
+                    count_down.on_cassandra_result, count_down.on_cassandra_failure
                 )
 
     def shutdown(self):
@@ -1617,8 +1690,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         keyspaces = self.__cluster_metadata.metadata.keyspaces.keys()
         if self.keyspace_metadata not in keyspaces:
-            raise CassandraError("Missing keyspace '%s'." %
-                                 self.keyspace_metadata)
+            raise CassandraError("Missing keyspace '%s'." % self.keyspace_metadata)
 
         keyspaces = self.__cluster_data.metadata.keyspaces.keys()
         if self.keyspace not in keyspaces:
@@ -1639,11 +1711,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         schema += " -- Already Existing Tables (updated schemas)\n"
         tables = self.__cluster_data.metadata.keyspaces[self.keyspace].tables
         for table in tables:
-            comment = tables[table].options.get('comment')
-            if table.startswith('datapoints_'):
+            comment = tables[table].options.get("comment")
+            if table.startswith("datapoints_"):
                 if not comment:
                     continue
-                stage_str = json.loads(comment).get('stage')
+                stage_str = json.loads(comment).get("stage")
                 if not stage_str:
                     continue
                 try:
@@ -1651,17 +1723,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 except Exception as e:
                     log.debug(e)
                     continue
-                query = self.__lazy_statements._create_datapoints_table_stmt(
-                    stage)
+                query = self.__lazy_statements._create_datapoints_table_stmt(stage)
                 schema += query + "\n\n"
 
         if retentions:
             schema += " -- New Tables\n"
-            stages = set(
-                [s for retention in retentions for s in retention.stages])
+            stages = set([s for retention in retentions for s in retention.stages])
             for stage in stages:
-                query = self.__lazy_statements._create_datapoints_table_stmt(
-                    stage)
+                query = self.__lazy_statements._create_datapoints_table_stmt(stage)
                 schema += query + "\n\n"
                 if not dry_run:
                     self._execute_data(query)
@@ -1690,25 +1759,28 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             # Update Cassandra.
             self._execute_async_metadata(
-                self.__touch_metrics_metadata_statement,
-                (metric.name,)
+                self.__touch_metrics_metadata_statement, (metric.name,)
             )
 
-    def map(self, callback, start_key=None, end_key=None, shard=1, nshards=0, errback=None):
+    def map(
+        self, callback, start_key=None, end_key=None, shard=1, nshards=0, errback=None
+    ):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
         tokens directly.
         """
         start_token, stop_token = self._get_search_range(
-            start_key, end_key, shard, nshards)
+            start_key, end_key, shard, nshards
+        )
 
         select = self._prepare_background_request(
             "SELECT name, token(name), id, config, "
             "dateOf(created_on), dateOf(updated_on), dateOf(read_on) "
-            "FROM \"%s\".metrics_metadata "
+            'FROM "%s".metrics_metadata '
             "WHERE token(name) > ? LIMIT %d ;"
-            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
+            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL)
+        )
         select.request_timeout = None
         select.fetch_size = DEFAULT_MAX_BATCH_UTIL
 
@@ -1742,13 +1814,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 try:
                     metadata = bg_metric.MetricMetadata.from_string_dict(config)
                     metric = bg_metric.Metric(
-                        metric_name, uid, metadata,
-                        created_on, updated_on, read_on,
+                        metric_name, uid, metadata, created_on, updated_on, read_on
                     )
                 # Avoid failing if either name, id, or metadata is missing.
                 except Exception as e:
-                    log.debug("Skipping corrupted metric: %s raising %s" %
-                              (result, str(e)))
+                    log.debug(
+                        "Skipping corrupted metric: %s raising %s" % (result, str(e))
+                    )
                     if errback:
                         errback(metric_name)
                     continue
@@ -1775,17 +1847,23 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             token = rows[-1][1]
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1,
-               callback_on_progress=None):
+    def repair(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """See bg_accessor.Accessor.
 
         Slight change for start_key and end_key, they are intrepreted as
         tokens directly.
         """
-        super(_CassandraAccessor, self).repair(
-            start_key, end_key, shard, nshards)
+        super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
         self._repair_missing_dir(
-            start_key, end_key, shard, nshards, callback_on_progress)
+            start_key, end_key, shard, nshards, callback_on_progress
+        )
 
     def _get_search_range(self, start_key, end_key, shard, nshards):
         partitioner = self.__cluster_data.metadata.partitioner
@@ -1803,21 +1881,29 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         return (start_token, stop_token)
 
-    def _repair_missing_dir(self, start_key=None, end_key=None, shard=0, nshards=1,
-                            callback_on_progress=None):
+    def _repair_missing_dir(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """Create directory that does not exist for a metric to be accessible."""
         start_token, stop_token = self._get_search_range(
-            start_key, end_key, shard, nshards)
+            start_key, end_key, shard, nshards
+        )
 
         dir_query = self._prepare_background_request(
-            "SELECT name, token(name) FROM \"%s\".directories"
+            'SELECT name, token(name) FROM "%s".directories'
             " WHERE token(name) > ? LIMIT %d;"
-            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL))
+            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL)
+        )
 
         has_directory_query = self._prepare_background_request(
-            "SELECT name FROM \"%s\".directories"
-            " WHERE name = ? LIMIT 1;"
-            % self.keyspace_metadata)
+            'SELECT name FROM "%s".directories'
+            " WHERE name = ? LIMIT 1;" % self.keyspace_metadata
+        )
 
         def directories_to_check(result):
             for row in result:
@@ -1837,7 +1923,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 dir_name = response.result_or_exc.response_future.query.values[0]
                 log.info("Scheduling repair for '%s'" % dir_name)
                 components = self._components_from_name(
-                    dir_name + DIRECTORY_SEPARATOR + '_')
+                    dir_name + DIRECTORY_SEPARATOR + "_"
+                )
                 queries = self._create_parent_dirs_queries(components)
                 for query in queries:
                     PM_REPAIRED_DIRECTORIES.inc()
@@ -1847,7 +1934,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
-                dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+                dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+            )
             if len(result.current_rows) == 0:
                 break
 
@@ -1856,47 +1944,54 @@ class _CassandraAccessor(bg_accessor.Accessor):
             parent_dirs = self._execute_concurrent_metadata(
                 directories_to_check(result),
                 concurrency=self.max_concurrent_connections,
-                raise_on_first_error=False)
+                raise_on_first_error=False,
+            )
 
             rets = self._execute_concurrent_metadata(
                 directories_to_create(parent_dirs),
                 concurrency=self.max_concurrent_connections,
-                raise_on_first_error=False)
+                raise_on_first_error=False,
+            )
 
             for ret in rets:
                 if not ret.success:
                     log.warn(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token,
-                                     stop_token - start_token)
+                callback_on_progress(token - start_token, stop_token - start_token)
 
-    def _clean_empty_dir(self, start_key=None, end_key=None, shard=0, nshards=1,
-                         callback_on_progress=None):
+    def _clean_empty_dir(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """Remove directory that does not contains any metrics."""
         start_token, stop_token = self._get_search_range(
-            start_key, end_key, shard, nshards)
+            start_key, end_key, shard, nshards
+        )
 
         dir_query = self._prepare_background_request(
             "SELECT name, token(name)"
-            " FROM \"%s\".directories"
+            ' FROM "%s".directories'
             " WHERE token(name) > ? LIMIT %d;"
-            % (self.keyspace_metadata,
-               DEFAULT_MAX_BATCH_UTIL))
+            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL)
+        )
         has_metric_query = self._prepare_background_request(
-            "SELECT name FROM \"%s\".metrics"
-            " WHERE parent LIKE ? LIMIT 1;"
-            % (self.keyspace_metadata, ))
+            'SELECT name FROM "%s".metrics'
+            " WHERE parent LIKE ? LIMIT 1;" % (self.keyspace_metadata,)
+        )
         delete_empty_dir_stm = self._prepare_background_request(
-            "DELETE FROM \"%s\".directories"
-            " WHERE name = ?;"
-            % self.keyspace_metadata)
+            'DELETE FROM "%s".directories' " WHERE name = ?;" % self.keyspace_metadata
+        )
 
         def directories_to_check(result):
             for row in result:
                 name, next_token = row
                 if name:
-                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + '%',))
+                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + "%",))
 
         def directories_to_remove(result):
             for response in result:
@@ -1907,7 +2002,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 if results:
                     continue
                 dir_name = response.result_or_exc.response_future.query.values[0]
-                dir_name = dir_name.rpartition('.')[0]
+                dir_name = dir_name.rpartition(".")[0]
                 log.info("Scheduling delete for empty dir '%s'" % dir_name)
                 PM_DELETED_DIRECTORIES.inc()
                 yield delete_empty_dir_stm, (dir_name,)
@@ -1916,7 +2011,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
-                dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+                dir_query, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+            )
             if len(result.current_rows) == 0:
                 break
 
@@ -1924,23 +2020,30 @@ class _CassandraAccessor(bg_accessor.Accessor):
             token = result[-1][1]
             parent_dirs = self._execute_concurrent_metadata(
                 directories_to_check(result),
-                concurrency=self.
-                max_concurrent_connections,
-                raise_on_first_error=False)
+                concurrency=self.max_concurrent_connections,
+                raise_on_first_error=False,
+            )
             rets = self._execute_concurrent_metadata(
                 directories_to_remove(parent_dirs),
                 concurrency=self.max_concurrent_connections,
-                raise_on_first_error=False)
+                raise_on_first_error=False,
+            )
             for ret in rets:
                 if not ret.success:
                     log.warning(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token,
-                                     stop_token - start_token)
+                callback_on_progress(token - start_token, stop_token - start_token)
 
-    def clean(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
-              callback_on_progress=None):
+    def clean(
+        self,
+        max_age=None,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        callback_on_progress=None,
+    ):
         """See bg_accessor.Accessor.
 
         Args:
@@ -1951,21 +2054,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
         first_exception = None
         try:
             self._clean_empty_dir(
-                start_key, end_key, shard, nshards,
-                callback_on_progress
+                start_key, end_key, shard, nshards, callback_on_progress
             )
         except Exception as e:
             first_exception = e
-            log.exception('Failed to clean directories.')
+            log.exception("Failed to clean directories.")
 
         try:
             self._clean_expired_metrics(
-                max_age, start_key, end_key, shard, nshards,
-                callback_on_progress
+                max_age, start_key, end_key, shard, nshards, callback_on_progress
             )
         except Exception as e:
             first_exception = e
-            log.exception('Failed to clean metrics.')
+            log.exception("Failed to clean metrics.")
 
         if first_exception is not None:
             raise first_exception
@@ -1990,15 +2091,23 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         return select
 
-    def _clean_expired_metrics(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
-                               callback_on_progress=None):
+    def _clean_expired_metrics(
+        self,
+        max_age=None,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        callback_on_progress=None,
+    ):
         """Delete metrics that has an expired ttl."""
         if not max_age:
             log.warn("You must specify a cutoff time for cleanup")
             return
 
         start_token, stop_token = self._get_search_range(
-            start_key, end_key, shard, nshards)
+            start_key, end_key, shard, nshards
+        )
 
         # timestamp format in Cassandra is in milliseconds
         cutoff = (int(time.time()) - max_age) * 1000
@@ -2006,16 +2115,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         # statements
         select = self._prepare_background_request_on_index(
-            "SELECT name, token(name) FROM \"%s\".metrics_metadata"
+            'SELECT name, token(name) FROM "%s".metrics_metadata'
             " WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d ;"
-            % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL))
+            % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL)
+        )
 
         delete = self._prepare_background_request(
-            "DELETE FROM \"%s\".metrics WHERE name = ? ;" %
-            (self.keyspace_metadata))
+            'DELETE FROM "%s".metrics WHERE name = ? ;' % (self.keyspace_metadata)
+        )
         delete_metadata = self._prepare_background_request(
-            "DELETE FROM \"%s\".metrics_metadata WHERE name = ? ;" %
-            (self.keyspace_metadata))
+            'DELETE FROM "%s".metrics_metadata WHERE name = ? ;'
+            % (self.keyspace_metadata)
+        )
 
         def run(rows):
             for name, _ in rows:
@@ -2029,7 +2140,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         while token < stop_token:
             try:
                 rows = self._execute_metadata(
-                    select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL)
+                    select, (token,), DEFAULT_TIMEOUT_QUERY_UTIL
+                )
 
                 # Empty results means that we've reached the end.
                 if len(rows.current_rows) == 0:
@@ -2049,7 +2161,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             rets = self._execute_concurrent_metadata(
                 run(rows),
                 concurrency=self.max_concurrent_connections,
-                raise_on_first_error=False)
+                raise_on_first_error=False,
+            )
 
             for ret in rets:
                 if not ret.success:

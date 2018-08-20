@@ -21,26 +21,22 @@ from biggraphite import accessor_cache as bg_accessor_cache
 
 
 class MemoryCacheTest(unittest.TestCase):
-
     def setUp(self):
         self.cache = bg_accessor_cache.MemoryCache(10, 3600)
 
     def test_set_get(self):
-        key = 'test'
+        key = "test"
 
         self.assertEqual(self.cache.get(key), None)
         self.cache.set(key, 1)
         self.assertEqual(self.cache.get(key), 1)
 
     def test_many_set_get(self):
-        keys = ['foo', 'bar']
+        keys = ["foo", "bar"]
 
         self.assertEqual(self.cache.get_many(keys), {})
         self.cache.set_many({key: key.capitalize() for key in keys})
-        self.assertEqual(
-            self.cache.get_many(keys),
-            {'foo': 'Foo', 'bar': 'Bar'}
-        )
+        self.assertEqual(self.cache.get_many(keys), {"foo": "Foo", "bar": "Bar"})
 
 
 if __name__ == "__main__":

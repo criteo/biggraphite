@@ -21,8 +21,9 @@ from graphite.tags import base
 class BigGraphiteTagDB(base.BaseTagDB):
     """TagDB using BigGraphite."""
 
-    def __init__(self, settings, cache=None, log=None,
-                 accessor=None, metadata_cache=None):
+    def __init__(
+        self, settings, cache=None, log=None, accessor=None, metadata_cache=None
+    ):
         """Creates a BigGraphiteTagDB."""
         super(BigGraphiteTagDB, self).__init__(settings, cache=cache, log=log)
 
@@ -57,7 +58,7 @@ class BigGraphiteTagDB(base.BaseTagDB):
 
     def find_series_cachekey(self, tags, requestContext=None):
         """Returns the cache key for tags."""
-        return 'TagDB.find_series:' + ':'.join(sorted(tags))
+        return "TagDB.find_series:" + ":".join(sorted(tags))
 
     def _find_series(self, tags, requestContext=None):
         """Internal function called by find_series.

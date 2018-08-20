@@ -29,9 +29,10 @@ class CommandShell(command.BaseCommand):
         See command.BaseCommand
         """
         header = (
-            '`accessor` contains BigGraphite accesor of type %s\n'
-            ' run `accessor.connect()` to use it'
+            "`accessor` contains BigGraphite accesor of type %s\n"
+            " run `accessor.connect()` to use it"
         ) % (accessor.backend_name)
 
         from IPython import embed
+
         embed(header=header)

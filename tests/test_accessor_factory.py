@@ -22,7 +22,6 @@ from biggraphite import settings as bg_settings
 
 
 class TestAccessorFactory(unittest.TestCase):
-
     def test_cassandra_accessor(self):
         settings = {"BG_DRIVER": "cassandra"}
         settings["BG_CASSANDRA_CONTACT_POINTS"] = "localhost"

@@ -24,7 +24,6 @@ from tests import test_utils as bg_test_utils
 
 
 class TestCommandDelete(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_run(self):
         self.accessor.drop_all_metrics()
 
@@ -34,18 +33,19 @@ class TestCommandDelete(bg_test_utils.TestCaseWithFakeAccessor):
         bg_setting.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
 
-        name = 'foo.bar'
+        name = "foo.bar"
         metadata = bg_metric.MetricMetadata(
-            retention=bg_metric.Retention.from_string('1440*60s'))
+            retention=bg_metric.Retention.from_string("1440*60s")
+        )
 
         self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
-        opts = parser.parse_args(['foo', '--recursive', '--dry-run'])
+        opts = parser.parse_args(["foo", "--recursive", "--dry-run"])
         cmd.run(self.accessor, opts)
-        self.assertIn(name, self.accessor.glob_metric_names('*.*'))
+        self.assertIn(name, self.accessor.glob_metric_names("*.*"))
 
-        opts = parser.parse_args(['foo', '--recursive'])
+        opts = parser.parse_args(["foo", "--recursive"])
         cmd.run(self.accessor, opts)
-        self.assertNotIn(name, self.accessor.glob_metric_names('*.*'))
+        self.assertNotIn(name, self.accessor.glob_metric_names("*.*"))
 
 
 if __name__ == "__main__":
