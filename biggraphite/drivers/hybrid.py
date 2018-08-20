@@ -28,10 +28,6 @@ class HybridAccessor(bg_accessor.Accessor):
         self._data_accessor = data_accessor
         self.TYPE = metadata_accessor.TYPE + "+" + data_accessor.TYPE
 
-    def get_accessor_name(self):
-        """Return the name of the accessor."""
-        return "hybrid"
-
     def connect(self):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).connect()
