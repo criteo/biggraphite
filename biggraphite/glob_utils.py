@@ -425,7 +425,7 @@ class GraphiteGlobParser:
         while i < size:
             if i < size - 2 and chars[i + 1] == "-":
                 # char range.
-                result.add(chars[i : i + 3])
+                result.add(chars[i:i + 3])
                 i += 3
             elif chars[i] != "-":
                 result.add(chars[i])
