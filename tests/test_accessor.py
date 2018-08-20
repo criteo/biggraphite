@@ -195,7 +195,6 @@ class TestAccessor(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_insert_error(self):
         """Check that errors propagate from asynchronous API calls to synchronous ones."""
-
         class CustomException(Exception):
             pass
 

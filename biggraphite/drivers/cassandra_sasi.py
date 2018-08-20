@@ -177,7 +177,7 @@ class CassandraSASI(object):
             return [self.__build_select_names_query(table, components[:gs_index])]
 
         prefix = components[:gs_index]
-        suffix = components[gs_index + 1 :] + [[_LAST_COMPONENT]]
+        suffix = components[gs_index + 1:] + [[_LAST_COMPONENT]]
         max_wildcards = min(
             self.max_queries_per_pattern, _COMPONENTS_MAX_LEN - len(components)
         )

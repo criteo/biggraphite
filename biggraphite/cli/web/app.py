@@ -93,7 +93,6 @@ class WebApp(object):
 
     def _init_logger(self):
         """Init logger to be able to intercept message from each command."""
-
         class HandlerWrapper(logging.Handler):
             def emit(self, record):
                 # FIXME Configure logging on executor threads

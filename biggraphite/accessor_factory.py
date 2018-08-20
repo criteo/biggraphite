@@ -110,7 +110,7 @@ def _build_simple_accessor(driver_name, settings):
     prefix = driver_name + "_"
     for key, value in settings.items():
         if key.startswith(prefix):
-            key = key[len(prefix) :]
+            key = key[len(prefix):]
             driver_settings[key] = value
 
     for name, driver in DRIVERS:
