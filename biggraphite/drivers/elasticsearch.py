@@ -298,10 +298,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             % (self._index_prefix, self._index_suffix)
         )
 
-    def get_accessor_name(self):
-        """Return the name of the accessor."""
-        return "elasticsearch"
-
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).connect(*args, **kwargs)

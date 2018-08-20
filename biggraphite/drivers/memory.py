@@ -68,10 +68,6 @@ class _MemoryAccessor(bg_accessor.Accessor):
     def _metric_names(self):
         return self._name_to_metric.keys()
 
-    def get_accessor_name(self):
-        """Return the name of the accessor."""
-        return "memory"
-
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).connect(*args, **kwargs)

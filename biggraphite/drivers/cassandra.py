@@ -976,10 +976,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self.max_metrics_per_pattern,
             )
 
-    def get_accessor_name(self):
-        """Return the name of the accessor."""
-        return "cassandra"
-
     def connect(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).connect()

@@ -131,11 +131,6 @@ class Accessor(object):
         self.cache_metadata_ttl = metadata_ttl
 
     @abc.abstractmethod
-    def get_accessor_name(self):
-        """Return the name of the accessor."""
-        pass
-
-    @abc.abstractmethod
     def connect(self):
         """Establish a connection, idempotent.
 
