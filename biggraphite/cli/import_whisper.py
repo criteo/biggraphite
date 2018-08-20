@@ -68,7 +68,6 @@ def metric_name_from_wsp(root_dir, prefix, wsp_path):
 
 
 class _Worker(object):
-
     def __init__(self, opts):
         settings = bg_settings.settings_from_args(opts)
         bg_utils.set_log_level(settings)
@@ -83,13 +82,13 @@ class _Worker(object):
         if not info:
             return None
 
-        retentions = bg_metric.Retention([
-            bg_metric.Stage(
-                precision=a["secondsPerPoint"], points=a["points"])
-            for a in info["archives"]
-        ])
-        aggregator = bg_metric.Aggregator.from_carbon_name(
-            info["aggregationMethod"])
+        retentions = bg_metric.Retention(
+            [
+                bg_metric.Stage(precision=a["secondsPerPoint"], points=a["points"])
+                for a in info["archives"]
+            ]
+        )
+        aggregator = bg_metric.Aggregator.from_carbon_name(info["aggregationMethod"])
         return bg_metric.MetricMetadata(
             aggregator=aggregator,
             retention=retentions,
@@ -113,7 +112,8 @@ class _Worker(object):
             stage = bg_metric.Stage(
                 precision=archive["secondsPerPoint"],
                 points=archive["points"],
-                stage0=stage0)
+                stage0=stage0,
+            )
             stage0 = False
             if stage in self._opts.ignored_stages:
                 continue
@@ -133,9 +133,7 @@ class _Worker(object):
         if not self._accessor.is_connected:
             self._accessor.connect()
 
-        name = metric_name_from_wsp(
-            self._opts.root_directory,
-            self._opts.prefix, path)
+        name = metric_name_from_wsp(self._opts.root_directory, self._opts.prefix, path)
         metadata = self._read_metadata(name, path)
         log.debug("%s: %s" % (name, metadata.as_string_dict()))
 
@@ -171,25 +169,51 @@ def _import_whisper(*args, **kwargs):
 
 def _parse_opts(args):
     parser = argparse.ArgumentParser(
-        description="Import whisper files into BigGraphite.")
-    parser.add_argument("root_directory", metavar="WHISPER_DIR",
-                        help="directory in which to find whisper files")
-    parser.add_argument("--filter", type=str, default=r".*\.wsp",
-                        help="Only import metrics matching this filter")
-    parser.add_argument("--prefix", metavar="WHISPER_PREFIX", default="",
-                        help="prefix to prepend to metric names")
-    parser.add_argument("--quiet", action="store_const", default=False, const=True,
-                        help="Show no output unless there are problems.")
-    parser.add_argument("--process", metavar="N", type=int,
-                        help="number of concurrent process",
-                        default=multiprocessing.cpu_count())
-    parser.add_argument("--no-data", action="store_true",
-                        help="Do not import data, only metadata.")
-    parser.add_argument("--no-metadata", action="store_true",
-                        help="Do not import metadata, only data.")
-    parser.add_argument("--ignored_stages", nargs="*",
-                        help="Do not import data for these stages.",
-                        default=[])
+        description="Import whisper files into BigGraphite."
+    )
+    parser.add_argument(
+        "root_directory",
+        metavar="WHISPER_DIR",
+        help="directory in which to find whisper files",
+    )
+    parser.add_argument(
+        "--filter",
+        type=str,
+        default=r".*\.wsp",
+        help="Only import metrics matching this filter",
+    )
+    parser.add_argument(
+        "--prefix",
+        metavar="WHISPER_PREFIX",
+        default="",
+        help="prefix to prepend to metric names",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_const",
+        default=False,
+        const=True,
+        help="Show no output unless there are problems.",
+    )
+    parser.add_argument(
+        "--process",
+        metavar="N",
+        type=int,
+        help="number of concurrent process",
+        default=multiprocessing.cpu_count(),
+    )
+    parser.add_argument(
+        "--no-data", action="store_true", help="Do not import data, only metadata."
+    )
+    parser.add_argument(
+        "--no-metadata", action="store_true", help="Do not import metadata, only data."
+    )
+    parser.add_argument(
+        "--ignored_stages",
+        nargs="*",
+        help="Do not import data for these stages.",
+        default=[],
+    )
     parser.add_argument(
         "--time-start",
         action=command.ParseDateTimeArg,
@@ -206,15 +230,12 @@ def _parse_opts(args):
     )
     bg_settings.add_argparse_arguments(parser)
     opts = parser.parse_args(args)
-    opts.ignored_stages = [
-        bg_metric.Stage.from_string(s)
-        for s in opts.ignored_stages
-    ]
+    opts.ignored_stages = [bg_metric.Stage.from_string(s) for s in opts.ignored_stages]
     return opts
 
 
 # TODO: put that in a thread.
-class _Walker():
+class _Walker:
     def __init__(self, root_directory, regexp):
         self.count = 0
         self.root_directory = root_directory
@@ -241,8 +262,7 @@ def main(args=None):
     pool_factory = multiprocessing.Pool
     if opts.process == 1:
         pool_factory = multiprocessing_dummy.Pool
-    pool = pool_factory(
-        opts.process, initializer=_setup_process, initargs=(opts,))
+    pool = pool_factory(opts.process, initializer=_setup_process, initargs=(opts,))
 
     out_fd = sys.stderr
     if opts.quiet:
@@ -255,7 +275,9 @@ def main(args=None):
     paths = walker.paths()
     total_points = 0
     max_value = progressbar.UnknownLength
-    with progressbar.ProgressBar(max_value=max_value, fd=out_fd, redirect_stderr=True) as pbar:
+    with progressbar.ProgressBar(
+        max_value=max_value, fd=out_fd, redirect_stderr=True
+    ) as pbar:
         try:
             res = pool.imap_unordered(_import_whisper, paths)
             for n_path, n_points in enumerate(res):
@@ -267,8 +289,14 @@ def main(args=None):
     pool.close()
     pool.join()
 
-    print("Uploaded", walker.count, "metrics containing",
-          total_points, "points", file=out_fd)
+    print(
+        "Uploaded",
+        walker.count,
+        "metrics containing",
+        total_points,
+        "points",
+        file=out_fd,
+    )
 
 
 if __name__ == "__main__":

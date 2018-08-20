@@ -29,24 +29,27 @@ _COMPONENTS_INDEX_MAX_LEN = cassandra_common.COMPONENTS_MAX_LEN
 LUCENE_INDEX_REFRESH_PERIOD_SECOND = 61  # Default value FIXME: use it
 
 _CQL_PATH_COMPONENTS_INDEX_FIELDS = ",\n".join(
-    "        component_%d : {type: \"string\"}" % n for n in range(_COMPONENTS_INDEX_MAX_LEN)
+    '        component_%d : {type: "string"}' % n
+    for n in range(_COMPONENTS_INDEX_MAX_LEN)
 )
 
 CQL_CREATE_INDICES = [
-    "CREATE CUSTOM INDEX IF NOT EXISTS %(table)s_idx ON \"%%(keyspace)s\".%(table)s()"
+    'CREATE CUSTOM INDEX IF NOT EXISTS %(table)s_idx ON "%%(keyspace)s".%(table)s()'
     "  USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {"
     "    'refresh_seconds': '60',"
     "    'schema': '{"
     "      fields: {"
-    "        parent : {type: \"string\"},"
+    '        parent : {type: "string"},'
     "%(components)s"
     "      }"
     "    }'"
     "  };" % {"table": t, "components": _CQL_PATH_COMPONENTS_INDEX_FIELDS}
-    for t in ('metrics', 'directories')
+    for t in ("metrics", "directories")
 ]
 
-_CQL_SYNC_INDEX = "SELECT * FROM %(keyspace)s.%(table)s WHERE expr(%(table)s_idx, '{refresh:true}')"
+_CQL_SYNC_INDEX = (
+    "SELECT * FROM %(keyspace)s.%(table)s WHERE expr(%(table)s_idx, '{refresh:true}')"
+)
 
 
 class CassandraStratioLucene(object):
@@ -70,10 +73,9 @@ class CassandraStratioLucene(object):
 
     def sync_queries(self):
         """Generate queries to refresh the index."""
-        for table in ('metrics', 'directories'):
+        for table in ("metrics", "directories"):
             statement = c_query.SimpleStatement(
-                _CQL_SYNC_INDEX % {
-                    'keyspace': self.keyspace_metadata, 'table': table},
-                consistency_level=c_query.ConsistencyLevel.ALL
+                _CQL_SYNC_INDEX % {"keyspace": self.keyspace_metadata, "table": table},
+                consistency_level=c_query.ConsistencyLevel.ALL,
             )
             yield statement

@@ -33,7 +33,7 @@ class CommandWeb(command.BaseCommand):
     def add_arguments(self, parser):
         """Add custom arguments."""
         if gourde:
-            parser.add_argument('--dry-run', action="store_true")
+            parser.add_argument("--dry-run", action="store_true")
             gourde.Gourde.get_argparser(parser)
 
     def run(self, accessor, opts):

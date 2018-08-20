@@ -34,19 +34,20 @@ class CommandDelete(command.BaseCommand):
 
         See command.CommandBase.
         """
-        parser.add_argument(
-            "path",
-            help="One metric or subdirectory name"
-        )
+        parser.add_argument("path", help="One metric or subdirectory name")
         parser.add_argument(
             "-r",
             "--recursive",
-            action="store_const", default=False, const=True,
+            action="store_const",
+            default=False,
+            const=True,
             help="Delete points for all metrics as a subtree",
         )
         parser.add_argument(
             "--dry-run",
-            action="store_const", default=False, const=True,
+            action="store_const",
+            default=False,
+            const=True,
             help="Only show commands to create/upgrade the schema.",
             required=False,
         )
@@ -58,7 +59,7 @@ class CommandDelete(command.BaseCommand):
         """
         accessor.connect()
 
-        message = ' (dry-run)' if opts.dry_run else ''
+        message = " (dry-run)" if opts.dry_run else ""
         pattern = "%s.**" % opts.path if opts.recursive else opts.path
 
         for metric in accessor.glob_metric_names(pattern):

@@ -44,7 +44,7 @@ def start_admin(settings):
     Args:
       settings: dict(str -> value).
     """
-    port = settings.get('admin_port', DEFAULT_ADMIN_PORT)
+    port = settings.get("admin_port", DEFAULT_ADMIN_PORT)
     if port and not start_admin.started:
         prometheus_client.start_wsgi_server(port)
         start_admin.started = True
@@ -55,12 +55,13 @@ start_admin.started = False
 
 def set_log_level(settings):
     """Set logs level according to settings."""
-    logger = logging.getLogger('biggraphite')
+    logger = logging.getLogger("biggraphite")
     # Install a handler if there are none.
     if not logger.handlers:
         handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        )
         logger.addHandler(handler)
     logger.setLevel(settings.get("loglevel", DEFAULT_LOG_LEVEL))
 

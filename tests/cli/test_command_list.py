@@ -24,7 +24,6 @@ from tests import test_utils as bg_test_utils
 
 
 class TestCommandList(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_run(self):
         self.accessor.drop_all_metrics()
 
@@ -34,21 +33,20 @@ class TestCommandList(bg_test_utils.TestCaseWithFakeAccessor):
         bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
 
-        name = 'foo.bar'
+        name = "foo.bar"
         metadata = bg_metric.MetricMetadata(
-            retention=bg_metric.Retention.from_string('1440*60s'))
+            retention=bg_metric.Retention.from_string("1440*60s")
+        )
 
         self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
 
-        opts = parser.parse_args(['foo.*'])
+        opts = parser.parse_args(["foo.*"])
         cmd.run(self.accessor, opts)
-        metrics = command_list.list_metrics(
-            self.accessor, opts.glob, opts.graphite)
+        metrics = command_list.list_metrics(self.accessor, opts.glob, opts.graphite)
         self.assertEqual(name, list(metrics)[0].name)
 
-        opts = parser.parse_args(['--graphite', 'foo.{bar}'])
-        metrics = command_list.list_metrics(
-            self.accessor, opts.glob, opts.graphite)
+        opts = parser.parse_args(["--graphite", "foo.{bar}"])
+        metrics = command_list.list_metrics(self.accessor, opts.glob, opts.graphite)
         self.assertEqual(name, list(metrics)[0].name)
 
 

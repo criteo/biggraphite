@@ -20,6 +20,7 @@ from six.moves.configparser import ConfigParser
 
 try:
     from carbon import util as carbon_util
+
     HAVE_CARBON = True
 except ImportError:
     HAVE_CARBON = False
@@ -37,20 +38,20 @@ class CommandSyncdb(command.BaseCommand):
     def add_arguments(self, parser):
         """Add custom arguments."""
         parser.add_argument(
-            "--dry_run", action="store_const", default=False, const=True,
-            help="Only show commands to create/upgrade the schema."
+            "--dry_run",
+            action="store_const",
+            default=False,
+            const=True,
+            help="Only show commands to create/upgrade the schema.",
         )
         if HAVE_CARBON:
             parser.add_argument(
                 "--storage-schemas",
                 help="Create tables from this Carbon's storage-schemas.conf file.",
-                required=False
+                required=False,
             )
         parser.add_argument(
-            "--retention",
-            help="Retention to create.",
-            default=None,
-            required=False,
+            "--retention", help="Retention to create.", default=None, required=False
         )
 
     def _get_retentions_from_storage_schemas(self, opts):
@@ -60,10 +61,11 @@ class CommandSyncdb(command.BaseCommand):
         config_parser = ConfigParser()
         if not config_parser.read(opts.storage_schemas):
             raise SystemExit(
-                "Error: Couldn't read config file: %s" % opts.storage_schemas)
+                "Error: Couldn't read config file: %s" % opts.storage_schemas
+            )
         for section in config_parser.sections():
             options = dict(config_parser.items(section))
-            retentions = options['retentions'].split(',')
+            retentions = options["retentions"].split(",")
             archives = [carbon_util.parseRetentionDef(s) for s in retentions]
             ret.append(bg_metric.Retention.from_carbon(archives))
 
@@ -76,8 +78,7 @@ class CommandSyncdb(command.BaseCommand):
         if HAVE_CARBON and opts.storage_schemas:
             retentions.extend(self._get_retentions_from_storage_schemas(opts))
         if opts.retention:
-            retentions.extend(
-                [bg_metric.Retention.from_string(opts.retention)])
+            retentions.extend([bg_metric.Retention.from_string(opts.retention)])
 
         schema = accessor.syncdb(retentions=retentions, dry_run=opts.dry_run)
         if opts.dry_run:

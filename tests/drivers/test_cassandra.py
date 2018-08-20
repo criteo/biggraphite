@@ -41,10 +41,10 @@ _USEFUL_POINTS = _POINTS[_EXTRA_POINTS:-_EXTRA_POINTS]
 assert _QUERY_RANGE == len(_USEFUL_POINTS)
 
 
-@unittest.skipUnless(
-    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
-)
-class TestAccessorWithCassandraSASI(BaseTestAccessorMetadata, bg_test_utils.TestCaseWithAccessor):
+@unittest.skipUnless(HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install")
+class TestAccessorWithCassandraSASI(
+    BaseTestAccessorMetadata, bg_test_utils.TestCaseWithAccessor
+):
     def test_glob_too_many_directories(self):
         for name in "a", "a.b", "x.y.z":
             metric = bg_test_utils.make_metric(name)
@@ -54,7 +54,7 @@ class TestAccessorWithCassandraSASI(BaseTestAccessorMetadata, bg_test_utils.Test
         old_value = self.accessor.max_metrics_per_pattern
         self.accessor.max_metrics_per_pattern = 1
         with self.assertRaises(bg_cassandra.TooManyMetrics):
-            list(self.accessor.glob_directory_names('**'))
+            list(self.accessor.glob_directory_names("**"))
         self.accessor.max_metrics_per_pattern = old_value
 
     # FIXME (t.chataigner) some duplication with ElasticsearchTestAccessorMetadata.
@@ -82,24 +82,20 @@ class TestAccessorWithCassandraSASI(BaseTestAccessorMetadata, bg_test_utils.Test
         self.accessor._CassandraAccessor__metadata_touch_ttl_sec = old_ttl
 
 
-@unittest.skipUnless(
-    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
-)
-class TestAccessorWithCassandraLucene(TestAccessorWithCassandraSASI,
-                                      bg_test_utils.TestCaseWithAccessor):
-    ACCESSOR_SETTINGS = {'cassandra_use_lucene': True}
+@unittest.skipUnless(HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install")
+class TestAccessorWithCassandraLucene(
+    TestAccessorWithCassandraSASI, bg_test_utils.TestCaseWithAccessor
+):
+    ACCESSOR_SETTINGS = {"cassandra_use_lucene": True}
 
 
-@unittest.skipUnless(
-    HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install",
-)
+@unittest.skipUnless(HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install")
 class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
-
     def fetch(self, metric, *args, **kwargs):
         """Helper to fetch points as a list."""
         # default kwargs for stage.
-        if 'stage' not in kwargs:
-            kwargs['stage'] = metric.retention[0]
+        if "stage" not in kwargs:
+            kwargs["stage"] = metric.retention[0]
         ret = self.accessor.fetch_points(metric, *args, **kwargs)
         self.assertTrue(hasattr(ret, "__iter__"))
         return list(ret)
@@ -109,14 +105,8 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.accessor.insert_points(_METRIC, _POINTS)
         self.flush()
         self.accessor.drop_all_metrics()
-        self.assertEqual(
-            len(self.fetch(no_such_metric, _POINTS_START, _POINTS_END)),
-            0,
-        )
-        self.assertFalse(
-            len(self.fetch(_METRIC, _POINTS_START, _POINTS_END)),
-            0,
-        )
+        self.assertEqual(len(self.fetch(no_such_metric, _POINTS_START, _POINTS_END)), 0)
+        self.assertFalse(len(self.fetch(_METRIC, _POINTS_START, _POINTS_END)), 0)
 
     def test_insert_empty(self):
         # We've had a regression where inserting empty list would freeze
@@ -181,10 +171,12 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.accessor.insert_points(metric, points)
         self.flush()
         actual_points = self.accessor.fetch_points(
-            metric, 1, 2, stage=metric.retention[0])
+            metric, 1, 2, stage=metric.retention[0]
+        )
         self.assertEqual(points, list(actual_points))
         actual_points = self.accessor.fetch_points(
-            metric_1, 1, 2, stage=metric.retention[0])
+            metric_1, 1, 2, stage=metric.retention[0]
+        )
         self.assertEqual(points, list(actual_points))
 
     def _get_version(self):
@@ -197,13 +189,14 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         orig_cs = bg_cassandra._COMPACTION_STRATEGY
         bg_cassandra._COMPACTION_STRATEGY = "DateTieredCompactionStrategy"
 
-        max_version = version.LooseVersion('3.8')
+        max_version = version.LooseVersion("3.8")
         if self._get_version() > max_version:
-            print('Skipping DTCS test, incompatible version')
+            print("Skipping DTCS test, incompatible version")
             return
 
         self.cassandra_helper._reset_keyspace(
-            self.cassandra_helper.session, self.cassandra_helper.KEYSPACE)
+            self.cassandra_helper.session, self.cassandra_helper.KEYSPACE
+        )
 
         # We create a fake metric to create the table. This also validate
         # that breaking changes aren't introduced to the schema.
@@ -217,40 +210,41 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
             if name == self.accessor.keyspace:
                 break
 
-        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s_0']
+        datapoints_86400p_1s = keyspace.tables["datapoints_86400p_1s_0"]
         options = datapoints_86400p_1s.options
         self.assertEqual(
-            options['compaction']['class'],
-            'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy')
-        self.assertEqual(options['compaction']['base_time_seconds'], '901')
-        self.assertEqual(options['compaction']
-                         ['max_window_size_seconds'], '2000')
-        self.assertEqual(options['default_time_to_live'], 87300)
+            options["compaction"]["class"],
+            "org.apache.cassandra.db.compaction.DateTieredCompactionStrategy",
+        )
+        self.assertEqual(options["compaction"]["base_time_seconds"], "901")
+        self.assertEqual(options["compaction"]["max_window_size_seconds"], "2000")
+        self.assertEqual(options["default_time_to_live"], 87300)
 
-        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s_aggr']
+        datapoints_10080_60s = keyspace.tables["datapoints_10080p_60s_aggr"]
         options = datapoints_10080_60s.options
         self.assertEqual(
-            options['compaction']['class'],
-            'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy')
-        self.assertEqual(options['compaction']['base_time_seconds'], '960')
-        self.assertEqual(options['compaction']
-                         ['max_window_size_seconds'], '120000')
-        self.assertEqual(options['default_time_to_live'], 605700)
+            options["compaction"]["class"],
+            "org.apache.cassandra.db.compaction.DateTieredCompactionStrategy",
+        )
+        self.assertEqual(options["compaction"]["base_time_seconds"], "960")
+        self.assertEqual(options["compaction"]["max_window_size_seconds"], "120000")
+        self.assertEqual(options["default_time_to_live"], 605700)
 
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 
     def test_create_datapoints_table_twcs(self):
         """Validate that we can create a TWCS table."""
-        min_version = version.LooseVersion('3.8')
+        min_version = version.LooseVersion("3.8")
         if self._get_version() < min_version:
-            print('Skipping TWCS test, incompatible version')
+            print("Skipping TWCS test, incompatible version")
             return
 
         orig_cs = bg_cassandra._COMPACTION_STRATEGY
         bg_cassandra._COMPACTION_STRATEGY = "TimeWindowCompactionStrategy"
 
         self.cassandra_helper._reset_keyspace(
-            self.cassandra_helper.session, self.cassandra_helper.KEYSPACE)
+            self.cassandra_helper.session, self.cassandra_helper.KEYSPACE
+        )
 
         # We create a fake metric to create the table. This also validate
         # that breaking changes aren't introduced to the schema.
@@ -264,25 +258,25 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
             if name == self.accessor.keyspace:
                 break
 
-        datapoints_86400p_1s = keyspace.tables['datapoints_86400p_1s_0']
+        datapoints_86400p_1s = keyspace.tables["datapoints_86400p_1s_0"]
         options = datapoints_86400p_1s.options
         self.assertEqual(
-            options['compaction']['class'],
-            'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
-        self.assertEqual(options['compaction']
-                         ['compaction_window_unit'], 'HOURS')
-        self.assertEqual(options['compaction']['compaction_window_size'], '1')
-        self.assertEqual(options['default_time_to_live'], 87300)
+            options["compaction"]["class"],
+            "org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy",
+        )
+        self.assertEqual(options["compaction"]["compaction_window_unit"], "HOURS")
+        self.assertEqual(options["compaction"]["compaction_window_size"], "1")
+        self.assertEqual(options["default_time_to_live"], 87300)
 
-        datapoints_10080_60s = keyspace.tables['datapoints_10080p_60s_aggr']
+        datapoints_10080_60s = keyspace.tables["datapoints_10080p_60s_aggr"]
         options = datapoints_10080_60s.options
         self.assertEqual(
-            options['compaction']['class'],
-            'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy')
-        self.assertEqual(options['compaction']
-                         ['compaction_window_unit'], 'HOURS')
-        self.assertEqual(options['compaction']['compaction_window_size'], '3')
-        self.assertEqual(options['default_time_to_live'], 605700)
+            options["compaction"]["class"],
+            "org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy",
+        )
+        self.assertEqual(options["compaction"]["compaction_window_unit"], "HOURS")
+        self.assertEqual(options["compaction"]["compaction_window_size"], "3")
+        self.assertEqual(options["default_time_to_live"], 605700)
 
         bg_cassandra._COMPACTION_STRATEGY = orig_cs
 

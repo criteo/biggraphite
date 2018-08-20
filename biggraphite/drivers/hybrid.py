@@ -60,9 +60,15 @@ class HybridAccessor(bg_accessor.Accessor):
 
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See the real Accessor for a description."""
-        super(HybridAccessor, self).fetch_points(metric, time_start, time_end, stage, aggregated)
-        self._metadata_accessor.fetch_points(metric, time_start, time_end, stage, aggregated)
-        return self._data_accessor.fetch_points(metric, time_start, time_end, stage, aggregated)
+        super(HybridAccessor, self).fetch_points(
+            metric, time_start, time_end, stage, aggregated
+        )
+        self._metadata_accessor.fetch_points(
+            metric, time_start, time_end, stage, aggregated
+        )
+        return self._data_accessor.fetch_points(
+            metric, time_start, time_end, stage, aggregated
+        )
 
     def has_metric(self, metric_name):
         """See the real Accessor for a description."""
@@ -104,20 +110,38 @@ class HybridAccessor(bg_accessor.Accessor):
 
     def insert_downsampled_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
-        super(HybridAccessor, self).insert_downsampled_points_async(metric, datapoints, on_done)
+        super(HybridAccessor, self).insert_downsampled_points_async(
+            metric, datapoints, on_done
+        )
         # Updating metadata here would be too expensive
         self._data_accessor.insert_downsampled_points_async(metric, datapoints, on_done)
 
-    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None):
+    def map(
+        self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None
+    ):
         """See the real Accessor for a description."""
-        super(HybridAccessor, self).map(callback, start_key, end_key, shard, nshards, errback)
-        return self._metadata_accessor.map(callback, start_key, end_key, shard, nshards, errback)
+        super(HybridAccessor, self).map(
+            callback, start_key, end_key, shard, nshards, errback
+        )
+        return self._metadata_accessor.map(
+            callback, start_key, end_key, shard, nshards, errback
+        )
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """See the real Accessor for a description."""
-        super(HybridAccessor, self).repair(start_key, end_key, shard, nshards,
-                                           callback_on_progress)
-        self._metadata_accessor.repair(start_key, end_key, shard, nshards, callback_on_progress)
+        super(HybridAccessor, self).repair(
+            start_key, end_key, shard, nshards, callback_on_progress
+        )
+        self._metadata_accessor.repair(
+            start_key, end_key, shard, nshards, callback_on_progress
+        )
 
     def shutdown(self):
         """See the real Accessor for a description."""
@@ -130,10 +154,19 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).touch_metric(metric)
         self._metadata_accessor.touch_metric(metric)
 
-    def clean(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
-              callback_on_progress=None):
+    def clean(
+        self,
+        max_age=None,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        callback_on_progress=None,
+    ):
         """See the real Accessor for a description."""
-        super(HybridAccessor, self).clean(max_age, start_key, end_key, shard, nshards,
-                                          callback_on_progress)
-        self._metadata_accessor.clean(max_age, start_key, end_key, shard, nshards,
-                                      callback_on_progress)
+        super(HybridAccessor, self).clean(
+            max_age, start_key, end_key, shard, nshards, callback_on_progress
+        )
+        self._metadata_accessor.clean(
+            max_age, start_key, end_key, shard, nshards, callback_on_progress
+        )

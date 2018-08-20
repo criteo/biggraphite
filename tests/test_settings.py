@@ -21,7 +21,6 @@ from biggraphite import settings as bg_settings
 
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
-
     def _check_settings(self, settings):
         # A non existing value.
         value, found = bg_settings.get_setting(settings, "BAR")
@@ -35,12 +34,14 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
 
     def test_carbon_settings(self):
         from carbon import conf as carbon_conf
+
         settings = carbon_conf.Settings()
         settings["FOO"] = "BAR"
         self._check_settings(settings)
 
     def test_django_settings(self):
         import types
+
         settings = types.ModuleType("settings")
         settings.FOO = "BAR"
         self._check_settings(settings)

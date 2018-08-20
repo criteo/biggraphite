@@ -25,8 +25,8 @@ import six
 
 from biggraphite import utils as bg_utils
 
-_UTF8_CODEC = codecs.getencoder('utf8')
-_UUID_NAMESPACE = uuid.UUID('{00000000-1111-2222-3333-444444444444}')
+_UTF8_CODEC = codecs.getencoder("utf8")
+_UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
 _NAN = float("nan")
 
 
@@ -48,17 +48,11 @@ class Metric(object):
     Not meant to be mutated.
     """
 
-    __slots__ = (
-        "name",
-        "id",
-        "metadata",
-        "created_on",
-        "updated_on",
-        "read_on",
-    )
+    __slots__ = ("name", "id", "metadata", "created_on", "updated_on", "read_on")
 
-    def __init__(self, name, id, metadata,
-                 created_on=None, updated_on=None, read_on=None):
+    def __init__(
+        self, name, id, metadata, created_on=None, updated_on=None, read_on=None
+    ):
         """Record its arguments."""
         super(Metric, self).__init__()
         assert name, "Metric: name is None"
@@ -97,8 +91,7 @@ class Metric(object):
     def __eq__(self, other):
         if not isinstance(other, Metric):
             return False
-        return (self.name == other.name and
-                self.metadata == other.metadata)
+        return self.name == other.name and self.metadata == other.metadata
 
     def __ne__(self, other):
         return not (self == other)
@@ -122,7 +115,7 @@ def encode_metric_name(name):
       UnicodeError: Couldn't encode.
     """
     if six.PY3:
-        assert(name) is not bytes, "%s should not be of type 'bytes'" % name
+        assert (name) is not bytes, "%s should not be of type 'bytes'" % name
         return name
 
     if isinstance(name, str):
@@ -152,7 +145,7 @@ def make_metric(name, metadata, created_on=None, updated_on=None, read_on=None):
         metadata,
         created_on=created_on or now,
         updated_on=updated_on or now,
-        read_on=read_on
+        read_on=read_on,
     )
 
 
@@ -348,11 +341,12 @@ class Stage(object):
     is special because it doesn't contain aggregated values.
     """
 
-    __slots__ = ("duration", "points", "precision", "stage0", )
+    __slots__ = ("duration", "points", "precision", "stage0")
 
     # Parses the values of as_string into points and precision group
     _STR_RE = re.compile(
-        r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s(?P<type>(_0|_aggr))?$")
+        r"^(?P<points>[\d]+)\*(?P<precision>[\d]+)s(?P<type>(_0|_aggr))?$"
+    )
 
     def __init__(self, points, precision, stage0=False):
         """Set attributes."""
@@ -365,16 +359,18 @@ class Stage(object):
         return self.as_string
 
     def __repr__(self):
-        return '<{0}.{1}({3}) object at {2}>'.format(
-            self.__module__, type(self).__name__, hex(id(self)),
-            self.as_string)
+        return "<{0}.{1}({3}) object at {2}>".format(
+            self.__module__, type(self).__name__, hex(id(self)), self.as_string
+        )
 
     def __eq__(self, other):
         if not isinstance(other, Stage):
             return False
-        return (self.points == other.points
-                and self.precision == other.precision
-                and self.stage0 == other.stage0)
+        return (
+            self.points == other.points
+            and self.precision == other.precision
+            and self.stage0 == other.stage0
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -392,9 +388,9 @@ class Stage(object):
         """A string like "${POINTS}*${PRECISION}s"."""
         ret = self.as_string
         if self.stage0:
-            ret += '_0'
+            ret += "_0"
         else:
-            ret += '_aggr'
+            ret += "_aggr"
         return ret
 
     @property
@@ -421,9 +417,9 @@ class Stage(object):
             raise InvalidArgumentError("Invalid retention: '%s'" % s)
         groups = match.groupdict()
         return cls(
-            points=int(groups['points']),
-            precision=int(groups['precision']),
-            stage0=bool(groups['type'] == '_0')
+            points=int(groups["points"]),
+            precision=int(groups["precision"]),
+            stage0=bool(groups["type"] == "_0"),
         )
 
     @property
@@ -476,7 +472,7 @@ class Stage(object):
 class Retention(object):
     """A retention policy, made of 0 or more Stages."""
 
-    __slots__ = ("stages", )
+    __slots__ = ("stages",)
 
     def __init__(self, stages):
         """Set self.stages ."""
@@ -486,10 +482,12 @@ class Retention(object):
         for s in stages:
             if prev and s.precision % prev.precision:
                 raise InvalidArgumentError(
-                    "precision of %s must be a multiple of %s" % (s, prev))
+                    "precision of %s must be a multiple of %s" % (s, prev)
+                )
             if prev and prev.duration >= s.duration:
                 raise InvalidArgumentError(
-                    "duration of %s must be lesser than %s" % (s, prev))
+                    "duration of %s must be lesser than %s" % (s, prev)
+                )
             prev = s
         self.stages = tuple(stages)
         self.stages[0].stage0 = True
@@ -550,8 +548,7 @@ class Retention(object):
 
         Note that precision is first, unlike in Stage.__init__
         """
-        stages = [Stage(points=points, precision=precision)
-                  for precision, points in l]
+        stages = [Stage(points=points, precision=precision) for precision, points in l]
         return cls(stages)
 
     def find_stage_for_ts(self, searched, now):
@@ -598,11 +595,7 @@ class MetricMetadata(object):
     Not meant to be mutated.
     """
 
-    __slots__ = (
-        "aggregator",
-        "retention",
-        "carbon_xfilesfactor"
-    )
+    __slots__ = ("aggregator", "retention", "carbon_xfilesfactor")
 
     _DEFAULT_AGGREGATOR = Aggregator.average
     _DEFAULT_RETENTION = Retention.from_string("86400*1s:10080*60s")

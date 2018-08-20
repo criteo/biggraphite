@@ -22,20 +22,41 @@ from tests import test_utils as bg_test_utils
 
 
 class BaseTestAccessorMetadata(object):
-
     def test_glob_metrics(self):
-        IS_CASSANDRA_LUCENE = self.ACCESSOR_SETTINGS.get('cassandra_use_lucene', False)
-        IS_ELASTICSEARCH = self.ACCESSOR_SETTINGS.get('driver', '') == 'elasticsearch'
+        IS_CASSANDRA_LUCENE = self.ACCESSOR_SETTINGS.get("cassandra_use_lucene", False)
+        IS_ELASTICSEARCH = self.ACCESSOR_SETTINGS.get("driver", "") == "elasticsearch"
 
         metrics = [
-            "a", "a.a", "a.b", "a.a.a", "a.b.c", "a.x.y",
-            "x.y.z", "x.y.y.z", "x.y.y.y.z",
-            "super", "superb", "supercomputer", "superconductivity", "superman",
-            "supper", "suppose",
-            "ad.o.g", "af.o.g", "ap.o.g", "az.o.g",
-            "b.o.g", "m.o.g",
-            "zd.o.g", "zf.o.g", "zp.o.g", "zz.o.g",
-            "-b-.a.t", "-c-.a.t", "-d-.a.t", "-e-.a.t",
+            "a",
+            "a.a",
+            "a.b",
+            "a.a.a",
+            "a.b.c",
+            "a.x.y",
+            "x.y.z",
+            "x.y.y.z",
+            "x.y.y.y.z",
+            "super",
+            "superb",
+            "supercomputer",
+            "superconductivity",
+            "superman",
+            "supper",
+            "suppose",
+            "ad.o.g",
+            "af.o.g",
+            "ap.o.g",
+            "az.o.g",
+            "b.o.g",
+            "m.o.g",
+            "zd.o.g",
+            "zf.o.g",
+            "zp.o.g",
+            "zz.o.g",
+            "-b-.a.t",
+            "-c-.a.t",
+            "-d-.a.t",
+            "-e-.a.t",
         ]
         metrics.sort()
 
@@ -49,8 +70,10 @@ class BaseTestAccessorMetadata(object):
             matches = sorted(list(self.accessor.glob_metric_names(glob)))
 
             self.assertEqual(
-                expected_matches, matches,
-                "Expected '%s' for glob '%s', got '%s'" % (expected_matches, glob, matches)
+                expected_matches,
+                matches,
+                "Expected '%s' for glob '%s', got '%s'"
+                % (expected_matches, glob, matches),
             )
 
         # Empty query
@@ -61,56 +84,52 @@ class BaseTestAccessorMetadata(object):
         assert_find("A", [])
 
         # Character wildcard
-        assert_find("?",
-                    [x for x in metrics if len(x) == 1])
-        assert_find("sup?er", ['supper'])
+        assert_find("?", [x for x in metrics if len(x) == 1])
+        assert_find("sup?er", ["supper"])
 
         # Character selector
         for pattern, expected in [
-            ("a[!dfp].o.g", ['az.o.g']),
-            (u"a[!dfp].o.g", ['az.o.g']),
+            ("a[!dfp].o.g", ["az.o.g"]),
+            (u"a[!dfp].o.g", ["az.o.g"]),
             ("a[!dfp]suffix.o.g", []),
-            ("a[nope].o.g", ['ap.o.g']),
+            ("a[nope].o.g", ["ap.o.g"]),
             ("a[nope]suffix.o.g", []),
         ]:
             assert_find(pattern, expected)
 
         # Sequence wildcard
-        assert_find("*",
-                    [x for x in metrics if x.count('.') == 0])
-        assert_find("*.*",
-                    [x for x in metrics if x.count('.') == 1])
-        assert_find("*.*.*",
-                    [x for x in metrics if x.count('.') == 2])
-        assert_find("super*",
-                    [x for x in metrics if x.startswith("super")])
+        assert_find("*", [x for x in metrics if x.count(".") == 0])
+        assert_find("*.*", [x for x in metrics if x.count(".") == 1])
+        assert_find("*.*.*", [x for x in metrics if x.count(".") == 2])
+        assert_find("super*", [x for x in metrics if x.startswith("super")])
 
         # Sequence selector
-        assert_find("a.{b,x}.{c,y}",
-                    ["a.b.c", "a.x.y"])
-        assert_find("a{d,f,p}.o.g",
-                    ["a{0}.o.g".format(c) for c in "dfp"])
-        assert_find("{a,z}{d,f,p}.o.g",
-                    ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"])
-        assert_find("{a{d,f,p},z{d,f,p}}.o.g",
-                    ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"])
+        assert_find("a.{b,x}.{c,y}", ["a.b.c", "a.x.y"])
+        assert_find("a{d,f,p}.o.g", ["a{0}.o.g".format(c) for c in "dfp"])
+        assert_find(
+            "{a,z}{d,f,p}.o.g", ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"]
+        )
+        assert_find(
+            "{a{d,f,p},z{d,f,p}}.o.g",
+            ["{0}{1}.o.g".format(a, b) for a in "az" for b in "dfp"],
+        )
         for pattern in [
-                "-{b,c,d}-.a.t",
-                u"-{b,c,d}-.a.t",
-                "-{b,c,d}?.a.t",
-                "-{b,c,d}[!ha].a.t",
-                "-{b,c,d}*.a.t",
-                "-{b,c,d}*.[ha].t",
+            "-{b,c,d}-.a.t",
+            u"-{b,c,d}-.a.t",
+            "-{b,c,d}?.a.t",
+            "-{b,c,d}[!ha].a.t",
+            "-{b,c,d}*.a.t",
+            "-{b,c,d}*.[ha].t",
         ]:
             assert_find(pattern, ["-b-.a.t", "-c-.a.t", "-d-.a.t"])
 
         for pattern in [
-                "-{b,c,d}?suffix.a.t",
-                "-{b,c,d}[ha].a.t",
-                "-{b,c,d}[ha]suffix.a.t",
-                "-{b,c,d}[!ha]suffix.a.t",
-                "-{b,c,d}*suffix.a.t",
-                u"-{b,c,d}*suffix.a.t",
+            "-{b,c,d}?suffix.a.t",
+            "-{b,c,d}[ha].a.t",
+            "-{b,c,d}[ha]suffix.a.t",
+            "-{b,c,d}[!ha]suffix.a.t",
+            "-{b,c,d}*suffix.a.t",
+            u"-{b,c,d}*suffix.a.t",
         ]:
             assert_find(pattern, [])
 
@@ -118,31 +137,31 @@ class BaseTestAccessorMetadata(object):
         # combinatorial pattern.
         assert_find(
             "-{b,c,d}*.a.t{,u}{,v}{,w}{,x}{,y}{,z}",
-            [u"-{0}-.a.t".format(c)
-             for c in "bcd"
-             if not IS_CASSANDRA_LUCENE and not IS_ELASTICSEARCH],
+            [
+                u"-{0}-.a.t".format(c)
+                for c in "bcd"
+                if not IS_CASSANDRA_LUCENE and not IS_ELASTICSEARCH
+            ],
         )
 
         # Globstars
-        assert_find("**",
-                    metrics)
-        assert_find("x.**",
-                    [x for x in metrics if x.startswith("x.")])
+        assert_find("**", metrics)
+        assert_find("x.**", [x for x in metrics if x.startswith("x.")])
 
         if not IS_CASSANDRA_LUCENE and not IS_ELASTICSEARCH:
             # FIXME: Lucene doesn't support globstars here yet.
-            assert_find("**.z",
-                        [x for x in metrics if x.endswith(".z")])
-            assert_find("x.**.z",
-                        [x for x in metrics
-                         if x.startswith("x.") and x.endswith(".z")])
+            assert_find("**.z", [x for x in metrics if x.endswith(".z")])
+            assert_find(
+                "x.**.z",
+                [x for x in metrics if x.startswith("x.") and x.endswith(".z")],
+            )
 
         self.accessor.drop_all_metrics()
         assert_find("*", [])
         assert_find("**", [])
 
     def test_glob_directories(self):
-        IS_ELASTICSEARCH = self.ACCESSOR_SETTINGS.get('driver', '') == 'elasticsearch'
+        IS_ELASTICSEARCH = self.ACCESSOR_SETTINGS.get("driver", "") == "elasticsearch"
         for name in "a", "a.b", "x.y.z":
             metric = bg_test_utils.make_metric(name)
             self.accessor.create_metric(metric)
@@ -150,8 +169,9 @@ class BaseTestAccessorMetadata(object):
 
         def assert_find(glob, expected_matches):
             # Check we can find the matches of a glob
-            self.assertEqual(expected_matches, list(
-                self.accessor.glob_directory_names(glob)))
+            self.assertEqual(
+                expected_matches, list(self.accessor.glob_directory_names(glob))
+            )
 
         assert_find("x.y", ["x.y"])  # Test exact match
         assert_find("A", [])  # Test case mismatch
@@ -170,7 +190,9 @@ class BaseTestAccessorMetadata(object):
     def test_glob_metrics_cached(self):
         if isinstance(self.accessor, bg_elasticsearch._ElasticSearchAccessor):
             # TODO (t.chataigner) Remove once accessor.cache is implemented.
-            self.skipTest("accessor.cache is not implemented for _ElasticSearchAccessor.")
+            self.skipTest(
+                "accessor.cache is not implemented for _ElasticSearchAccessor."
+            )
 
         metrics = ["a", "a.b", "x.y.z"]
         for name in metrics:
@@ -187,20 +209,20 @@ class BaseTestAccessorMetadata(object):
             self.assertEqual(set(results), set(res))
 
         # Nothing should be cached here.
-        assert_find('**', metrics)
-        assert_find('a', ['a'])
-        assert_find('{x,y}.*y.[z]', ['x.y.z'])
+        assert_find("**", metrics)
+        assert_find("a", ["a"])
+        assert_find("{x,y}.*y.[z]", ["x.y.z"])
 
         # Things should be cached here.
-        assert_find('**', metrics)
-        assert_find('a', ['a'])
-        assert_find('{x,y}.*y.[z]', ['x.y.z'])
+        assert_find("**", metrics)
+        assert_find("a", ["a"])
+        assert_find("{x,y}.*y.[z]", ["x.y.z"])
 
         # Make sure we use the cache.
-        self.accessor.cache.get = lambda _, version: ['fake.foo.a']
-        assert_find('fake.foo.a', ['fake.foo.a'])
-        assert_find('**', ['fake.foo.a'])
-        assert_find('{fake,feke}.*oo.[a]', ['fake.foo.a'])
+        self.accessor.cache.get = lambda _, version: ["fake.foo.a"]
+        assert_find("fake.foo.a", ["fake.foo.a"])
+        assert_find("**", ["fake.foo.a"])
+        assert_find("{fake,feke}.*oo.[a]", ["fake.foo.a"])
 
         self.accessor.cache = original_cache
 
@@ -224,7 +246,9 @@ class BaseTestAccessorMetadata(object):
     def test_update_metrics(self):
         if isinstance(self.accessor, bg_elasticsearch._ElasticSearchAccessor):
             # TODO (t.chataigner) Remove once update_metric is implemented.
-            self.skipTest("update_metric is not implemented for _ElasticSearchAccessor.")
+            self.skipTest(
+                "update_metric is not implemented for _ElasticSearchAccessor."
+            )
 
         # prepare test
         meta_dict = {
@@ -234,8 +258,7 @@ class BaseTestAccessorMetadata(object):
         }
         metadata = bg_metric.MetricMetadata(**meta_dict)
         metric_name = "a.b.c.d.e.f"
-        self.accessor.create_metric(
-            bg_test_utils.make_metric(metric_name, metadata))
+        self.accessor.create_metric(bg_test_utils.make_metric(metric_name, metadata))
         self.flush()
         metric = self.accessor.get_metric(metric_name)
         for k, v in meta_dict.items():
@@ -256,7 +279,10 @@ class BaseTestAccessorMetadata(object):
         # Setting an unknown metric name should fail
         self.assertRaises(
             bg_cassandra.InvalidArgumentError,
-            self.accessor.update_metric, "fake.metric.name", updated_metadata)
+            self.accessor.update_metric,
+            "fake.metric.name",
+            updated_metadata,
+        )
 
     def test_has_metric(self):
         metric = bg_test_utils.make_metric("a.b.c.d.e.f")
@@ -269,7 +295,9 @@ class BaseTestAccessorMetadata(object):
     def test_delete_metric(self):
         if isinstance(self.accessor, bg_elasticsearch._ElasticSearchAccessor):
             # TODO (t.chataigner) Remove once delete_metric is implemented.
-            self.skipTest("delete_metric is not implemented for _ElasticSearchAccessor.")
+            self.skipTest(
+                "delete_metric is not implemented for _ElasticSearchAccessor."
+            )
 
         metric = bg_test_utils.make_metric("a.b.c.d.e.f")
 
@@ -296,8 +324,7 @@ class BaseTestAccessorMetadata(object):
         self.accessor.create_metric(metric_1)
         self.flush()
 
-        self.assertEqual(['a.b.c'],
-                         list(self.accessor.glob_metric_names("a.b.*")))
+        self.assertEqual(["a.b.c"], list(self.accessor.glob_metric_names("a.b.*")))
         self.assertEqual(True, self.accessor.has_metric("a.b..c"))
         self.assertNotEqual(None, self.accessor.get_metric("a.b..c"))
 

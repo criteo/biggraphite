@@ -24,11 +24,11 @@ from tests import test_utils as bg_test_utils
 
 
 class TestCommandRead(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_run(self):
-        name = 'foo.bar'
+        name = "foo.bar"
         metadata = bg_metric.MetricMetadata(
-            retention=bg_metric.Retention.from_string('1440*60s'))
+            retention=bg_metric.Retention.from_string("1440*60s")
+        )
         self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
 
         cmd = command_read.CommandRead()

@@ -43,16 +43,15 @@ class _MemoryAccessor(bg_accessor.Accessor):
     """A memory acessor that doubles as a memory MetadataCache."""
 
     Row = collections.namedtuple(
-        'Row', ['time_start_ms', 'offset', 'shard', 'value', 'count'])
+        "Row", ["time_start_ms", "offset", "shard", "value", "count"]
+    )
 
-    Row0 = collections.namedtuple(
-        'Row', ['time_start_ms', 'offset', 'value'])
+    Row0 = collections.namedtuple("Row", ["time_start_ms", "offset", "value"])
 
     def __init__(self):
         """Create a new MemoryAccessor."""
         super(_MemoryAccessor, self).__init__("memory")
-        self._metric_to_points = collections.defaultdict(
-            sortedcontainers.SortedDict)
+        self._metric_to_points = collections.defaultdict(sortedcontainers.SortedDict)
         self._name_to_metric = {}
         self._directory_names = sortedcontainers.SortedSet()
         self.__downsampler = _downsampling.Downsampler()
@@ -91,8 +90,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
     def insert_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
-        super(_MemoryAccessor, self).insert_points_async(
-            metric, datapoints, on_done)
+        super(_MemoryAccessor, self).insert_points_async(metric, datapoints, on_done)
         if metric.name not in self._name_to_metric:
             self.create_metric(metric)
 
@@ -104,7 +102,8 @@ class _MemoryAccessor(bg_accessor.Accessor):
     def insert_downsampled_points_async(self, metric, datapoints, on_done=None):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).insert_downsampled_points_async(
-            metric, datapoints, on_done)
+            metric, datapoints, on_done
+        )
         if metric.name not in self._name_to_metric:
             self.create_metric(metric)
 
@@ -139,8 +138,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
         name = ".".join(self._components_from_name(name))
         metric = self._name_to_metric[name]
         if not metric:
-            raise InvalidArgumentError(
-                "Unknown metric '%s'" % name)
+            raise InvalidArgumentError("Unknown metric '%s'" % name)
         metric.metadata = updated_metadata
         self._name_to_metric[name] = metric
 
@@ -181,16 +179,13 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See the real Accessor for a description."""
-        super(_MemoryAccessor, self).fetch_points(
-            metric, time_start, time_end, stage)
+        super(_MemoryAccessor, self).fetch_points(metric, time_start, time_end, stage)
         points = self._metric_to_points[(metric.name, stage)]
         rows = []
         for ts in points.irange(time_start, time_end):
             # A row is time_base_ms, time_offset_ms, value, count
             if stage.aggregated():
-                row = self.Row(
-                    ts * 1000.0, 0, 0,
-                    float(points[ts][0]), points[ts][1])
+                row = self.Row(ts * 1000.0, 0, 0, float(points[ts][0]), points[ts][1])
             else:
                 row = self.Row0(ts * 1000.0, 0, float(points[ts][0]))
             rows.append(row)
@@ -199,7 +194,13 @@ class _MemoryAccessor(bg_accessor.Accessor):
         time_start_ms = int(time_start) * 1000
         time_end_ms = int(time_end) * 1000
         return bg_accessor.PointGrouper(
-            metric, time_start_ms, time_end_ms, stage, query_results, aggregated=aggregated)
+            metric,
+            time_start_ms,
+            time_end_ms,
+            stage,
+            query_results,
+            aggregated=aggregated,
+        )
 
     def touch_metric(self, metric):
         """See the real Accessor for a description."""
@@ -212,7 +213,7 @@ class _MemoryAccessor(bg_accessor.Accessor):
     def repair(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_MemoryAccessor, self).repair(*args, **kwargs)
-        callback_on_progress = kwargs.pop('callback_on_progress')
+        callback_on_progress = kwargs.pop("callback_on_progress")
 
         def _callback(m, i, t):
             callback_on_progress(i, t)
@@ -224,8 +225,8 @@ class _MemoryAccessor(bg_accessor.Accessor):
     def clean(self, *args, **kwargs):
         """See bg_accessor.Accessor."""
         super(_MemoryAccessor, self).clean(*args, **kwargs)
-        callback_on_progress = kwargs.pop('callback_on_progress')
-        kwargs.pop('max_age', None)
+        callback_on_progress = kwargs.pop("callback_on_progress")
+        kwargs.pop("max_age", None)
 
         def _callback(m, i, t):
             callback_on_progress(i, t)
@@ -234,10 +235,13 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
         self.map(_callback, *args, **kwargs)
 
-    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None):
+    def map(
+        self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None
+    ):
         """See bg_accessor.Accessor."""
         super(_MemoryAccessor, self).map(
-            callback, start_key, end_key, shard, nshards, errback)
+            callback, start_key, end_key, shard, nshards, errback
+        )
 
         metrics = self._name_to_metric
         total = len(metrics)

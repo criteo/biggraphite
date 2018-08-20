@@ -35,11 +35,13 @@ _CONFIG_NAME = "biggraphite"
 
 try:
     from graphite.readers import utils as readers_utils
+
     BaseReader = readers_utils.BaseReader
 except ImportError:
     BaseReader = object
 try:
     from graphite.finders import utils as finders_utils
+
     BaseFinder = finders_utils.BaseFinder
 except ImportError:
     BaseFinder = object
@@ -53,15 +55,19 @@ class Error(Exception):
     """Base class for all exceptions from this module."""
 
 
-_DISABLED = 'DISABLED'
+_DISABLED = "DISABLED"
 
 
 class Reader(BaseReader):
     """As per the Graphite API, fetches points for and metadata for a given metric."""
 
     __slots__ = (
-        "_accessor", "_metadata_cache", "_carbonlink",
-        "_metric", "_metric_name", )
+        "_accessor",
+        "_metadata_cache",
+        "_carbonlink",
+        "_metric",
+        "_metric_name",
+    )
 
     def __init__(self, accessor, metadata_cache, carbonlink, metric_name):
         """Create a new reader."""
@@ -94,11 +100,10 @@ class Reader(BaseReader):
     def __get_time_info(self, start_time, end_time, now, shift=False):
         """Constrain the provided range in an aligned interval within retention."""
         retention = (
-                self.__get_metadata().retention or
-                bg_metric.MetricMetadata._DEFAULT_RETENTION
+            self.__get_metadata().retention
+            or bg_metric.MetricMetadata._DEFAULT_RETENTION
         )
-        return retention.align_time_window(
-            start_time, end_time, now, shift=shift)
+        return retention.align_time_window(start_time, end_time, now, shift=shift)
 
     def __refresh_metric(self):
         """Set self._metric."""
@@ -110,15 +115,27 @@ class Reader(BaseReader):
         if self._metric is None:
             self._metric = self._metadata_cache.get_metric(self._metric_name)
 
-    def _merge_cached_points(self, stage, start, step, aggregation_method,
-                             points, cached_datapoints, raw_step=None):
+    def _merge_cached_points(
+        self,
+        stage,
+        start,
+        step,
+        aggregation_method,
+        points,
+        cached_datapoints,
+        raw_step=None,
+    ):
         """Merge points from carbonlink with points from database."""
         if isinstance(cached_datapoints, dict):
             cached_datapoints = list(cached_datapoints.items())
 
         return readers.utils.merge_with_cache(
-            cached_datapoints, start, step, points,
-            func=aggregation_method, raw_step=raw_step
+            cached_datapoints,
+            start,
+            step,
+            points,
+            func=aggregation_method,
+            raw_step=raw_step,
         )
 
     def fetch_async(self, start_time, end_time, now=None, requestContext=None):
@@ -135,16 +152,16 @@ class Reader(BaseReader):
           Points is a list for which missing points are set to None.
         """
         fetch_start = time.time()
-        log.rendering('fetch(%s, %d, %d) - start' % (
-            self._metric_name, start_time, end_time))
+        log.rendering(
+            "fetch(%s, %d, %d) - start" % (self._metric_name, start_time, end_time)
+        )
 
         self.__refresh_metric()
         if now is None:
             now = time.time()
 
         metadata = self.__get_metadata()
-        start_time, end_time, stage = self.__get_time_info(
-            start_time, end_time, now)
+        start_time, end_time, stage = self.__get_time_info(start_time, end_time, now)
         start_step = stage.step(start_time)
         points_num = stage.step(end_time) - start_step
         step = stage.precision
@@ -157,7 +174,8 @@ class Reader(BaseReader):
         else:
             # This returns a generator which we can iterate on later.
             ts_and_points = self._accessor.fetch_points(
-                self._metric, start_time, end_time, stage)
+                self._metric, start_time, end_time, stage
+            )
 
         def read_points():
             read_start = time.time()
@@ -173,19 +191,32 @@ class Reader(BaseReader):
 
             if cached_datapoints:
                 points = self._merge_cached_points(
-                    stage, start_step, step, aggregation_method,
-                    points, cached_datapoints, raw_step=raw_step
+                    stage,
+                    start_step,
+                    step,
+                    aggregation_method,
+                    points,
+                    cached_datapoints,
+                    raw_step=raw_step,
                 )
 
             now = time.time()
             log.rendering(
-                'fetch(%s, %d, %d) - %d points - read: %f secs - total: %f secs' % (
-                    self._metric_name, start_time, end_time, len(points),
-                    now - read_start, now - fetch_start))
+                "fetch(%s, %d, %d) - %d points - read: %f secs - total: %f secs"
+                % (
+                    self._metric_name,
+                    start_time,
+                    end_time,
+                    len(points),
+                    now - read_start,
+                    now - fetch_start,
+                )
+            )
             return (start_time, end_time, stage.precision), points
 
-        log.rendering('fetch(%s, %d, %d) - started' % (
-            self._metric_name, start_time, end_time))
+        log.rendering(
+            "fetch(%s, %d, %d) - started" % (self._metric_name, start_time, end_time)
+        )
 
         return read_points
 
@@ -223,8 +254,7 @@ class Reader(BaseReader):
 
         # Call __get_time_info with the widest conceivable range will make it be
         # shortened to the widest range available according to retention policy.
-        start, end, unused_stage = self.__get_time_info(
-            0, now, now, shift=True)
+        start, end, unused_stage = self.__get_time_info(0, now, now, shift=True)
         return intervals.IntervalSet([intervals.Interval(start, end)])
 
 
@@ -233,8 +263,9 @@ class Finder(BaseFinder):
 
     local = False
 
-    def __init__(self, directories=None, accessor=None,
-                 metadata_cache=None, carbonlink=None):
+    def __init__(
+        self, directories=None, accessor=None, metadata_cache=None, carbonlink=None
+    ):
         """Build a new finder.
 
         Args:
@@ -255,8 +286,8 @@ class Finder(BaseFinder):
         with self._lock:
             if not self._accessor:
                 from django.conf import settings as django_settings
-                accessor = graphite_utils.accessor_from_settings(
-                    django_settings)
+
+                accessor = graphite_utils.accessor_from_settings(django_settings)
                 # If connect() fail it will raise an exception that will be caught
                 # by the caller. If the plugin is called again, self._accessor will
                 # still be None and a new accessor will be created.
@@ -269,7 +300,7 @@ class Finder(BaseFinder):
                 accessor.set_cache(
                     bg_accessor_cache.DjangoCache(self.django_cache()),
                     metadata_ttl=django_settings.FIND_CACHE_DURATION,
-                    data_ttl=django_settings.DEFAULT_CACHE_DURATION
+                    data_ttl=django_settings.DEFAULT_CACHE_DURATION,
                 )
                 self._accessor = accessor
         return self._accessor
@@ -279,6 +310,7 @@ class Finder(BaseFinder):
         with self._lock:
             if not self._carbonlink:
                 from django.conf import settings as django_settings
+
                 if not django_settings.CARBONLINK_HOSTS:
                     self._carbonlink = _DISABLED
                 elif callable(carbonlink.CarbonLink):
@@ -295,8 +327,10 @@ class Finder(BaseFinder):
             if not self._cache:
                 # TODO: Allow to use Django's cache.
                 from django.conf import settings as django_settings
+
                 cache = graphite_utils.cache_from_settings(
-                    self.accessor(), django_settings, "graphite")
+                    self.accessor(), django_settings, "graphite"
+                )
                 cache.open()
                 self._cache = cache
         return self._cache
@@ -307,6 +341,7 @@ class Finder(BaseFinder):
             if not self._django_cache:
                 from django.conf import settings as django_settings
                 from django.core.cache import cache
+
                 self._django_cache = cache
                 self._cache_timeout = django_settings.FIND_CACHE_DURATION
         return self._django_cache
@@ -318,7 +353,7 @@ class Finder(BaseFinder):
 
     def find_nodes(self, query):
         """Find nodes matching a query."""
-        leaves_only = hasattr(query, 'leaves_only') and query.leaves_only
+        leaves_only = hasattr(query, "leaves_only") and query.leaves_only
         cache_key = "find_nodes:%s" % self._hash(query)
         cached = self.django_cache().get(cache_key)
         if cached is not None:
@@ -338,9 +373,12 @@ class Finder(BaseFinder):
                     end_time = datetime.fromtimestamp(query.endTime)
 
                 results = glob_utils.graphite_glob(
-                    self.accessor(), query.pattern,
-                    metrics=True, directories=not leaves_only,
-                    start_time=start_time, end_time=end_time
+                    self.accessor(),
+                    query.pattern,
+                    metrics=True,
+                    directories=not leaves_only,
+                    start_time=start_time,
+                    end_time=end_time,
                 )
                 success = True
             except bg_accessor.Error as e:
@@ -348,7 +386,8 @@ class Finder(BaseFinder):
                 results = e
 
             log.rendering(
-                'find(%s) - %f secs' % (query.pattern, time.time() - find_start))
+                "find(%s) - %f secs" % (query.pattern, time.time() - find_start)
+            )
             cache_hit = False
 
         if not cache_hit:
@@ -387,9 +426,11 @@ class Finder(BaseFinder):
 
         queries = [
             finders_utils.FindQuery(
-                pattern, start_time, end_time,
-                local=requestContext.get('localOnly'),
-                headers=requestContext.get('forwardHeaders'),
+                pattern,
+                start_time,
+                end_time,
+                local=requestContext.get("localOnly"),
+                headers=requestContext.get("forwardHeaders"),
                 leaves_only=True,
             )
             for pattern in patterns
@@ -409,8 +450,7 @@ class Finder(BaseFinder):
 
             # Call directly the async method
             gen = n.reader.fetch_async(
-                start_time, end_time,
-                now=now, requestContext=requestContext
+                start_time, end_time, now=now, requestContext=requestContext
             )
 
             queries_and_generators.append((n, query, gen))
@@ -420,12 +460,14 @@ class Finder(BaseFinder):
         for n, query, func in queries_and_generators:
             time_info, values = func()
 
-            results.append({
-                'pathExpression': query.pattern,
-                'path': n.path,
-                'name': n.path,
-                'time_info': time_info,
-                'values': values,
-            })
+            results.append(
+                {
+                    "pathExpression": query.pattern,
+                    "path": n.path,
+                    "name": n.path,
+                    "time_info": time_info,
+                    "values": values,
+                }
+            )
 
         return results

@@ -31,14 +31,8 @@ class CommandWrite(command.BaseCommand):
 
     def add_arguments(self, parser):
         """Add custom arguments."""
-        parser.add_argument(
-            "metric",
-            help="Name of the metric to update.",
-        )
-        parser.add_argument(
-            "value",
-            help="Value to write at the select time.",
-        )
+        parser.add_argument("metric", help="Name of the metric to update.")
+        parser.add_argument("value", help="Value to write at the select time.")
         parser.add_argument(
             "-t",
             "--timestamp",
@@ -55,7 +49,7 @@ class CommandWrite(command.BaseCommand):
             required=False,
         )
         # TODO(d.forest): support for writing directly a chosen stage
-        aggregators = ', '.join([str(v.value) for v in bg_metric.Aggregator])
+        aggregators = ", ".join([str(v.value) for v in bg_metric.Aggregator])
         parser.add_argument(
             "--aggregator",
             help="Aggregator function for the metric (%s)." % aggregators,
@@ -83,8 +77,7 @@ class CommandWrite(command.BaseCommand):
         if not metric:
             print("Metric '%s' was not found and will be created" % opts.metric)
             metadata = bg_metric.MetricMetadata(
-                aggregator=bg_metric.Aggregator.from_config_name(
-                    opts.aggregator),
+                aggregator=bg_metric.Aggregator.from_config_name(opts.aggregator),
                 retention=bg_metric.Retention.from_string(opts.retention),
                 carbon_xfilesfactor=opts.x_files_factor,
             )

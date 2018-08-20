@@ -31,7 +31,7 @@ class CountDown(object):
     This is used to wait for queries to complete without storing & sorting their results.
     """
 
-    __slots__ = ("_canceled", "count", "_lock", "_on_zero", )
+    __slots__ = ("_canceled", "count", "_lock", "_on_zero")
 
     def __init__(self, count, on_zero):
         """Record parameters.
@@ -96,9 +96,9 @@ def list_from_str(value):
 
 def bool_from_str(value):
     """Convert a user-specified string to a bool."""
-    if value == 'True':
+    if value == "True":
         return value
-    elif value == 'False':
+    elif value == "False":
         return value
     elif type(value) is bool:
         return value

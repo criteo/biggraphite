@@ -23,14 +23,13 @@ from tests import test_utils as bg_test_utils
 
 
 class TestCommandWrite(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_run(self):
         cmd = command_write.CommandWrite()
 
         parser = argparse.ArgumentParser()
         bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(['metric', '1'])
+        opts = parser.parse_args(["metric", "1"])
         cmd.run(self.accessor, opts)
 
 

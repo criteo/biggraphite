@@ -29,15 +29,16 @@ from tests import test_utils as bg_test_utils
 
 class TestCommandStats(bg_test_utils.TestCaseWithFakeAccessor):
 
-    metrics = ['metric1', 'metric2']
-    metadata = MetricMetadata(retention=Retention.from_string('1440*60s'))
+    metrics = ["metric1", "metric2"]
+    metadata = MetricMetadata(retention=Retention.from_string("1440*60s"))
 
-    @patch('sys.stdout', new_callable=StringIO)
+    @patch("sys.stdout", new_callable=StringIO)
     def get_output(self, args, mock_stdout):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
             self.accessor.create_metric(
-                bg_test_utils.make_metric(metric, self.metadata))
+                bg_test_utils.make_metric(metric, self.metadata)
+            )
 
         cmd = command_stats.CommandStats()
 
@@ -51,13 +52,13 @@ class TestCommandStats(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_simple(self):
         output = self.get_output([])
-        self.assertIn('Namespace      Metrics    Points', output)
-        self.assertIn('2      2880', output)
+        self.assertIn("Namespace      Metrics    Points", output)
+        self.assertIn("2      2880", output)
 
     def test_graphite(self):
-        output = self.get_output(['--format', 'graphite'])
-        self.assertIn('metrics.none 2', output)
-        self.assertIn('points.none 2880', output)
+        output = self.get_output(["--format", "graphite"])
+        self.assertIn("metrics.none 2", output)
+        self.assertIn("points.none 2880", output)
 
 
 if __name__ == "__main__":

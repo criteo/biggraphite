@@ -47,9 +47,7 @@ class CommandGraphiteWeb(command_read.CommandRead):
         See command.CommandBase.
         """
         parser.add_argument(
-            "patterns",
-            nargs="+",
-            help="One metric name or globbing on metrics names"
+            "patterns", nargs="+", help="One metric name or globbing on metrics names"
         )
         parser.add_argument(
             "--time-start",
@@ -68,16 +66,11 @@ class CommandGraphiteWeb(command_read.CommandRead):
         parser.add_argument(
             "--output-csv",
             help="Output points in CSV format: metric;timestamp;value.",
-            action="store_true"
+            action="store_true",
         )
+        parser.add_argument("--profile", help="Start a profiler.")
         parser.add_argument(
-            "--profile",
-            help="Start a profiler.",
-        )
-        parser.add_argument(
-            "--no-output",
-            help="Don't print results.",
-            action="store_true"
+            "--no-output", help="Don't print results.", action="store_true"
         )
 
     def run(self, accessor, opts):
@@ -86,7 +79,7 @@ class CommandGraphiteWeb(command_read.CommandRead):
         See command.CommandBase.
         """
         # import here to make sure everything is setup.
-        os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
+        os.environ["DJANGO_SETTINGS_MODULE"] = "graphite.settings"
 
         accessor.connect()
 
@@ -95,15 +88,15 @@ class CommandGraphiteWeb(command_read.CommandRead):
         # Disable carbon link (enabled by default)
         django_settings.CARBONLINK_HOSTS = []
         # Make sure logging goes to stderr
-        django_settings.LOG_FILE_INFO = '-'
-        django_settings.LOG_FILE_EXCEPTION = '-'
-        django_settings.LOG_FILE_CACHE = '-'
-        django_settings.LOG_FILE_RENDERING = '-'
+        django_settings.LOG_FILE_INFO = "-"
+        django_settings.LOG_FILE_EXCEPTION = "-"
+        django_settings.LOG_FILE_CACHE = "-"
+        django_settings.LOG_FILE_RENDERING = "-"
 
         from graphite import util as graphite_util
         from biggraphite.plugins import graphite
 
-        settings = bg_settings.settings_from_confattr(opts, prefix='')
+        settings = bg_settings.settings_from_confattr(opts, prefix="")
         metadata_cache = bg_cache_factory.cache_from_settings(accessor, settings)
         metadata_cache.open()
 
@@ -111,9 +104,7 @@ class CommandGraphiteWeb(command_read.CommandRead):
             flamegraph.start_profile_thread(fd=open("./perf.log", "w"))
 
         finder = graphite.Finder(
-            directories=[],
-            accessor=accessor,
-            metadata_cache=metadata_cache
+            directories=[], accessor=accessor, metadata_cache=metadata_cache
         )
 
         time_start = graphite_util.timestamp(opts.time_start)
@@ -124,19 +115,14 @@ class CommandGraphiteWeb(command_read.CommandRead):
         for i, result in enumerate(results):
             # Change the output to match something that display_metrics
             # can work with.
-            metric = _FakeMetric(result['path'])
-            time_start, time_end, step = result['time_info']
+            metric = _FakeMetric(result["path"])
+            time_start, time_end, step = result["time_info"]
 
             points = []
-            for i, v in enumerate(result['values']):
+            for i, v in enumerate(result["values"]):
                 v = 0 if v is None else v
                 points.append((time_start + step * i, v))
 
-            result = (
-                points,
-                time_start,
-                time_end,
-                step
-            )
+            result = (points, time_start, time_end, step)
             if not opts.no_output:
                 self._display_metric(metric, result, output_csv)

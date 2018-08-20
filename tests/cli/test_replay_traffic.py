@@ -24,7 +24,6 @@ import unittest
 
 
 class TestReplayTraffic(unittest.TestCase):
-
     def test_import(self):
         pass
 

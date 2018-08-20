@@ -17,4 +17,4 @@
 
 def format_datetime(value):
     """Format datetime to an human readable format."""
-    return value.strftime('%Y-%m-%d %H:%M:%S') if value else None
+    return value.strftime("%Y-%m-%d %H:%M:%S") if value else None

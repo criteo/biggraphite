@@ -44,25 +44,22 @@ class InvalidArgumentError(Error):
 # to drivers/ and be used only by drivers who needs that, they should in
 # turn just forward the replica id instead of the shard id.
 SHARD_REPLICA_MASK = 0xC000
-SHARD_WRITER_MASK = (SHARD_REPLICA_MASK ^ 0xFFFF)
-SHARD_REPLICA_BITS = bin(SHARD_REPLICA_MASK).count('1')
+SHARD_WRITER_MASK = SHARD_REPLICA_MASK ^ 0xFFFF
+SHARD_REPLICA_BITS = bin(SHARD_REPLICA_MASK).count("1")
 SHARD_WRITER_BITS = 16 - SHARD_REPLICA_BITS
 SHARD_REPLICA_SHIFT = SHARD_WRITER_BITS
-SHARD_MAX_REPLICAS = 2**SHARD_REPLICA_BITS
+SHARD_MAX_REPLICAS = 2 ** SHARD_REPLICA_BITS
 
 
 def pack_shard(replica, writer):
     """Pack a replica id and writer id in a short."""
-    return (
-        (replica << SHARD_REPLICA_SHIFT) |
-        (writer & SHARD_WRITER_MASK)
-    )
+    return (replica << SHARD_REPLICA_SHIFT) | (writer & SHARD_WRITER_MASK)
 
 
 def unpack_shard(shard):
     """Unpack what pack_shard() did."""
     replica = (shard & SHARD_REPLICA_MASK) >> SHARD_REPLICA_SHIFT
-    writer = (shard & SHARD_WRITER_MASK)
+    writer = shard & SHARD_WRITER_MASK
     return (replica, writer)
 
 
@@ -99,7 +96,7 @@ class Accessor(object):
     noted otherwise.
     """
 
-    __slots__ = ('is_connected', )
+    __slots__ = ("is_connected",)
 
     __metaclass__ = abc.ABCMeta
 
@@ -228,12 +225,14 @@ class Accessor(object):
             raise InvalidArgumentError("%s is not a Stage instance" % stage)
         if time_start % stage.precision or time_start < 0:
             raise InvalidArgumentError(
-                "time_start (%d) is not a multiple of the stage's precision (%s)" % (
-                    time_start, stage.as_string))
+                "time_start (%d) is not a multiple of the stage's precision (%s)"
+                % (time_start, stage.as_string)
+            )
         if time_end % stage.precision or time_end < 0:
             raise InvalidArgumentError(
-                "time_end (%d) is not a multiple of the stage's precision (%s)" % (
-                    time_end, stage.as_string))
+                "time_end (%d) is not a multiple of the stage's precision (%s)"
+                % (time_end, stage.as_string)
+            )
 
     @abc.abstractmethod
     def has_metric(self, metric_name):
@@ -273,8 +272,7 @@ class Accessor(object):
           datapoints: An iterable of (timestamp in seconds, values as double)
         """
         self._check_connected()
-        _wait_async_call(self.insert_points_async,
-                         metric=metric, datapoints=datapoints)
+        _wait_async_call(self.insert_points_async, metric=metric, datapoints=datapoints)
 
     @abc.abstractmethod
     def insert_points_async(self, metric, datapoints, on_done=None):
@@ -299,7 +297,8 @@ class Accessor(object):
         """
         self._check_connected()
         _wait_async_call(
-            self.insert_downsampled_points_async, metric=metric, datapoints=datapoints)
+            self.insert_downsampled_points_async, metric=metric, datapoints=datapoints
+        )
 
     @abc.abstractmethod
     def insert_downsampled_points_async(self, metric, datapoints, on_done=None):
@@ -315,7 +314,9 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def map(self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None):
+    def map(
+        self, callback, start_key=None, end_key=None, shard=0, nshards=1, errback=None
+    ):
         """Call callback on each metric.
 
         This operation can potentially be very slow.
@@ -338,7 +339,14 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """Repair potential corruptions in the database.
 
         This operation can potentially be very slow.
@@ -375,8 +383,15 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
-    def clean(self, max_age=None, start_key=None, end_key=None, shard=1, nshards=0,
-              callback_on_progress=None):
+    def clean(
+        self,
+        max_age=None,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        callback_on_progress=None,
+    ):
         """Remove metrics that have expired (not used anymore)."""
         self._check_connected()
 
@@ -390,8 +405,16 @@ class PointGrouper(object):
     abstracted away if more datastores do client-side agregation.
     """
 
-    def __init__(self, metric, time_start_ms, time_end_ms, stage, query_results,
-                 source_stage=None, aggregated=True):
+    def __init__(
+        self,
+        metric,
+        time_start_ms,
+        time_end_ms,
+        stage,
+        query_results,
+        source_stage=None,
+        aggregated=True,
+    ):
         """Constructor for PointGrouper.
 
         Args:
@@ -489,14 +512,14 @@ class PointGrouper(object):
 
                 # Find the replica id from the shard id.
                 replica = (shard & SHARD_REPLICA_MASK) >> SHARD_REPLICA_SHIFT
-                timestamp_ms = (
-                    time_start_ms + offset * self.source_stage.precision_ms)
+                timestamp_ms = time_start_ms + offset * self.source_stage.precision_ms
 
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms
                 if not same_stage:
                     timestamp_ms = bg_utils.round_down(
-                        timestamp_ms, self.stage.precision_ms)
+                        timestamp_ms, self.stage.precision_ms
+                    )
 
                 if self.current_timestamp_ms != timestamp_ms:
                     # This needs to be optimized because in the common case
@@ -531,15 +554,17 @@ class PointGrouper(object):
             for row in rows_or_exception:
                 (time_start_ms, offset, value) = row
 
-                timestamp_ms = (
-                    time_start_ms + offset * self.source_stage.precision_ms)
+                timestamp_ms = time_start_ms + offset * self.source_stage.precision_ms
 
                 assert timestamp_ms >= self.time_start_ms
                 assert timestamp_ms < self.time_end_ms
 
                 # Non aggregated stages are pretty simple, nothing to do.
-                yield ((timestamp_ms / 1000.0, value) if self.aggregated
-                       else (timestamp_ms / 1000.0, value, 1))
+                yield (
+                    (timestamp_ms / 1000.0, value)
+                    if self.aggregated
+                    else (timestamp_ms / 1000.0, value, 1)
+                )
 
         if first_exc:
             raise RetryableError(first_exc)

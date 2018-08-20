@@ -17,10 +17,9 @@
 from biggraphite import metadata_cache
 
 
-CACHES = frozenset([
-    ("disk", metadata_cache.DiskCache),
-    ("memory", metadata_cache.MemoryCache),
-])
+CACHES = frozenset(
+    [("disk", metadata_cache.DiskCache), ("memory", metadata_cache.MemoryCache)]
+)
 DEFAULT_CACHE = "memory"
 
 
@@ -40,14 +39,11 @@ def add_argparse_arguments(parser):
     """
     parser.add_argument(
         "--cache",
-        help="BigGraphite cache (%s))" % ', '.join([v[0] for v in CACHES]),
-        default=DEFAULT_CACHE)
-    parser.add_argument(
-        "--cache-size",
-        help="Metadata cache size.")
-    parser.add_argument(
-        "--cache-sync",
-        help="Metadata cache sync.")
+        help="BigGraphite cache (%s))" % ", ".join([v[0] for v in CACHES]),
+        default=DEFAULT_CACHE,
+    )
+    parser.add_argument("--cache-size", help="Metadata cache size.")
+    parser.add_argument("--cache-sync", help="Metadata cache sync.")
 
 
 def cache_from_settings(accessor, settings, cname=None):
@@ -59,12 +55,10 @@ def cache_from_settings(accessor, settings, cname=None):
     Returns:
       Cache (not opened).
     """
-    cache_name = settings.get('cache', DEFAULT_CACHE)
-    cache_settings = {
-        'path': settings.get('storage_dir'),
-    }
-    for opt in ['size', 'ttl', 'sync']:
-        value = settings.get('cache_%s' % opt)
+    cache_name = settings.get("cache", DEFAULT_CACHE)
+    cache_settings = {"path": settings.get("storage_dir")}
+    for opt in ["size", "ttl", "sync"]:
+        value = settings.get("cache_%s" % opt)
         if value is not None:
             cache_settings[opt] = value
 

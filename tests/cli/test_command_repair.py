@@ -23,14 +23,13 @@ from tests import test_utils as bg_test_utils
 
 
 class TestCommandRepair(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_run(self):
         cmd = command_repair.CommandRepair()
 
         parser = argparse.ArgumentParser()
         bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(['--shard=0', '--nshards=5'])
+        opts = parser.parse_args(["--shard=0", "--nshards=5"])
         cmd.run(self.accessor, opts)
 
 

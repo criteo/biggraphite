@@ -19,7 +19,6 @@ from tests import test_utils as bg_test_utils
 
 
 class TestMetric(unittest.TestCase):
-
     def test_dir(self):
         metric = bg_test_utils.make_metric("a.b.c")
         self.assertIn("name", dir(metric))
@@ -27,7 +26,6 @@ class TestMetric(unittest.TestCase):
 
 
 class TestAccessorFunctions(unittest.TestCase):
-
     def test_sanitize_metric_name_should_remove_multiple_dots(self):
         self.assertEqual("foo.bar.baz", bg_metric.sanitize_metric_name("foo.bar..baz"))
         self.assertEqual("foo.bar.baz", bg_metric.sanitize_metric_name("foo.bar...baz"))

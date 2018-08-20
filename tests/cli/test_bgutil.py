@@ -25,14 +25,14 @@ from tests import test_utils as bg_test_utils
 
 class TestBgutil(bg_test_utils.TestCaseWithFakeAccessor):
 
-    metrics = ['metric1', 'metric2']
+    metrics = ["metric1", "metric2"]
 
-    @patch('sys.stdout', new_callable=StringIO)
+    @patch("sys.stdout", new_callable=StringIO)
     def test_run(self, mock_stdout):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
             self.accessor.create_metric(bg_test_utils.make_metric(metric))
-        bgutil.main(['--driver=memory', 'read', '**'], self.accessor)
+        bgutil.main(["--driver=memory", "read", "**"], self.accessor)
         output = mock_stdout.getvalue()
         for metric in self.metrics:
             self.assertIn(metric, output)

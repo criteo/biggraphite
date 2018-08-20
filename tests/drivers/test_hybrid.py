@@ -29,14 +29,11 @@ DEFAULT_GLOB = "foo.bar.**"
 
 
 class TestHybridAccessor(unittest.TestCase):
-
     def setUp(self):
         self._metadata_accessor = Mock()
         self._data_accessor = Mock()
         self._accessor = hybrid.HybridAccessor(
-            "test_hybrid",
-            self._metadata_accessor,
-            self._data_accessor
+            "test_hybrid", self._metadata_accessor, self._data_accessor
         )
 
     def test_connect_should_be_called_on_both_accessors(self):
@@ -56,7 +53,9 @@ class TestHybridAccessor(unittest.TestCase):
         self._accessor.connect()
         self._accessor.update_metric(DEFAULT_METRIC, DEFAULT_METADATA)
 
-        self._metadata_accessor.update_metric.assert_called_with(DEFAULT_METRIC, DEFAULT_METADATA)
+        self._metadata_accessor.update_metric.assert_called_with(
+            DEFAULT_METRIC, DEFAULT_METADATA
+        )
         self._data_accessor.update_metric.assert_not_called()
 
     def test_delete_metric_should_be_called_only_for_metadata(self):
@@ -87,7 +86,9 @@ class TestHybridAccessor(unittest.TestCase):
         aggregated = False
 
         self._accessor.connect()
-        self._accessor.fetch_points(DEFAULT_METRIC, time_start, time_end, stage, aggregated)
+        self._accessor.fetch_points(
+            DEFAULT_METRIC, time_start, time_end, stage, aggregated
+        )
 
         self._metadata_accessor.fetch_points.assert_called_with(
             DEFAULT_METRIC, time_start, time_end, stage, aggregated
@@ -144,9 +145,13 @@ class TestHybridAccessor(unittest.TestCase):
         self._accessor.insert_points_async(DEFAULT_METRIC, datapoints)
 
         self._metadata_accessor.insert_points_async.assert_not_called()
-        self._data_accessor.insert_points_async.assert_called_with(DEFAULT_METRIC, datapoints, None)
+        self._data_accessor.insert_points_async.assert_called_with(
+            DEFAULT_METRIC, datapoints, None
+        )
 
-    def test_insert_downsampled_points_async_should_be_called_only_on_data_accessor(self):
+    def test_insert_downsampled_points_async_should_be_called_only_on_data_accessor(
+        self
+    ):
         datapoints = []
         self._accessor.connect()
         self._accessor.insert_downsampled_points_async(DEFAULT_METRIC, datapoints)

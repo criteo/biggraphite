@@ -23,16 +23,15 @@ from tests import test_utils as bg_test_utils
 
 
 class TestCommandSyncdb(bg_test_utils.TestCaseWithFakeAccessor):
-
     def test_run(self):
         cmd = command_syncdb.CommandSyncdb()
 
         parser = argparse.ArgumentParser()
         bg_settings.add_argparse_arguments(parser)
         cmd.add_arguments(parser)
-        opts = parser.parse_args(['--retention', '86400*1s:10080*60s'])
+        opts = parser.parse_args(["--retention", "86400*1s:10080*60s"])
         cmd.run(self.accessor, opts)
-        opts = parser.parse_args(['--dry_run'])
+        opts = parser.parse_args(["--dry_run"])
         cmd.run(self.accessor, opts)
 
 

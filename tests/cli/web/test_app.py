@@ -28,7 +28,6 @@ from tests import test_utils as bg_test_utils
 
 @unittest.skipUnless(gourde, "Gourde is required.")
 class TestWebApp(bg_test_utils.TestCaseWithFakeAccessor):
-
     def setUp(self):
         super(TestWebApp, self).setUp()
         # Don't use a shared registry.
@@ -41,11 +40,11 @@ class TestWebApp(bg_test_utils.TestCaseWithFakeAccessor):
         self.client = self.webapp.app.test_client()
 
     def test_index(self):
-        rv = self.client.get('/')
+        rv = self.client.get("/")
         self.assertEqual(rv.status_code, 200)
 
     def test_bgutil_list(self):
-        rv = self.client.post('/api/bgutil/list', json={'arguments': ['*']})
+        rv = self.client.post("/api/bgutil/list", json={"arguments": ["*"]})
         rv.get_json()
 
 

@@ -35,14 +35,14 @@ from tests.test_utils_elasticsearch import ElasticsearchHelper
 
 
 class TestGraphiteUtilsInternals(unittest.TestCase):
-
     def test_set_log_level(self):
         bg_utils.set_log_level({"log_level": "INFO"})
 
     def test_manipulate_paths_like_upstream(self):
         sys_path = []
         bg_utils.manipulate_paths_like_upstream(
-            "/a/b/c/bin/bg-carbon-aggregator-cache", sys_path)
+            "/a/b/c/bin/bg-carbon-aggregator-cache", sys_path
+        )
         self.assertEqual(1, len(sys_path))
         self.assertEqual("/a/b/c/lib", sys_path[0])
 
@@ -51,7 +51,7 @@ class TestGraphiteUtilsInternals(unittest.TestCase):
         assert "GRAPHITE_ROOT" not in os.environ
         bg_utils.setup_graphite_root_path("/opt/graphite/lib/carbon/file")
         assert "GRAPHITE_ROOT" in os.environ
-        self.assertEqual(os.environ["GRAPHITE_ROOT"], '/opt/graphite')
+        self.assertEqual(os.environ["GRAPHITE_ROOT"], "/opt/graphite")
 
 
 def setup_logging():
@@ -65,14 +65,16 @@ def prepare_graphite():
     """Make sure that we have a working Graphite environment."""
     # Setup sys.path
     prepare_graphite_imports()
-    os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
+    os.environ["DJANGO_SETTINGS_MODULE"] = "graphite.settings"
 
     # Redirect logs somewhere writable
     from django.conf import settings
+
     settings.LOG_DIR = tempfile.gettempdir()
 
     # Setup Django
     import django
+
     django.setup()
 
 
@@ -99,7 +101,7 @@ def prepare_graphite_imports():
                 sys.path.insert(0, path)
 
 
-_UUID_NAMESPACE = uuid.UUID('{00000000-0000-0000-0000-000000000000}')
+_UUID_NAMESPACE = uuid.UUID("{00000000-0000-0000-0000-000000000000}")
 
 
 def make_metric(name, metadata=None, **kwargs):
@@ -167,14 +169,16 @@ class TestCaseWithFakeAccessor(TestCaseWithTempDir):
         self.accessor.connect()
         self.addCleanup(self.accessor.shutdown)
         self.metadata_cache = self.CACHE_CLASS(
-            self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
+            self.accessor, {"path": self.tempdir, "size": 1024 * 1024}
+        )
         self.metadata_cache.open()
         self.addCleanup(self.metadata_cache.close)
 
     def fake_drivers(self):
         """Hijack drivers' build() functions to return self.accessor."""
-        patcher = mock.patch('biggraphite.drivers.cassandra.build',
-                             return_value=self.accessor)
+        patcher = mock.patch(
+            "biggraphite.drivers.cassandra.build", return_value=self.accessor
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -192,17 +196,19 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
     def setUpClass(cls):
         """Create the test Accessor."""
         # TODO (t.chataigner) Handle hybrid accessor here.
-        driver_name = cls.ACCESSOR_SETTINGS.get('driver', bg_accessor_factory.DEFAULT_DRIVER)
+        driver_name = cls.ACCESSOR_SETTINGS.get(
+            "driver", bg_accessor_factory.DEFAULT_DRIVER
+        )
         if "cassandra" in driver_name:
             cls.cassandra_helper = CassandraHelper()
             cls.cassandra_helper.setUpClass()
-            cls.ACCESSOR_SETTINGS.update(
-                cls.cassandra_helper.get_accessor_settings())
+            cls.ACCESSOR_SETTINGS.update(cls.cassandra_helper.get_accessor_settings())
         if "elasticsearch" in driver_name:
             cls.elasticsearch_helper = ElasticsearchHelper()
             cls.elasticsearch_helper.setUpClass()
             cls.ACCESSOR_SETTINGS.update(
-                cls.elasticsearch_helper.get_accessor_settings())
+                cls.elasticsearch_helper.get_accessor_settings()
+            )
 
         cls.accessor = bg_accessor_factory.accessor_from_settings(cls.ACCESSOR_SETTINGS)
         cls.accessor.syncdb()
@@ -222,7 +228,8 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         """Create a new Accessor in self.acessor."""
         super(TestCaseWithAccessor, self).setUp()
         self.metadata_cache = self.CACHE_CLASS(
-            self.accessor, {'path': self.tempdir, 'size': 1024 * 1024})
+            self.accessor, {"path": self.tempdir, "size": 1024 * 1024}
+        )
         self.metadata_cache.open()
 
     def tearDown(self):

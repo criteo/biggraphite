@@ -109,15 +109,15 @@ class DelayedWriter(object):
         if len(self._queue) > 0:
             return
         # Order by number of points.
-        self._queue = sorted(
-            self._points.keys(),
-            key=lambda k: len(self._points[k])
-        )
+        self._queue = sorted(self._points.keys(), key=lambda k: len(self._points[k]))
         # We know that we have up to `period_ms` to write everything
         # so let's write only a few metrics per iteration.
         self._metrics_per_ms = float(len(self._queue)) / self.period_ms
-        log.debug("rebuilt the queues: %d metrics, %d per second",
-                  len(self._queue), self._metrics_per_ms)
+        log.debug(
+            "rebuilt the queues: %d metrics, %d per second",
+            len(self._queue),
+            self._metrics_per_ms,
+        )
 
     def write_some(self, flush=False, now=time.time):
         """Write some points from the queue."""

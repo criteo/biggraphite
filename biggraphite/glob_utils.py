@@ -50,14 +50,14 @@ def _is_valid_glob(glob):
     """
     depth = 0
     for c in glob:
-        if c == '{':
+        if c == "{":
             depth += 1
-        elif c == '}':
+        elif c == "}":
             depth -= 1
             if depth < 0:
                 # Mismatched braces
                 return False
-        elif c == '.':
+        elif c == ".":
             if depth > 0:
                 # Component separator in the middle of a group
                 return False
@@ -93,7 +93,7 @@ def tokenize(glob):
     Returns:
       Iterator on a token stream.
     """
-    SPECIAL_CHARS = '.?*[-]{,}'
+    SPECIAL_CHARS = ".?*[-]{,}"
     is_escaped = False
     is_char_select = False
     tmp = ""
@@ -108,10 +108,10 @@ def tokenize(glob):
             tmp += c
             is_escaped = False
             continue
-        elif c == '\\':
+        elif c == "\\":
             is_escaped = True
             continue
-        elif c not in SPECIAL_CHARS or (c == '-' and not is_char_select):
+        elif c not in SPECIAL_CHARS or (c == "-" and not is_char_select):
             if token and token != TokenType.LITERAL:
                 yield token, None
                 token, tmp = TokenType.LITERAL, ""
@@ -123,35 +123,35 @@ def tokenize(glob):
             token, tmp = None, ""
 
         # Special chars handling
-        if c == '.':
+        if c == ".":
             yield TokenType.PATH_SEPARATOR, ""
-        elif c == '?':
+        elif c == "?":
             yield TokenType.WILD_CHAR, ""
-        elif c == '*':
+        elif c == "*":
             # Look-ahead for wild path (globstar)
-            if i + 1 < len(glob) and glob[i + 1] == '*':
+            if i + 1 < len(glob) and glob[i + 1] == "*":
                 i += 1
                 yield TokenType.WILD_PATH, ""
             else:
                 yield TokenType.WILD_SEQUENCE, ""
-        elif c == '[':
+        elif c == "[":
             is_char_select = True
             # Look-ahead for negated selector (not in)
-            if i + 1 < len(glob) and glob[i + 1] == '!':
+            if i + 1 < len(glob) and glob[i + 1] == "!":
                 i += 1
                 yield TokenType.CHAR_SELECT_NEGATED_BEGIN, ""
             else:
                 yield TokenType.CHAR_SELECT_BEGIN, ""
-        elif c == '-':
+        elif c == "-":
             yield TokenType.CHAR_SELECT_RANGE_DASH, ""
-        elif c == ']':
+        elif c == "]":
             is_char_select = False
             yield TokenType.CHAR_SELECT_END, ""
-        elif c == '{':
+        elif c == "{":
             yield TokenType.EXPR_SELECT_BEGIN, ""
-        elif c == ',':
+        elif c == ",":
             yield TokenType.EXPR_SELECT_SEPARATOR, ""
-        elif c == '}':
+        elif c == "}":
             yield TokenType.EXPR_SELECT_END, ""
         else:
             raise Exception("Unexpected character '%s'" % c)
@@ -182,7 +182,7 @@ def glob_to_regex(glob):
     ans = ""
     for token, data in tokenize(glob):
         if token == TokenType.PATH_SEPARATOR:
-            ans += re.escape('.')
+            ans += re.escape(".")
         elif token == TokenType.LITERAL:
             ans += re.escape(data)
         elif token == TokenType.WILD_CHAR:
@@ -206,9 +206,8 @@ def glob_to_regex(glob):
         elif token == TokenType.EXPR_SELECT_END:
             ans += ")"
         else:
-            raise Exception(
-                "Unexpected token type '%s' with data '%s'" % (token, data))
-    return '^' + ans + '$'
+            raise Exception("Unexpected token type '%s' with data '%s'" % (token, data))
+    return "^" + ans + "$"
 
 
 def glob(metric_names, glob_pattern):
@@ -255,9 +254,14 @@ def glob(metric_names, glob_pattern):
     return list(filter(maybe_matched_prefilter, metric_names))
 
 
-def graphite_glob(accessor, graphite_glob,
-                  metrics=True, directories=True,
-                  start_time=None, end_time=None):
+def graphite_glob(
+    accessor,
+    graphite_glob,
+    metrics=True,
+    directories=True,
+    start_time=None,
+    end_time=None,
+):
     """Get metrics and directories matching a Graphite glob.
 
     Args:
@@ -318,8 +322,7 @@ class GlobExpressionWithValues(GlobExpression):
         return "%s(%s)" % (self.__class__.__name__, self.values)
 
     def __eq__(self, other):
-        return (GlobExpression.__eq__(self, other) and
-                self.values == other.values)
+        return GlobExpression.__eq__(self, other) and self.values == other.values
 
 
 class Globstar(GlobExpression):
@@ -369,12 +372,12 @@ class GraphiteGlobParser:
 
     def __init__(self):
         """Build a parser, fill in default values."""
-        self._reset('')
+        self._reset("")
 
     def _commit_sequence(self):
         if len(self._sequence) > 0:
             self._component.append(self._sequence)
-            self._sequence = ''
+            self._sequence = ""
 
     def _commit_component(self):
         self._commit_sequence()
@@ -391,7 +394,7 @@ class GraphiteGlobParser:
         """Parse multi-character wildcard, and globstar."""
         self._commit_sequence()
         # Look-ahead for potential globstar
-        if i < n and self._glob[i] == '*':
+        if i < n and self._glob[i] == "*":
             self._commit_component()
             self._parsed.append(Globstar())
             i += 1
@@ -403,12 +406,12 @@ class GraphiteGlobParser:
     def _find_char_selector_end(self, i, n):
         """Find where a character selector expression ends."""
         j = i
-        if j < n and self._glob[j] == '!':
+        if j < n and self._glob[j] == "!":
             j += 1
-        if j < n and self._glob[j] == ']':
+        if j < n and self._glob[j] == "]":
             j += 1
 
-        j = self._glob.find(']', j)
+        j = self._glob.find("]", j)
         if j == -1:
             return n
 
@@ -420,11 +423,11 @@ class GraphiteGlobParser:
         result = set()
         size = len(chars)
         while i < size:
-            if i < size - 2 and chars[i+1] == '-':
+            if i < size - 2 and chars[i + 1] == "-":
                 # char range.
-                result.add(chars[i:i+3])
+                result.add(chars[i : i + 3])
                 i += 3
-            elif chars[i] != '-':
+            elif chars[i] != "-":
                 result.add(chars[i])
                 i += 1
             else:
@@ -442,7 +445,7 @@ class GraphiteGlobParser:
         j = self._find_char_selector_end(i, n)
         if j < n:
             chars = self._glob[i:j]
-            if chars[0] == '!':
+            if chars[0] == "!":
                 chars = self._group_char_selector(chars[1:])
                 char = CharNotIn(chars)
             else:
@@ -454,7 +457,7 @@ class GraphiteGlobParser:
             self._component.append(char)
         else:
             # Reached end of string: unbalanced bracket
-            self._sequence += '['
+            self._sequence += "["
 
         return i
 
@@ -478,7 +481,7 @@ class GraphiteGlobParser:
                 self._commit_sequence()
                 self._component.append(seq)
         else:
-            self._sequence += '{'
+            self._sequence += "{"
 
         return i
 
@@ -486,17 +489,17 @@ class GraphiteGlobParser:
         has_char_selector = False
         values = []
         curr = []
-        tmp = ''
+        tmp = ""
         j = i
-        c = ''
-        while j < n and c != '}':
+        c = ""
+        while j < n and c != "}":
             c = self._glob[j]
             j += 1
             # Parse sub-expression then combine values with prefixes.
-            if c == '{':
-                if tmp != '':
+            if c == "{":
+                if tmp != "":
                     curr.append(tmp)
-                    tmp = ''
+                    tmp = ""
 
                 result = self._parse_sequence_selector_values(j, n)
                 if not result:
@@ -506,16 +509,16 @@ class GraphiteGlobParser:
                 has_char_selector = has_char_selector or has_charsel
                 curr = [prefix + x for prefix in curr for x in subvalues]
             # End of current element, combine values with suffix.
-            elif c == ',' or c == '}':
+            elif c == "," or c == "}":
                 if len(curr) > 0:
                     values += [x + tmp for x in curr]
                 else:
                     values.append(tmp)
 
                 curr = []
-                tmp = ''
+                tmp = ""
             # Simplified handling of char selector
-            elif c == '[':
+            elif c == "[":
                 # XXX(d.forest): We could keep track of depth and just make sure
                 #                the selector expression is well-formed instead
                 #                of continuing to parse everything.
@@ -525,9 +528,9 @@ class GraphiteGlobParser:
                     has_char_selector = True
                     j = k + 1
                 else:
-                    tmp += '['
+                    tmp += "["
             # Reject dots inside selectors
-            elif c == '.':
+            elif c == ".":
                 return None
             # Append char to the current value.
             else:
@@ -535,7 +538,7 @@ class GraphiteGlobParser:
 
         # We have reached the end without finding a closing brace: the braces
         # are unbalanced, expression cannot be parsed as a sequence selector.
-        if j == n and c != '}':
+        if j == n and c != "}":
             return None
 
         return has_char_selector, j, values + curr
@@ -544,7 +547,7 @@ class GraphiteGlobParser:
         self._glob = glob
         self._parsed = []
         self._component = []
-        self._sequence = ''
+        self._sequence = ""
 
     def parse(self, glob):
         """Parse a graphite glob expression into simple components."""
@@ -555,15 +558,15 @@ class GraphiteGlobParser:
         while i < n:
             c = self._glob[i]
             i += 1
-            if c == '?':
+            if c == "?":
                 self._parse_char_wildcard()
-            elif c == '*':
+            elif c == "*":
                 i = self._parse_wildcard(i, n)
-            elif c == '[':
+            elif c == "[":
                 i = self._parse_char_selector(i, n)
-            elif c == '{':
+            elif c == "{":
                 i = self._parse_sequence_selector(i, n)
-            elif c == '.':
+            elif c == ".":
                 self._commit_component()
             else:
                 self._sequence += c

@@ -36,7 +36,7 @@ if HAS_CASSANDRA_HOME:
     from testing import cassandra3 as testing_cassandra
 
 
-class CassandraHelper():
+class CassandraHelper:
     """Helper for an ephemeral Cassandra cluster."""
 
     KEYSPACE = "testkeyspace"
@@ -48,7 +48,7 @@ class CassandraHelper():
             "cassandra_keyspace": cls.KEYSPACE,
             "cassandra_contact_points": cls.contact_points,
             "cassandra_port": cls.port,
-            "cassandra_timeout": 60
+            "cassandra_timeout": 60,
         }
 
     @classmethod
@@ -56,7 +56,7 @@ class CassandraHelper():
         """Create the test Cassandra Cluster as cls.cassandra."""
         cls.cassandra = None
         if CASSANDRA_HOSTPORT:
-            host, cls.port = CASSANDRA_HOSTPORT.split(':')
+            host, cls.port = CASSANDRA_HOSTPORT.split(":")
             cls.contact_points = [host]
         else:
             cls.setUpCassandra()
@@ -70,26 +70,32 @@ class CassandraHelper():
     @classmethod
     def setUpCassandra(cls):
         """Start Cassandra."""
-        cls.cassandra = testing_cassandra.Cassandra(
-            auto_start=False,
-        )
+        cls.cassandra = testing_cassandra.Cassandra(auto_start=False)
         try:
             cls.cassandra.setup()
             cls.cassandra.start()
         except Exception as e:
             logging.exception(e)
-            print("fail to starting cassandra, logging potentially useful debug info",
-                  file=sys.stderr)
-            for attr in "cassandra_home", "cassandra_yaml", "cassandra_bin", "base_dir", "settings":
-                print(attr, ":", getattr(cls.cassandra,
-                                         attr, "Unknown"), file=sys.stderr)
+            print(
+                "fail to starting cassandra, logging potentially useful debug info",
+                file=sys.stderr,
+            )
+            for attr in (
+                "cassandra_home",
+                "cassandra_yaml",
+                "cassandra_bin",
+                "base_dir",
+                "settings",
+            ):
+                print(
+                    attr, ":", getattr(cls.cassandra, attr, "Unknown"), file=sys.stderr
+                )
             cls.cassandra.cleanup()
             raise
 
         # testing.cassandra is meant to be used with the Thrift API, so we need to
         # extract the IPs and native port for use with the native driver.
-        cls.contact_points = [s.split(":")[0]
-                              for s in cls.cassandra.server_list()]
+        cls.contact_points = [s.split(":")[0] for s in cls.cassandra.server_list()]
         cls.port = cls.cassandra.cassandra_yaml["native_transport_port"]
 
     @classmethod
@@ -111,7 +117,7 @@ class CassandraHelper():
     def create_unreplicated_keyspace(session, keyspace):
         """Create a keyspace, mostly used for tests."""
         template = (
-            "CREATE KEYSPACE \"%s\" "
+            'CREATE KEYSPACE "%s" '
             " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1}"
             " AND durable_writes = false;"
         )
@@ -120,9 +126,7 @@ class CassandraHelper():
     @staticmethod
     def drop_keyspace(session, keyspace):
         """Drop a keyspace, mostly used for tests."""
-        template = (
-            "DROP KEYSPACE IF EXISTS \"%s\";"
-        )
+        template = 'DROP KEYSPACE IF EXISTS "%s";'
         session.execute(template % keyspace)
 
     def flush(self, accessor):

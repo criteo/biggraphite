@@ -36,8 +36,7 @@ class CommandRead(command.BaseCommand):
         See command.CommandBase.
         """
         parser.add_argument(
-            "metrics",
-            help="One metric name or globbing on metrics names"
+            "metrics", help="One metric name or globbing on metrics names"
         )
         parser.add_argument(
             "--time-start",
@@ -63,12 +62,12 @@ class CommandRead(command.BaseCommand):
             "--async",
             dest="is_async",
             help="Do reads asynchronously.",
-            action="store_true"
+            action="store_true",
         )
         parser.add_argument(
             "--output-csv",
             help="Output points in CSV format: metric;timestamp;value.",
-            action="store_true"
+            action="store_true",
         )
 
     def run(self, accessor, opts):
@@ -80,8 +79,7 @@ class CommandRead(command.BaseCommand):
 
         metrics = list(list_metrics(accessor, opts.metrics))
 
-        forced_stage = bg_metric.Stage.from_string(
-            opts.stage) if opts.stage else None
+        forced_stage = bg_metric.Stage.from_string(opts.stage) if opts.stage else None
         time_start = opts.time_start
         time_end = opts.time_end
         output_csv = opts.output_csv
@@ -91,7 +89,8 @@ class CommandRead(command.BaseCommand):
             # Fetch all points asynchronously.
             for metric in metrics:
                 results = self._fetch_points(
-                    accessor, metric, time_start, time_end, forced_stage)
+                    accessor, metric, time_start, time_end, forced_stage
+                )
                 async_results.append(results)
         else:
             async_results = [None] * len(metrics)
@@ -99,7 +98,8 @@ class CommandRead(command.BaseCommand):
         for metric, results in zip(metrics, async_results):
             if not results:
                 results = self._fetch_points(
-                    accessor, metric, time_start, time_end, forced_stage)
+                    accessor, metric, time_start, time_end, forced_stage
+                )
 
             self._display_metric(metric, results, output_csv)
 
@@ -136,7 +136,7 @@ class CommandRead(command.BaseCommand):
         print("Points:")
 
         for point in points:
-            print('%s: %f' % (point[0], point[1]))
+            print("%s: %f" % (point[0], point[1]))
         print()
 
     @staticmethod

@@ -33,8 +33,10 @@ metric_metadata = api.model(
     {
         "aggregator": rp.fields.String(description="The metric aggregator"),
         "retention": rp.fields.String(description="The metric retention"),
-        "carbon_xfilesfactor": rp.fields.Float(description="The metric carbon xfiles factor"),
-    }
+        "carbon_xfilesfactor": rp.fields.Float(
+            description="The metric carbon xfiles factor"
+        ),
+    },
 )
 
 metric = api.model(
@@ -42,7 +44,9 @@ metric = api.model(
     {
         "id": rp.fields.String(readOnly=True, description="The metric identifier"),
         "name": rp.fields.String(description="The metric name"),
-        "metadata": rp.fields.Nested(metric_metadata, description="The metric metadata"),
+        "metadata": rp.fields.Nested(
+            metric_metadata, description="The metric metadata"
+        ),
         "created_on": rp.fields.DateTime(),
         "updated_on": rp.fields.DateTime(),
         "read_on": rp.fields.DateTime(),
@@ -75,7 +79,7 @@ class MetricResource(rp.Resource):
         metadata = bg_metric.MetricMetadata(
             aggregator=bg_metric.Aggregator.from_config_name(payload["aggregator"]),
             retention=bg_metric.Retention.from_string(payload["retention"]),
-            carbon_xfilesfactor=payload["carbon_xfilesfactor"]
+            carbon_xfilesfactor=payload["carbon_xfilesfactor"],
         )
         context.accessor.update_metric(name, metadata)
-        return '', 204
+        return "", 204

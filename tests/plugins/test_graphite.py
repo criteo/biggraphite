@@ -38,7 +38,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
     _POINTS_END = _POINTS_START + 3600
     _RETENTION = bg_metric.Retention.from_string("20*15s:1440*60s:48*3600s")
     _POINTS = bg_test_utils._make_easily_queryable_points(
-        start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision,
+        start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision
     )
     _METRIC = bg_test_utils.make_metric(_METRIC_NAME, retention=_RETENTION)
 
@@ -49,17 +49,18 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.insert_points(self._METRIC, self._POINTS)
         self.accessor.flush()
         self.finder = bg_graphite.Finder(
-            accessor=self.accessor,
-            metadata_cache=self.metadata_cache,
+            accessor=self.accessor, metadata_cache=self.metadata_cache
         )
 
         # Make sure that carbonlink is enabled.
         from django.conf import settings as django_settings
-        django_settings.CARBONLINK_HOSTS = ['localhost:12345']
+
+        django_settings.CARBONLINK_HOSTS = ["localhost:12345"]
 
         self.carbonlink = self.finder.carbonlink()
         self.reader = bg_graphite.Reader(
-            self.accessor, self.metadata_cache, self.carbonlink, _METRIC_NAME)
+            self.accessor, self.metadata_cache, self.carbonlink, _METRIC_NAME
+        )
 
     def fetch(self, *args, **kwargs):
         result = self.reader.fetch(*args, **kwargs)
@@ -71,7 +72,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         return result
 
     def test_fetch_non_existing(self):
-        self.reader._metric_name = 'broken.name'
+        self.reader._metric_name = "broken.name"
         (start, end, step), points = self.fetch(
             start_time=self._POINTS_START + 3,
             end_time=self._POINTS_END - 3,
@@ -95,7 +96,7 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(expected_points, points)
 
     def test_carbon_protocol_read(self):
-        metric_name = 'fake.name'
+        metric_name = "fake.name"
         metric = bg_test_utils.make_metric(_METRIC_NAME)
         # Custom aggregator to make sure all goes right.
         metric.metadata.aggregator = bg_metric.Aggregator.minimum
@@ -105,9 +106,13 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
             self.accessor, self.metadata_cache, self.carbonlink, metric_name
         )
 
-        with mock.patch('graphite.carbonlink.CarbonLinkPool.query') as carbonlink_query_mock:
+        with mock.patch(
+            "graphite.carbonlink.CarbonLinkPool.query"
+        ) as carbonlink_query_mock:
             carbonlink_query_mock.return_value = [
-                (864005.0, 100.0), (864065.0, 101.0), (864125.0, 102.0)
+                (864005.0, 100.0),
+                (864065.0, 101.0),
+                (864125.0, 102.0),
             ]
 
             (start, end, step), points = self.fetch(
@@ -150,15 +155,13 @@ class FakeFindQuery(object):
 
 
 class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
-
     def setUp(self):
         super(TestFinder, self).setUp()
         for metric_name in "a", "a.a", "a.b.c", "x.y":
             metric = bg_test_utils.make_metric(metric_name)
             self.accessor.create_metric(metric)
         self.finder = bg_graphite.Finder(
-            accessor=self.accessor,
-            metadata_cache=self.metadata_cache,
+            accessor=self.accessor, metadata_cache=self.metadata_cache
         )
 
     def find_nodes(self, pattern, leaves_only=None):

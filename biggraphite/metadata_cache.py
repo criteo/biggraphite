@@ -43,19 +43,15 @@ import six
 
 from biggraphite import metric as bg_metric
 
-METRICS_LABELS = ['type', 'name']
+METRICS_LABELS = ["type", "name"]
 
-CACHE_SIZE = prometheus_client.Gauge(
-    'bg_cache_size', 'Current size', METRICS_LABELS,
-)
-CACHE_MAX_SIZE = prometheus_client.Gauge(
-    'bg_cache_maxsize', 'Max size', METRICS_LABELS,
-)
+CACHE_SIZE = prometheus_client.Gauge("bg_cache_size", "Current size", METRICS_LABELS)
+CACHE_MAX_SIZE = prometheus_client.Gauge("bg_cache_maxsize", "Max size", METRICS_LABELS)
 CACHE_HITS = prometheus_client.Counter(
-    'bg_cache_hits_total', 'Cache hits', METRICS_LABELS,
+    "bg_cache_hits_total", "Cache hits", METRICS_LABELS
 )
 CACHE_MISSES = prometheus_client.Counter(
-    'bg_cache_misses_total', 'Cache misses', METRICS_LABELS,
+    "bg_cache_misses_total", "Cache misses", METRICS_LABELS
 )
 
 
@@ -71,7 +67,7 @@ class MetadataCache(object):
     """A metadata cache."""
 
     __metaclass__ = abc.ABCMeta
-    TYPE = 'abstract'
+    TYPE = "abstract"
 
     def __init__(self, accessor, settings, name=None):
         """Create a new DiskCache."""
@@ -90,7 +86,7 @@ class MetadataCache(object):
         self.name = name
 
         self._size = CACHE_SIZE.labels(self.TYPE, name)
-        self._size.set_function(lambda: self.stats()['size'])
+        self._size.set_function(lambda: self.stats()["size"])
         self._max_size = CACHE_MAX_SIZE.labels(self.TYPE, name)
         self._hits = CACHE_HITS.labels(self.TYPE, name)
         self._misses = CACHE_MISSES.labels(self.TYPE, name)
@@ -187,7 +183,14 @@ class MetadataCache(object):
         pass
 
     @abc.abstractmethod
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """Remove spurious entries from the cache.
 
         During the repair the keyspace is split in nshards and
@@ -230,19 +233,19 @@ class MetadataCache(object):
     @abc.abstractmethod
     def stats(self):
         """Current stats about the cache the cache."""
-        return {'size': 0, 'maxsize': 0, 'hits': 0, 'miss': 0}
+        return {"size": 0, "maxsize": 0, "hits": 0, "miss": 0}
 
 
 class MemoryCache(MetadataCache):
     """A per-process memory cache."""
 
-    TYPE = 'memory'
+    TYPE = "memory"
 
     def __init__(self, accessor, settings, name=None):
         """Initialize the memory cache."""
         super(MemoryCache, self).__init__(accessor, settings, name)
-        self.__size = settings.get('size', 1 * 1000 * 1000)
-        self.__ttl = int(settings.get('ttl', 24 * 60 * 60))
+        self.__size = settings.get("size", 1 * 1000 * 1000)
+        self.__ttl = int(settings.get("ttl", 24 * 60 * 60))
         self._max_size.set(self.__size)
 
     def open(self):
@@ -253,8 +256,10 @@ class MemoryCache(MetadataCache):
             # Use a custom timer to try to spread expirations. Within one instance it
             # won't change anything but it will be better if you run multiple instances.
             return time.time() + self.__ttl * random.uniform(-0.25, 0.25)
+
         self.__cache = cachetools.TTLCache(
-            maxsize=self.__size, ttl=self.__ttl, timer=_timer)
+            maxsize=self.__size, ttl=self.__ttl, timer=_timer
+        )
 
     def close(self):
         """Free resources allocated by open()."""
@@ -289,11 +294,17 @@ class MemoryCache(MetadataCache):
         with self._lock:
             self.__cache.expire()
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """Remove spurious entries from the cache."""
         with self._lock:
-            self._repair(start_key, end_key, shard,
-                         nshards, callback_on_progress)
+            self._repair(start_key, end_key, shard, nshards, callback_on_progress)
 
     def _repair(self, start_key, end_key, shard, nshards, callback_on_progress):
         i = 0
@@ -310,8 +321,9 @@ class MemoryCache(MetadataCache):
             expected_metric = self.__cache[key]
             if metric != expected_metric:
                 logging.warning(
-                    "Removing invalid key '%s': expected: %s cached: %s" % (
-                        key, expected_metric, metric))
+                    "Removing invalid key '%s': expected: %s cached: %s"
+                    % (key, expected_metric, metric)
+                )
                 del self.__cache[key]
 
             if callback_on_progress:
@@ -322,10 +334,10 @@ class MemoryCache(MetadataCache):
     def stats(self):
         """Current stats about the cache the cache."""
         return {
-            'size': self.__cache.currsize,
-            'maxsize': self.__cache.maxsize,
-            'hits': self._hits._value.get(),
-            'miss': self._misses._value.get(),
+            "size": self.__cache.currsize,
+            "maxsize": self.__cache.maxsize,
+            "hits": self._hits._value.get(),
+            "miss": self._misses._value.get(),
         }
 
 
@@ -336,7 +348,7 @@ class DiskCache(MetadataCache):
     See module-level comments for the design.
     """
 
-    TYPE = 'disk'
+    TYPE = "disk"
 
     __SINGLETONS = {}
     __SINGLETONS_LOCK = threading.Lock()
@@ -345,13 +357,12 @@ class DiskCache(MetadataCache):
     # According to LMDB's author, 128 readers is about 8KiB of RAM, 1024 is about 128kiB and even
     # 4096 is safe: https://twitter.com/armon/status/534867803426533376
     _MAX_READERS = 2048
-    _METRIC_SEPARATOR = '|'
-    _EMPTY = b'nil'
+    _METRIC_SEPARATOR = "|"
+    _EMPTY = b"nil"
 
     # 1G on 32 bits systems
     # 16G on 64 bits systems
-    MAP_SIZE = (1024 * 1024 * 1024 * 16 if sys.maxsize >
-                2**32 else 1024 * 1024 * 1024)
+    MAP_SIZE = 1024 * 1024 * 1024 * 16 if sys.maxsize > 2 ** 32 else 1024 * 1024 * 1024
 
     def __init__(self, accessor, settings, name=None):
         """Create a new DiskCache."""
@@ -365,9 +376,7 @@ class DiskCache(MetadataCache):
         self.__size = settings.get("size", self.MAP_SIZE)
         self.__ttl = int(settings.get("ttl", 24 * 60 * 60))
         self.__sync = settings.get("sync", True)
-        self.__databases = {
-            "metric_to_meta": None
-        }
+        self.__databases = {"metric_to_meta": None}
         self.__metric_to_metadata_db = None
         self._max_size.set(self.__size)
 
@@ -384,8 +393,9 @@ class DiskCache(MetadataCache):
         except OSError:
             pass  # Directory already exists
 
-        logging.info('Opening cache %s (ttl: %s, sync: %s)',
-                     self.__path, self.__ttl, self.__sync)
+        logging.info(
+            "Opening cache %s (ttl: %s, sync: %s)", self.__path, self.__ttl, self.__sync
+        )
         self.__env = lmdb.open(
             self.__path,
             map_size=self.__size,
@@ -449,12 +459,12 @@ class DiskCache(MetadataCache):
             return value
         if isinstance(value, six.binary_type):
             return value
-        return value.encode('utf-8')
+        return value.encode("utf-8")
 
     def _decode(self, value):
         if value is None:
             return value
-        return value.decode('utf-8')
+        return value.decode("utf-8")
 
     def _cache_get(self, metric_name):
         """Return a Metric from a the cache, None if no such metric."""
@@ -518,7 +528,7 @@ class DiskCache(MetadataCache):
     def stats(self):
         """Count number of cached entries."""
         ret = super(DiskCache, self).stats()
-        ret['root'] = self.__env.stat(),
+        ret["root"] = (self.__env.stat(),)
         for name, database in self.__databases.items():
             with self.__env.begin(database, write=False) as txn:
                 ret[name] = txn.stat(database)
@@ -537,8 +547,7 @@ class DiskCache(MetadataCache):
         """
         timestamp = str(int(time.time()))
         return self._encode(
-            self._METRIC_SEPARATOR.join(
-                [metric_id, metric_metadata, timestamp])
+            self._METRIC_SEPARATOR.join([metric_id, metric_metadata, timestamp])
         )
 
     def __value_from_metric(self, metric):
@@ -600,19 +609,27 @@ class DiskCache(MetadataCache):
             split = self.__split_payload(self._decode(value))
             if split is None:
                 logging.warning(
-                    "Removing undecodable key '%s' with value %s" % (key, value))
+                    "Removing undecodable key '%s' with value %s" % (key, value)
+                )
                 txn.delete(key=key)
                 continue
 
             _, _, timestamp = split
             if timestamp < cutoff:
                 logging.warning(
-                    "Removing expired key '%s' with timestamp %d" % (
-                        key, timestamp))
+                    "Removing expired key '%s' with timestamp %d" % (key, timestamp)
+                )
                 txn.delete(key=key)
         return None
 
-    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+    def repair(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
         """Remove spurious entries from the cache.
 
         During the repair the keyspace is split in nshards and
@@ -641,21 +658,23 @@ class DiskCache(MetadataCache):
                     continue
 
                 metric = self._accessor.get_metric(self._decode(key))
-                expected_value = self.__value_from_metric(
-                    metric) if metric else None
+                expected_value = self.__value_from_metric(metric) if metric else None
 
                 split = self.__split_payload(self._decode(value))
-                v_id, v_metadata, _ = split if split is not None else (
-                    None, None, None)
+                v_id, v_metadata, _ = split if split is not None else (None, None, None)
 
                 split = self.__split_payload(self._decode(expected_value))
-                e_id, e_metadata, _ = split if split is not None else (
-                    None, None, None)
+                e_id, e_metadata, _ = split if split is not None else (None, None, None)
 
-                if v_id is None or e_id is None or (v_id, v_metadata) != (e_id, e_metadata):
+                if (
+                    v_id is None
+                    or e_id is None
+                    or (v_id, v_metadata) != (e_id, e_metadata)
+                ):
                     logging.warning(
-                        "Removing invalid key '%s': expected: %s cached: %s" % (
-                            key, expected_value, value))
+                        "Removing invalid key '%s': expected: %s cached: %s"
+                        % (key, expected_value, value)
+                    )
                     txn.delete(key=key)
 
                 if callback_on_progress:

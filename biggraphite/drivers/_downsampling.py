@@ -32,10 +32,7 @@ class Downsampler(object):
     CAPACITY = 20
     PURGE_EVERY_S = 3600
 
-    slots = (
-        "_capacity",
-        "_names_to_aggregates"
-    )
+    slots = ("_capacity", "_names_to_aggregates")
 
     def __init__(self, capacity=CAPACITY):
         """Default constructor."""
@@ -60,7 +57,8 @@ class Downsampler(object):
         # Ensure we have the required aggregation mechanism.
         if metric.name not in self._names_to_aggregates:
             metric_aggregates = MetricAggregates(
-                metric.metadata, stage0_capacity=self._capacity)
+                metric.metadata, stage0_capacity=self._capacity
+            )
             self._names_to_aggregates[metric.name] = metric_aggregates
 
         # Sort points by increasing timestamp, because put expects them in order.
@@ -81,7 +79,7 @@ class Downsampler(object):
             aggregate = self._names_to_aggregates[metric_name]
             if aggregate.obsolete(now):
                 del self._names_to_aggregates[metric_name]
-                log.info('removing obsolete aggregates for %s' % metric_name)
+                log.info("removing obsolete aggregates for %s" % metric_name)
 
 
 class MetricAggregates(object):
@@ -173,8 +171,7 @@ class MetricAggregates(object):
                 for step in range(start_step, end_step):
                     index = step % self._stage0_capacity
                     if not math.isnan(self._values[index]):
-                        expired.append(
-                            (step * stage_0.precision, self._values[index]))
+                        expired.append((step * stage_0.precision, self._values[index]))
                     self._values[index] = _NaN
                 self._stage0_timestamp = point_timestamp
 
@@ -183,7 +180,7 @@ class MetricAggregates(object):
             elif point_step > last_update_step - self._stage0_capacity:
                 # Point fits in the buffer => replace value in the stage0 buffer.
 
-                if (self._values[point_index] != value):
+                if self._values[point_index] != value:
                     updated[point_step] = downsampled_point
                 self._values[point_index] = value
 
@@ -205,8 +202,7 @@ class MetricAggregates(object):
         stage_0 = self._stage0
         # Most ancient step is at the beginning of the stage0 buffer,
         # which is current step - (length - 1)
-        start_step = stage_0.step(
-            self._stage0_timestamp) - (self._stage0_capacity - 1)
+        start_step = stage_0.step(self._stage0_timestamp) - (self._stage0_capacity - 1)
         end_step = start_step + self._stage0_capacity
         for step in range(start_step, end_step):
             index = step % self._stage0_capacity
@@ -308,7 +304,7 @@ class MetricAggregates(object):
         # At this point, result contains only expired points => update stage information.
         # The last point in result contains the information taking into account
         # the expired points, so we use it to update the stage information.
-        last_point = result[- 1]
+        last_point = result[-1]
         self._set_stage_timestamp(stage_index, last_point[0])
         self._set_stage_value(stage_index, last_point[1])
         self._set_stage_count(stage_index, last_point[2])
@@ -337,8 +333,7 @@ class MetricAggregates(object):
         retention = self._metric_metadata.retention
         stages = retention.stages
 
-        (result, expired_stage0, non_expired_stage0) = (
-            self._update_stage0(points))
+        (result, expired_stage0, non_expired_stage0) = self._update_stage0(points)
 
         # Early return if we haven't changed anything.
         if not result:
@@ -347,7 +342,8 @@ class MetricAggregates(object):
         # Update all the other stages.
         for stage_index in range(1, len(stages)):
             result_stage = self._update_stage(
-                stage_index, expired_stage0, non_expired_stage0)
+                stage_index, expired_stage0, non_expired_stage0
+            )
             result.extend(result_stage)
 
         return result
@@ -366,10 +362,10 @@ class MetricAggregates(object):
         """Check if this aggregate is obsolete."""
         if not len(self._retention.downsampled_stages):
             # If there is only one stage, keep it for stage0_capacity periods.
-            keepalive = (self._stage0.precision * self._stage0_capacity)
+            keepalive = self._stage0.precision * self._stage0_capacity
         else:
             # Else, keep it for at least twice the precision of the upper stage.
-            keepalive = (self._retention[1].precision * 2)
+            keepalive = self._retention[1].precision * 2
         return self._stage0_timestamp < now - keepalive
 
     @property
