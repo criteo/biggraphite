@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.5] - 2018-08-21
+
+### Added
+- Support clean/stats/repair in ES
+- bgutil web: fix and finish async commands
+
 ## [0.13.4] - 2018-08-16
 
 ### Fixed
@@ -269,7 +275,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.3...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.5...HEAD
+[0.13.5]: https://github.com/criteo/biggraphite/compare/v0.13.4...v0.13.5
+[0.13.4]: https://github.com/criteo/biggraphite/compare/v0.13.3...v0.13.4
 [0.13.3]: https://github.com/criteo/biggraphite/compare/v0.13.2...v0.13.3
 [0.13.2]: https://github.com/criteo/biggraphite/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/criteo/biggraphite/compare/v0.13.0...v0.13.1
