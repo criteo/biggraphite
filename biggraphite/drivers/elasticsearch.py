@@ -637,6 +637,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def __touch_document(self, document):
         metric = self._document_to_metric(document)
         new_index = self.get_index(metric)
+
         if new_index == document.meta.index:
             self.__update_existing_document(document)
         else:

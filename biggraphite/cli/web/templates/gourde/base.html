@@ -8,13 +8,16 @@
 {% block navbar_left %}
     {{ super() }}
     <li class="nav-item">
-        <a class="nav-link" href="/workers">Workers</a>
+        <a class="nav-link" href="/maintenance"><i class="fa fa-broom"></i> Maintenance</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="/workers"><i class="fa fa-cogs"></i> Workers</a>
     </li>
 {% endblock %}
 
 {%  block navbar_right %}
     {{ super() }}
     <li class="nav-item">
-        <a class="nav-link" href="/api">API</a>
+        <a class="nav-link" href="/api"><i class="fa fa-sitemap"></i> API</a>
     </li>
 {%  endblock %}

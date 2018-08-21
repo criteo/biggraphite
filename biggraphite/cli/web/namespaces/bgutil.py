@@ -66,7 +66,12 @@ def parse_command(command_name, payload):
     bg_settings.add_argparse_arguments(parser)
     cmd.add_arguments(parser)
 
-    args = [a for a in payload["arguments"]]
+    if not payload:
+        arguments = []
+    else:
+        arguments = payload.get("arguments", [])
+
+    args = [a for a in arguments]
     opts = parser.parse_args(args)
 
     return cmd, opts
