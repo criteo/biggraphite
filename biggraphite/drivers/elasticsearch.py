@@ -802,6 +802,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         data = {"doc": {"read_on": datetime.datetime.now()}}
         index = self.get_index(metric.name)
         self.__update_document(data, index, metric.id)
+        # Make sure the caller also see the change without refreshing
+        # the metric.
+        metric.updated_on = datetime.datetime.now()
 
     def __update_document(self, data, index, document_id):
         self.client.update(
