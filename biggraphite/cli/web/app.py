@@ -57,6 +57,10 @@ class WebApp(object):
         tasks = enumerate(context.task_runner.tasks)
         return flask.render_template("workers.html", tasks=tasks)
 
+    def maintenance(self):
+        """Display maintenance operations."""
+        return flask.render_template("maintenance.html")
+
     def is_healthy(self):
         """Custom "health" check."""
         return all(t.is_alive() for t in context.task_runner._executor._threads)
@@ -84,6 +88,7 @@ class WebApp(object):
         self.args = args
         self.gourde.add_url_rule("/", "index", self.index)
         self.gourde.add_url_rule("/workers", "workers", self.workers)
+        self.gourde.add_url_rule("/maintenance", "maintenance", self.maintenance)
         self.gourde.setup(args)
         self.gourde.is_healthy = self.is_healthy
 

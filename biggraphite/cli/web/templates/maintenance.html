@@ -1,0 +1,40 @@
+{% extends "gourde/base.html" %}
+
+{% block title %}Maintenance{% endblock %}
+
+{% block content %}
+<h1>Maintenance</h1>
+
+<div class="row">
+    <p>
+        Result will be available on the <a href="/workers"><i class="fa fa-cogs"></i> workers</a> page.
+    </p>
+</div>
+<div class="row">
+    <ul class="list-group">
+        <li class="list-group-item">
+            <button type="button" class="btn btn-primary" onclick="bgutil('clean', ['--clean-backend'])">Clean</button>
+        </li>
+        <li class="list-group-item">
+            <button type="button" class="btn btn-primary" onclick="bgutil('repair', [])">Repair</button>
+        </li>
+        <li class="list-group-item">
+            <button type="button" class="btn btn-primary" onclick="bgutil('stats', [])">Stats</button>
+        </li>
+    </ul>
+</div>
+
+
+<script type="text/javascript">
+    function bgutil(command, arguments) {
+        $.ajax({
+            type: "POST",
+            url: "/api/bgutil/async/" + command,
+            data: JSON.stringify({"arguments": arguments}),
+            dataType: "json",
+            contentType: "application/json"
+        })
+        // TODO: Handle success and errors.
+    }
+</script>
+{% endblock %}
