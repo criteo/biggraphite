@@ -65,4 +65,8 @@ setuptools.setup(
             'bgutil = biggraphite.cli.bgutil:main',
         ]
     },
+    classifiers=[
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.6",
+    ],
 )
