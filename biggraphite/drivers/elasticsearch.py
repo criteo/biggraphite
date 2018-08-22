@@ -796,11 +796,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             self.__update_read_on(metric)
 
     def __update_read_on(self, metric):
-        # TODO: state if we should move the document from its index to
-        # the current (today) index
         data = {"doc": {"read_on": datetime.datetime.now()}}
-        index = self.get_index(metric.name)
-        self.__update_document(data, index, metric.id)
+
+        # Get the latest version of the metric and update it.
+        document = self.__get_document(metric.name)
+        self.__update_document(data, document.meta.index, metric.id)
+
         # Make sure the caller also see the change without refreshing
         # the metric.
         metric.read_on = datetime.datetime.now()
