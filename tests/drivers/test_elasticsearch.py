@@ -317,6 +317,7 @@ class TestAccessorWithElasticsearch(
             self.accessor.flush()
 
         metric = self.accessor.get_metric(metric_name)
+        self.accessor.flush()
 
         self.assertEqual(metric.created_on, expected_created_on)
         self.assertEqual(metric.updated_on, expected_created_on)
@@ -354,7 +355,7 @@ class TestAccessorWithElasticsearch(
 
         updated_metric = self.accessor.get_metric(metric.name)
 
-        self.assertNotEquals(created_metric.updated_on, updated_metric.updated_on)
+        self.assertNotEqual(created_metric.updated_on, updated_metric.updated_on)
 
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
 
@@ -371,10 +372,11 @@ class TestAccessorWithElasticsearch(
                 "elasticsearch.test_metric_is_recreated_if_index_has_changed"
             )
             self.accessor.create_metric(metric)
-        self.flush()
+            self.flush()
 
         with freezegun.freeze_time("2014-01-01 00:00:00"):
             self.accessor.get_metric(metric.name)
+            self.flush()
 
         self.accessor.get_index = old_get_index_fn
 
@@ -383,7 +385,7 @@ class TestAccessorWithElasticsearch(
 
         with freezegun.freeze_time("2014-01-01 00:00:02"):
             self.accessor.touch_metric(metric)
-        self.flush()
+            self.flush()
 
         search = elasticsearch_dsl.Search()
         search = (
@@ -395,12 +397,12 @@ class TestAccessorWithElasticsearch(
         )
 
         responses = search.execute()
-        self.assertEquals(2, responses.hits.total)
+        self.assertEqual(2, responses.hits.total)
         with freezegun.freeze_time("2014-01-01 00:00:02"):
-            self.assertEquals(
+            self.assertEqual(
                 self.accessor.get_index(metric), responses.hits[0].meta.index
             )
-        self.assertEquals(get_index_mock(None), responses.hits[1].meta.index)
+        self.assertEqual(get_index_mock(None), responses.hits[1].meta.index)
 
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
 

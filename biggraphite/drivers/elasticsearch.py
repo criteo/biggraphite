@@ -23,6 +23,8 @@ import logging
 import os
 import time
 
+from concurrent import futures
+
 import elasticsearch
 import elasticsearch_dsl
 import prometheus_client
@@ -301,6 +303,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'"
             % (self._index_prefix, self._index_suffix)
         )
+        # This will be used for low-priority background operations.
+        self._executor = None
 
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
@@ -312,6 +316,11 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """Connect to elasticsearch."""
         if self.is_connected:
             return
+        if not self._executor:
+            # It has a single thread because it's really for low-priority operations.
+            self._executor = futures.ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="bg_es"
+            )
 
         if self._username:
             http_auth = (self._username, self._password or "")
@@ -349,6 +358,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if self.client:
             self.client.transport.close()
             self.client = None
+        if self._executor:
+            self._executor.shutdown()
+            self._executor = None
 
     def background(self):
         """Perform periodic background operations."""
@@ -356,6 +368,13 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     def flush(self):
         """Flush any internal buffers."""
+        # First, flush background tasks.
+        if self._executor:
+            # Since we have a single thread, it's cheap way to join()
+            future = self._executor.submit(lambda: True)
+            future.result(timeout=1)
+
+        # Then, make sure we can read everything we wrote.
         if self.client:
             self.client.indices.flush(
                 index="%s*" % self._index_prefix,
@@ -602,6 +621,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         )
 
         log.debug(json.dumps(search.to_dict(), default=str))
+
         response = search[:1].execute()
 
         if response is None or response.hits.total == 0:
@@ -629,29 +649,33 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             delta = int(time.time()) - int(updated_on_timestamp)
 
         if delta >= self.__updated_on_ttl_sec:
-            # Update Elasticsearch.
-            metric_name = bg_metric.sanitize_metric_name(metric.name)
-            document = self.__get_document(metric_name)
-            if document:
-                self.__touch_document(document)
             # Make sure the caller also see the change without refreshing
             # the metric.
             metric.updated_on = datetime.datetime.now()
+            self._executor.submit(self.__touch_document, metric, metric.updated_on)
 
-    def __touch_document(self, document):
+    def __touch_document(self, metric, updated_on):
+        # Update Elasticsearch.
+        metric_name = bg_metric.sanitize_metric_name(metric.name)
+        document = self.__get_document(metric_name)
+
+        # Ignore non-existing metrics.
+        if not document:
+            return
+
         metric = self._document_to_metric(document)
         new_index = self.get_index(metric)
 
         if new_index == document.meta.index:
-            self.__update_existing_document(document)
+            self.__update_existing_document(document, updated_on)
         else:
-            metric.updated_on = datetime.datetime.now()
+            # Re-create the metric.
+            metric.updated_on = updated_on
             self.create_metric(metric)
 
-    def __update_existing_document(self, document):
+    def __update_existing_document(self, document, updated_on):
         index = document.meta.index
         document_id = document.uuid
-        updated_on = datetime.datetime.now()
         data = {"doc": {"updated_on": updated_on}}
         self.__update_document(data, index, document_id)
         document.updated_on = ttls.datetime_to_str(updated_on)
@@ -807,8 +831,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             delta = int(time.time()) - int(read_on_timestamp)
 
         if delta >= self.__read_on_ttl_sec:
-            # TODO: execute asynchronously
-            self.__update_read_on(metric)
+            self._executor.submit(self.__update_read_on, metric)
+            # Make sure the caller also see the change without refreshing
+            # the metric.
+            metric.read_on = datetime.datetime.now()
 
     def __update_read_on(self, metric):
         data = {"doc": {"read_on": datetime.datetime.now()}}
@@ -816,10 +842,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # Get the latest version of the metric and update it.
         document = self.__get_document(metric.name)
         self.__update_document(data, document.meta.index, metric.id)
-
-        # Make sure the caller also see the change without refreshing
-        # the metric.
-        metric.read_on = datetime.datetime.now()
 
     def __update_document(self, data, index, document_id):
         self.client.update(
