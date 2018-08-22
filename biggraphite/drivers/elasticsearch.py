@@ -63,6 +63,7 @@ DEFAULT_PORT = 9200
 DEFAULT_TIMEOUT = 10
 DEFAULT_USERNAME = os.getenv("BG_ELASTICSEARCH_USERNAME")
 DEFAULT_PASSWORD = os.getenv("BG_ELASTICSEARCH_PASSWORD")
+DEFAULT_READ_ON_SAMPLING_RATE = 0.05
 
 DEFAULT_ES_SCHEMA_PATH = os.path.join(
     os.path.dirname(__file__), "elasticsearch_schema.json"
@@ -275,6 +276,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         timeout=DEFAULT_TIMEOUT,
         updated_on_ttl_sec=ttls.DEFAULT_UPDATED_ON_TTL_SEC,
         read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
+        read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
         schema_path=DEFAULT_ES_SCHEMA_PATH,
     ):
         """Create a new ElasticSearchAccessor."""
@@ -290,6 +292,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__glob_parser = bg_glob.GraphiteGlobParser()
         self.__updated_on_ttl_sec = updated_on_ttl_sec
         self.__read_on_ttl_sec = read_on_ttl_sec
+        self.__read_on_counter = 0
+        self.__read_on_sampling_rate = read_on_sampling_rate
         self.__schema_path = schema_path
         self.client = None
         self.schema = None
@@ -785,6 +789,17 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     @READ_ON.time()
     def __update_read_on_on_need(self, metric):
+        # TODO: remove the sampling rate once graphite.py stops using a cache (that doesn't get
+        # updated when we updated read_on). Instead we should collect the latest read_on when we list
+        # metrics.
+        rate = int(1 / self.__read_on_sampling_rate)
+
+        skip = self.__read_on_counter % rate > 0
+        self.__read_on_counter += 1
+
+        if skip:
+            return
+
         if not metric.read_on:
             delta = self.__read_on_ttl_sec + 1
         else:
