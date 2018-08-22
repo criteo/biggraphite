@@ -1,6 +1,7 @@
 [![Build Status](https://travis-ci.org/criteo/biggraphite.svg?branch=master)](https://travis-ci.org/criteo/biggraphite)
 [![Coverage Status](https://coveralls.io/repos/github/criteo/biggraphite/badge.svg)](https://coveralls.io/github/criteo/biggraphite?branch=master)
 [![PyPi version](https://img.shields.io/pypi/v/biggraphite.svg)](https://pypi.python.org/pypi/biggraphite/)
+[![Supported Python versions](https://img.shields.io/pypi/pyversions/biggraphite.svg)](https://pypi.python.org/pypi/bigraphite/)
 
 BigGraphite
 -----------
