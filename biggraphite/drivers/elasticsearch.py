@@ -698,7 +698,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 index_datetime = datetime.datetime.strptime(
                     index, self._index_prefix + index_suffix
                 )
-                print(index_datetime)
             except ValueError as e:
                 # Ignore dates that we can't parse.
                 logging.error("Can't parse %s: %s" % (index, e))
