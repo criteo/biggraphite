@@ -789,9 +789,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     @READ_ON.time()
     def __update_read_on_on_need(self, metric):
-        # TODO: remove the sampling rate once graphite.py stops using a cache (that doesn't get
-        # updated when we updated read_on). Instead we should collect the latest read_on when we list
-        # metrics.
+        # TODO: remove the sampling rate once graphite.py stops using a cache
+        # (that doesn't get updated when we updated read_on). Instead we
+        # should collect the latest read_on when we list metrics.
         rate = int(1 / self.__read_on_sampling_rate)
 
         skip = self.__read_on_counter % rate > 0
