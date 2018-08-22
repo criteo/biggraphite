@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.6] - 2018-08-22
+
+### Added
+- elasticsearch: fix read_on bug
+- bgutil web: add /maintainance page
+
 ## [0.13.5] - 2018-08-21
 
 ### Added
@@ -275,7 +281,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.5...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.6...HEAD
+[0.13.6]: https://github.com/criteo/biggraphite/compare/v0.13.5...v0.13.6
 [0.13.5]: https://github.com/criteo/biggraphite/compare/v0.13.4...v0.13.5
 [0.13.4]: https://github.com/criteo/biggraphite/compare/v0.13.3...v0.13.4
 [0.13.3]: https://github.com/criteo/biggraphite/compare/v0.13.2...v0.13.3
