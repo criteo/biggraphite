@@ -18,6 +18,10 @@ import logging
 
 import flask
 import flask_restplus
+try:
+    import flask_cors
+except ImportError:
+    flask_cors = None
 import gourde
 import prometheus_client
 
@@ -76,6 +80,12 @@ class WebApp(object):
         api.init_app(blueprint)
 
         self.app.register_blueprint(blueprint)
+
+        if flask_cors:
+            # Allow others to request swagger stuff without restrictions.
+            # This helps for https reverse proxy with bad headers.
+            flask_cors.CORS(
+                app, resources={r"/api/swagger.json": {"origins": "*"}})
 
     def initialize_app(self, accessor, args):
         """Initialize the App."""
