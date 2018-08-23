@@ -376,7 +376,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if self._executor:
             # Since we have a single thread, it's cheap way to join()
             future = self._executor.submit(lambda: True)
-            future.result(timeout=1)
+            future.result(timeout=5)
 
         # Then, make sure we can read everything we wrote.
         if self.client:
