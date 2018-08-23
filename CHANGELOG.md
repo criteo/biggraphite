@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.7] - 2018-08-23
+
+### Fixed
+- elasticsearch: env variables are now working properly
+
+### Improved
+- elasticsearch: timestamps are now updated on a background thread
+
 ## [0.13.6] - 2018-08-22
 
 ### Added
@@ -281,7 +289,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.6...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.7...HEAD
+[0.13.7]: https://github.com/criteo/biggraphite/compare/v0.13.6...v0.13.7
 [0.13.6]: https://github.com/criteo/biggraphite/compare/v0.13.5...v0.13.6
 [0.13.5]: https://github.com/criteo/biggraphite/compare/v0.13.4...v0.13.5
 [0.13.4]: https://github.com/criteo/biggraphite/compare/v0.13.3...v0.13.4
