@@ -85,7 +85,7 @@ class WebApp(object):
             # Allow others to request swagger stuff without restrictions.
             # This helps for https reverse proxy with bad headers.
             flask_cors.CORS(
-                app, resources={r"/api/swagger.json": {"origins": "*"}})
+                self.app, resources={r"/api/swagger.json": {"origins": "*"}})
 
     def initialize_app(self, accessor, args):
         """Initialize the App."""
