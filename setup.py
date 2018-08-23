@@ -16,6 +16,10 @@
 """setuptools integration for BigGraphite."""
 import os
 import setuptools
+import sys
+
+
+PY3 = sys.version_info.major == 3
 
 
 def _read(relpath):
@@ -34,6 +38,10 @@ def _read_reqs(relpath):
 _REQUIREMENTS_TXT = _read_reqs("requirements.txt")
 _DEPENDENCY_LINKS = [l for l in _REQUIREMENTS_TXT if "://" in l]
 _INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
+
+
+if not PY3:
+  _INSTALL_REQUIRES += ('futures', 'enum34')
 
 
 packages = setuptools.find_packages()

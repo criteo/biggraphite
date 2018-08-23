@@ -23,7 +23,6 @@ certifi
 
 # Core
 six
-enum34
 cachetools
 prometheus_client
 
