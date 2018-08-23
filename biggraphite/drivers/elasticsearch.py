@@ -99,10 +99,14 @@ def add_argparse_arguments(parser):
         default=DEFAULT_INDEX_SUFFIX,
     )
     parser.add_argument(
-        "--elasticsearch_username", help="elasticsearch username.", default=None
+        "--elasticsearch_username",
+        help="elasticsearch username.",
+        default=''
     )
     parser.add_argument(
-        "--elasticsearch_password", help="elasticsearch password.", default=None
+        "--elasticsearch_password",
+        help="elasticsearch password.",
+        default=''
     )
     parser.add_argument(
         "--elasticsearch_hosts",
@@ -273,8 +277,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         port=DEFAULT_PORT,
         index=DEFAULT_INDEX,
         index_suffix=DEFAULT_INDEX_SUFFIX,
-        username=DEFAULT_USERNAME,
-        password=DEFAULT_PASSWORD,
+        username=None,
+        password=None,
         timeout=DEFAULT_TIMEOUT,
         updated_on_ttl_sec=ttls.DEFAULT_UPDATED_ON_TTL_SEC,
         read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
@@ -287,8 +291,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._port = port
         self._index_prefix = index
         self._index_suffix = index_suffix
-        self._username = username
-        self._password = password
+        self._username = username or DEFAULT_USERNAME
+        self._password = password or DEFAULT_PASSWORD
         self._timeout = timeout
         self._known_indices = {}
         self.__glob_parser = bg_glob.GraphiteGlobParser()

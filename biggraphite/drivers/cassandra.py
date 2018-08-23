@@ -156,10 +156,14 @@ def add_argparse_arguments(parser):
         default=DEFAULT_KEYSPACE,
     )
     parser.add_argument(
-        "--cassandra_username", help="Cassandra username.", default=None
+        "--cassandra_username",
+        help="Cassandra username.",
+        default=None
     )
     parser.add_argument(
-        "--cassandra_password", help="Cassandra password.", default=None
+        "--cassandra_password",
+        help="Cassandra password.",
+        default=None
     )
     parser.add_argument(
         "--cassandra_contact_points",
