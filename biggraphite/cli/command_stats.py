@@ -19,6 +19,8 @@ from __future__ import print_function
 import collections
 import re
 import time
+import socket
+import logging
 
 import tabulate
 from six.moves.configparser import ConfigParser
@@ -67,6 +69,7 @@ class Namespaces(object):
         self.patterns = collections.OrderedDict()
 
         if not filename:
+            self.patterns[re.compile(".*")] = "total"
             return
 
         self.config.read(filename)
@@ -110,6 +113,10 @@ class CommandStats(command.BaseCommand):
         parser.add_argument(
             "-f", "--format", help="Format: %s" % ", ".join(formats), dest="fmt"
         )
+        parser.add_argument(
+            "--carbon",
+            help="Carbon host:port to send points to when using graphite output."
+        )
         self._n_metrics = collections.defaultdict(int)
         self._n_points = collections.defaultdict(int)
 
@@ -119,6 +126,7 @@ class CommandStats(command.BaseCommand):
         See command.CommandBase.
         """
         self.ns = Namespaces(opts.conf)
+
         accessor.connect()
 
         if accessor.TYPE.startswith("elasticsearch+"):
@@ -141,10 +149,21 @@ class CommandStats(command.BaseCommand):
 
         if opts.fmt == "graphite":
             now = int(time.time())
+            output = ""
             for k, v in self._n_metrics.items():
-                print("metrics.%s %s %s" % (k, v, now))
+                output += "metrics.%s %s %s\n" % (k, v, now)
             for k, v in self._n_points.items():
-                print("points.%s %s %s" % (k, v, now))
+                output += "points.%s %s %s\n" % (k, v, now)
+            if not opts.carbon:
+                print(output)
+            else:
+                # This is a very-very cheap implementation of a carbon client.
+                host, port = opts.carbon.split(':')
+                logging.info("Sending data to %s:%s" % (host, port))
+                sock = socket.socket()
+                sock.connect((host, int(port)))
+                sock.sendall(output)
+                sock.close()
             return
 
         for k in self._n_metrics.keys():
@@ -155,6 +174,6 @@ class CommandStats(command.BaseCommand):
 
     def stats(self, metric, done, total):
         """Compute stats."""
-        ns, attrs = self.ns.lookup(metric.name)
+        ns, _ = self.ns.lookup(metric.name)
         self._n_metrics[ns] += 1
         self._n_points[ns] += metric.metadata.retention.points
