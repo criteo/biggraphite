@@ -70,6 +70,7 @@ class Namespaces(object):
 
         if not filename:
             self.patterns[re.compile(".*")] = "total"
+            self.config.add_section("total")
             return
 
         self.config.read(filename)

@@ -57,8 +57,8 @@ class TestCommandStats(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_graphite(self):
         output = self.get_output(["--format", "graphite"])
-        self.assertIn("metrics.none 2", output)
-        self.assertIn("points.none 2880", output)
+        self.assertIn("metrics.total 2", output)
+        self.assertIn("points.total 2880", output)
 
 
 if __name__ == "__main__":
