@@ -17,6 +17,7 @@
 from __future__ import absolute_import
 
 import argparse
+import logging
 
 import flask_restplus as rp
 
@@ -132,6 +133,7 @@ class BgUtilResource(rp.Resource):
         except UnknownCommandException as e:
             rp.abort(message=str(e))
         except Exception as e:
+            logging.exception("bgutil failed")
             rp.abort(message=str(e))
 
         context.accessor.flush()
@@ -163,6 +165,7 @@ class BgUtilAsyncResource(rp.Resource):
         except UnknownCommandException as e:
             rp.abort(message=str(e))
         except Exception as e:
+            logging.exception("bgutil failed")
             rp.abort(message=str(e))
 
         context.accessor.flush()
