@@ -118,6 +118,11 @@ class CommandStats(command.BaseCommand):
             "--carbon",
             help="Carbon host:port to send points to when using graphite output."
         )
+        parser.add_argument(
+            "--prefix",
+            help="Prefix to add to every section name.",
+            default='',
+        )
         self._n_metrics = collections.defaultdict(int)
         self._n_points = collections.defaultdict(int)
 
@@ -152,9 +157,9 @@ class CommandStats(command.BaseCommand):
             now = int(time.time())
             output = ""
             for k, v in self._n_metrics.items():
-                output += "metrics.%s %s %s\n" % (k, v, now)
+                output += "%smetrics.%s %s %s\n" % (opts.prefix, k, v, now)
             for k, v in self._n_points.items():
-                output += "points.%s %s %s\n" % (k, v, now)
+                output += "%spoints.%s %s %s\n" % (opts.prefix, k, v, now)
             if not opts.carbon:
                 print(output)
             else:
@@ -168,7 +173,11 @@ class CommandStats(command.BaseCommand):
             return
 
         for k in self._n_metrics.keys():
-            data = (k, self._n_metrics.get(k), self._n_points.get(k))
+            data = (
+                '%s%s' % (opts.prefix, k),
+                self._n_metrics.get(k),
+                self._n_points.get(k)
+            )
             rows.append(data)
 
         print(tabulate.tabulate(rows, headers="firstrow", tablefmt=opts.fmt))
