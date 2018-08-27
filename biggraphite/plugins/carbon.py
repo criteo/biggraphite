@@ -181,7 +181,13 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             retention=bg_metric.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,
         )
-        metric = bg_metric.make_metric(metric_name, metadata)
+        metric = bg_metric.make_metric(
+            metric_name, metadata,
+            # Don't set updated_on to make sure it gets written when
+            # necessary. This also means all `updated_on` gets re-written
+            # after each carbon restart.
+            updated_on=None,
+        )
         self.cache.cache_set(metric_name, metric)
         self._createAsync(metric, orig_metric_name)
 
