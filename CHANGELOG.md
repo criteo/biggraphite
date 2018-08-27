@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.8] - 2018-08-27
+
+### Fixed
+- cassandra: don't loose points if we have many restarts
+- Fix python 3.6 compatibility
+
+### Improved
+- bgutil stats: add carbon support
+- Add flask_cors support
+
 ## [0.13.7] - 2018-08-23
 
 ### Fixed
@@ -289,7 +299,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.7...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.8...HEAD
+[0.13.7]: https://github.com/criteo/biggraphite/compare/v0.13.7...v0.13.8
 [0.13.7]: https://github.com/criteo/biggraphite/compare/v0.13.6...v0.13.7
 [0.13.6]: https://github.com/criteo/biggraphite/compare/v0.13.5...v0.13.6
 [0.13.5]: https://github.com/criteo/biggraphite/compare/v0.13.4...v0.13.5
