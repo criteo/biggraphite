@@ -158,7 +158,9 @@ class _MemoryAccessor(bg_accessor.Accessor):
 
     def glob_metrics(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metrics matching this glob."""
-        raise NotImplementedError("TODO: glob_metrics")
+        super(_MemoryAccessor, self).glob_metrics(glob)
+        metric_names = iter(self.__glob_names(self._metric_names, glob))
+        return [self._name_to_metric.get(name) for name in metric_names]
 
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
