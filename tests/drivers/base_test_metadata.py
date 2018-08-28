@@ -22,7 +22,7 @@ from tests import test_utils as bg_test_utils
 
 
 class BaseTestAccessorMetadata(object):
-    def test_glob_metrics(self):
+    def test_glob_metric_names(self):
         IS_CASSANDRA_LUCENE = self.ACCESSOR_SETTINGS.get("cassandra_use_lucene", False)
         IS_ELASTICSEARCH = self.ACCESSOR_SETTINGS.get("driver", "") == "elasticsearch"
 
@@ -187,7 +187,7 @@ class BaseTestAccessorMetadata(object):
         self.accessor.drop_all_metrics()
         assert_find("*", [])
 
-    def test_glob_metrics_cached(self):
+    def test_glob_metric_names_cached(self):
         if isinstance(self.accessor, bg_elasticsearch._ElasticSearchAccessor):
             # TODO (t.chataigner) Remove once accessor.cache is implemented.
             self.skipTest(
