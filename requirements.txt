@@ -22,6 +22,7 @@ elasticsearch-dsl
 certifi
 
 # Core
+enum-compat
 six
 cachetools
 prometheus_client
