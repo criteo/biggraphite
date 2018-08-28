@@ -519,7 +519,26 @@ class TestAccessorWithElasticsearch(
         with self.assertRaises(Exception):
             self.accessor.insert_downsampled_points_async(metric, [])
 
-    def test_metric_out_of_search_bounds_should_not_be_found(self):
+    def test_glob_metrics_should_return_metrics_matching_glob(self):
+        metric_name = "test_glob_metrics_should_return_metrics_matching_glob.a.b.c"
+        metric = self._create_updated_metric(metric_name)
+
+        glob = "test_glob_metrics_should_return_metrics_matching_glob.*.*.*"
+        results = self.accessor.glob_metrics(glob)
+
+        self.assertTrue(len(results) > 0, "Expected metric was not found")
+        found_metric = results[0]
+        self.assertEqual(metric_name, found_metric.name)
+        self.assertEqual(metric.metadata, found_metric.metadata)
+        self.assertEqual(metric.created_on, found_metric.created_on)
+
+    def test_glob_metric_names_should_return_empty_results_when_out_of_bounds(self):
+        self._metric_out_of_search_bounds_should_not_be_found(self.accessor.glob_metric_names)
+
+    def test_glob_metrics_should_return_empty_results_when_out_of_bounds(self):
+        self._metric_out_of_search_bounds_should_not_be_found(self.accessor.glob_metrics)
+
+    def _metric_out_of_search_bounds_should_not_be_found(self, glob_search_function):
         metric_name = "test_metric_out_of_search_bounds_should_not_be_found.a.b.c"
         metric = self._create_updated_metric(metric_name)
         metric_created_on = metric.created_on
@@ -536,12 +555,16 @@ class TestAccessorWithElasticsearch(
         ]
 
         for start_time, end_time in bounds:
-            should_not_be_found_metric = self.accessor.glob_metric_names(
-                metric_name, start_time, end_time
-            )
+            should_not_be_found_metric = glob_search_function(metric_name, start_time, end_time)
             self.assert_iter_empty(should_not_be_found_metric, start_time, end_time)
 
-    def test_metric_in_search_bounds_should_be_found(self):
+    def test_glob_metric_names_should_return_results_when_in_bounds(self):
+        self._metric_in_search_bounds_should_be_found(self.accessor.glob_metric_names)
+
+    def test_glob_metrics_should_return_results_when_in_bounds(self):
+        self._metric_in_search_bounds_should_be_found(self.accessor.glob_metrics)
+
+    def _metric_in_search_bounds_should_be_found(self, glob_search_function):
         metric_name = "test_metric_in_search_bounds_should_be_found.a.b.c"
         metric = self._create_updated_metric(metric_name)
         metric_created_on = metric.created_on
@@ -583,9 +606,7 @@ class TestAccessorWithElasticsearch(
         ]
 
         for start_time, end_time in bounds:
-            should_be_found_metric = self.accessor.glob_metric_names(
-                metric_name, start_time, end_time
-            )
+            should_be_found_metric = glob_search_function(metric_name, start_time, end_time)
             self.assert_iter_not_empty(should_be_found_metric, start_time, end_time)
 
     def _create_updated_metric(self, metric_name):
