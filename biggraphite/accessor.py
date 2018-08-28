@@ -250,6 +250,11 @@ class Accessor(object):
         self._check_connected()
 
     @abc.abstractmethod
+    def glob_metrics(self, glob, start_time=None, end_time=None):
+        """Return a sorted list of metrics matching this glob."""
+        self._check_connected()
+
+    @abc.abstractmethod
     def glob_directory_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric directories matching this glob."""
         self._check_connected()

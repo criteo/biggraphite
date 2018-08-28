@@ -88,6 +88,11 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).touch_metric(metric)
         self._metadata_accessor.touch_metric(metric)
 
+    def glob_metrics(self, glob, start_time=None, end_time=None):
+        """Return a sorted list of metrics matching this glob."""
+        super(HybridAccessor, self).glob_metrics(glob, start_time, end_time)
+        return self._metadata_accessor.glob_metrics(glob)
+
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).glob_metric_names(glob)

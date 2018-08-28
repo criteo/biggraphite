@@ -513,6 +513,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 search = search.filter(filter_type, **{"p%d" % i: value})
         return False, search
 
+    def glob_metrics(self, glob, start_time=None, end_time=None):
+        """Return a sorted list of metrics matching this glob."""
+        raise NotImplementedError("TODO: glob_metrics")
+
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).glob_metric_names(
