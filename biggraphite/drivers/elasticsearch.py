@@ -484,7 +484,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     # TODO (t.chataigner) Add unittest.
     def _search_metrics_from_components(self, glob, components, search=None):
         search = self._create_search_query() if search is None else search
-        search = search.source("name")
 
         # Handle glob with globstar(s).
         globstars = components.count(bg_glob.Globstar())
@@ -515,13 +514,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
     def glob_metrics(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metrics matching this glob."""
-        raise NotImplementedError("TODO: glob_metrics")
+        super(_ElasticSearchAccessor, self).glob_metrics(glob, start_time, end_time)
 
-    def glob_metric_names(self, glob, start_time=None, end_time=None):
-        """See the real Accessor for a description."""
-        super(_ElasticSearchAccessor, self).glob_metric_names(
-            glob, start_time, end_time
-        )
         if glob == "":
             return []
 
@@ -540,8 +534,18 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         # TODO (t.chataigner) try to move the sort in the ES search and return a generator.
         log.debug(json.dumps(search.to_dict(), default=str))
-        results = [h.name for h in search.execute()]
-        results.sort()
+
+        results = [self._document_to_metric(document) for document in search.execute()]
+        results.sort(key=lambda metric: metric.name)
+
+        return results
+
+    def glob_metric_names(self, glob, start_time=None, end_time=None):
+        """See the real Accessor for a description."""
+        super(_ElasticSearchAccessor, self).glob_metric_names(
+            glob, start_time, end_time
+        )
+        results = [h.name for h in self.glob_metrics(glob, start_time, end_time)]
         return iter(results)
 
     def glob_directory_names(self, glob, start_time=None, end_time=None):
