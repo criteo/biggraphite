@@ -1485,6 +1485,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         directory_names = self.__glob_names("directories", glob)
         return bg_glob.filter_from_glob(directory_names, glob)
 
+    def glob_metrics(self, glob, start_time=None, end_time=None):
+        """Return a sorted list of metrics matching this glob."""
+        raise NotImplementedError("TODO: glob_metrics")
+
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric names matching this glob."""
         super(_CassandraAccessor, self).glob_metric_names(glob)
