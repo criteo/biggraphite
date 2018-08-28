@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.9] - 2018-08-28
+
+### Fixed
+- updated_on behavior
+
+### Improved
+- bgutil stats supports metric prefix
+
 ## [0.13.8] - 2018-08-27
 
 ### Fixed
@@ -299,8 +307,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.8...HEAD
-[0.13.7]: https://github.com/criteo/biggraphite/compare/v0.13.7...v0.13.8
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.9...HEAD
+[0.13.9]: https://github.com/criteo/biggraphite/compare/v0.13.8...v0.13.9
+[0.13.8]: https://github.com/criteo/biggraphite/compare/v0.13.7...v0.13.8
 [0.13.7]: https://github.com/criteo/biggraphite/compare/v0.13.6...v0.13.7
 [0.13.6]: https://github.com/criteo/biggraphite/compare/v0.13.5...v0.13.6
 [0.13.5]: https://github.com/criteo/biggraphite/compare/v0.13.4...v0.13.5
