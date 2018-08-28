@@ -15,6 +15,7 @@
 from __future__ import absolute_import  # Otherwise carbon is this module.
 
 import time
+import datetime
 
 import prometheus_client
 from six.moves import queue
@@ -183,10 +184,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         )
         metric = bg_metric.make_metric(
             metric_name, metadata,
-            # Don't set updated_on to make sure it gets written when
-            # necessary. This also means all `updated_on` gets re-written
-            # after each carbon restart.
-            updated_on=None,
+            # Set updated_on to something far in the past to make sure it gets updated
+            # This also means all `updated_on` gets re-written after each carbon restart.
+            updated_on=datetime.datetime.utcfromtimestamp(0),
         )
         self.cache.cache_set(metric_name, metric)
         self._createAsync(metric, orig_metric_name)
