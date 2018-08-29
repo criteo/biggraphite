@@ -1487,7 +1487,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def glob_metrics(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metrics matching this glob."""
-        raise NotImplementedError("TODO: glob_metrics")
+        return [self.get_metric(metric_name)
+                for metric_name in self.glob_metric_names(glob, start_time, end_time)]
 
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric names matching this glob."""
