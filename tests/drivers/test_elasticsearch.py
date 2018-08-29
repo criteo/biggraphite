@@ -609,6 +609,15 @@ class TestAccessorWithElasticsearch(
             should_be_found_metric = glob_search_function(metric_name, start_time, end_time)
             self.assert_iter_not_empty(should_be_found_metric, start_time, end_time)
 
+    def test_glob_metrics_should_return_deduplicated_results(self):
+        metric_name = "test_glob_metrics_should_return_deduplicated_results.a.b.c"
+        # _create_updated_metric is responsible for creating metrics over two indices
+        self._create_updated_metric(metric_name)
+
+        results = self.accessor.glob_metrics(metric_name)
+
+        self.assertEqual(len(results), 1, "Only one metric is expected")
+
     def _create_updated_metric(self, metric_name):
         creation_date = datetime.datetime(2018, 1, 1)
         update_date = datetime.datetime(2018, 3, 1)

@@ -535,10 +535,24 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # TODO (t.chataigner) try to move the sort in the ES search and return a generator.
         log.debug(json.dumps(search.to_dict(), default=str))
 
-        results = [self._document_to_metric(document) for document in search.execute()]
+        documents = search.execute()
+        results = [self._document_to_metric(document)
+                   for document in self._deduplicate_documents(documents)]
         results.sort(key=lambda metric: metric.name)
 
         return results
+
+    @staticmethod
+    def _deduplicate_documents(documents):
+        """Deduplicate documents with same name over several indices to keep most recent one."""
+        documents_by_name = dict()
+        docs = list(documents)
+        docs.sort(key=lambda doc: doc.updated_on, reverse=True)
+
+        for document in docs:
+            if document.name not in documents_by_name:
+                documents_by_name[document.name] = document
+        return documents_by_name.values()
 
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
