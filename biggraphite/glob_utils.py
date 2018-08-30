@@ -262,7 +262,7 @@ def graphite_glob(
     start_time=None,
     end_time=None,
 ):
-    """Get metrics and directories matching a Graphite glob.
+    """Get metric and directory names matching a Graphite glob.
 
     Args:
       accessor: BigGraphite accessor
@@ -274,8 +274,8 @@ def graphite_glob(
 
     Returns:
       A tuple:
-        First element: sorted list of Cassandra metrics matched by the glob.
-        Second element: sorted list of Cassandra directories matched by the glob.
+        First element: sorted list of metric names matched by the glob.
+        Second element: sorted list of directory names matched by the glob.
     """
     if not _is_valid_glob(graphite_glob):
         # TODO(d.forest): should we instead raise an exception?
