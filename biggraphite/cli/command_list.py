@@ -38,9 +38,10 @@ def list_metrics(accessor, pattern, graphite=True):
     if not graphite:
         metrics_names = accessor.glob_metric_names(pattern)
     else:
-        metrics_names, _ = graphite_glob(
+        metrics, _ = graphite_glob(
             accessor, pattern, metrics=True, directories=False
         )
+        metrics_names = [metric.name for metric in metrics]
 
     for metric in metrics_names:
         if metric is None:
