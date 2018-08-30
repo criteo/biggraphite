@@ -328,6 +328,30 @@ def graphite_glob(
            [GlobDirectoryResult.from_name(directory_name) for directory_name in directories]
 
 
+def graphite_glob_leaves(accessor,
+                         graphite_glob,
+                         start_time=None,
+                         end_time=None):
+    """Get metrics matching a Graphite glob.
+
+    Args:
+      accessor: BigGraphite accessor
+      graphite_glob: Graphite glob expression
+      start_time: Lower bound of search time range (use None for no bound)
+      end_time: Upper bound of search time range (use None for no bound)
+
+    Returns:
+      A tuple:
+        First element: sorted list of metrics matched by the glob.
+        Second element: always empty directory list.
+    """
+    if not _is_valid_glob(graphite_glob):
+        return [], []
+
+    metrics = accessor.glob_metric(graphite_glob, start_time, end_time)
+    return [GlobMetricResult.from_value(metric) for metric in metrics], []
+
+
 def filter_from_glob(names, glob_repr):
     """Filter metric or directory names from provided glob."""
     glob_re = re.compile(glob_to_regex(glob_repr))
