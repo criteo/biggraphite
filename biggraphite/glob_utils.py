@@ -19,7 +19,7 @@ import re
 
 import six
 from enum import Enum
-import metric as bg_metric
+import biggraphite.metric as bg_metric
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
 _GRAPHITE_GLOB_RE = re.compile(r"^[^*?{}\[\]]+$")
@@ -350,7 +350,7 @@ def graphite_glob_leaves(accessor,
     if not _is_valid_glob(graphite_glob):
         return [], []
 
-    metrics = accessor.glob_metric(graphite_glob, start_time, end_time)
+    metrics = accessor.glob_metrics(graphite_glob, start_time, end_time)
     return [GlobMetricResult.from_value(metric) for metric in metrics], []
 
 
