@@ -257,6 +257,7 @@ def glob(metric_names, glob_pattern):
 
 class GlobMetricResult:
     """Result from a glob search on metrics."""
+
     def __init__(self, name, value):
         """Create new instance of GlobMetricResult."""
         self.name = name
@@ -276,6 +277,7 @@ class GlobMetricResult:
 
 class GlobDirectoryResult:
     """Result from a glob search on directories."""
+
     def __init__(self, name):
         """Create new instance of GlobMetricResult."""
         self.name = name

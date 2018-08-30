@@ -248,8 +248,8 @@ class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
         ]
         for (glob, metrics, directories) in scenarii:
             (found_metrics, found_directories) = bg_glob.graphite_glob(self.accessor, glob)
-            found_metric_names = [metric.name for metric in found_metrics]
-            found_directory_names = [directory.name for directory in found_directories]
+            found_metric_names = [found_metric.name for found_metric in found_metrics]
+            found_directory_names = [found_directory.name for found_directory in found_directories]
             self.assertEqual((metrics, directories), (found_metric_names, found_directory_names))
 
 
