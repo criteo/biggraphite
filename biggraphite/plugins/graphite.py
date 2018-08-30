@@ -396,13 +396,13 @@ class Finder(BaseFinder):
         if not success:
             raise results
 
-        metric_names, directories = results
+        metrics, directories = results
 
-        for metric_name in metric_names:
+        for metric in metrics:
             reader = Reader(
-                self.accessor(), self.cache(), self.carbonlink(), metric_name
+                self.accessor(), self.cache(), self.carbonlink(), metric.name
             )
-            yield node.LeafNode(metric_name, reader)
+            yield node.LeafNode(metric.name, reader)
 
         for directory in directories:
             yield node.BranchNode(directory)

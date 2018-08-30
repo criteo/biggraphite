@@ -19,6 +19,7 @@ import re
 import unittest
 from collections import defaultdict
 
+import biggraphite.metric as bg_metric
 from biggraphite import glob_utils as bg_glob
 from tests import test_utils as bg_test_utils
 
@@ -246,8 +247,32 @@ class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
             ("a.**", ["a.a.a", "a.b.c", "a.b.d"], ["a.a", "a.b"]),
         ]
         for (glob, metrics, directories) in scenarii:
-            found = bg_glob.graphite_glob(self.accessor, glob)
-            self.assertEqual((metrics, directories), found)
+            (found_metrics, found_directories) = bg_glob.graphite_glob(self.accessor, glob)
+            found_metric_names = [metric.name for metric in found_metrics]
+            found_directory_names = [directory.name for directory in found_directories]
+            self.assertEqual((metrics, directories), (found_metric_names, found_directory_names))
+
+
+class TestGraphiteGlobResult(unittest.TestCase):
+
+    def test_GlobMetricResult_be_built_from_a_metric(self):
+        metric = bg_metric.Metric(name="foo.bar", id="0", metadata=bg_metric.MetricMetadata())
+
+        metric_result = bg_glob.GlobMetricResult.from_value(metric)
+
+        self.assertEqual(metric_result.value, metric)
+
+    def test_GlobMetricResult_built_from_a_metric_should_discover_its_name(self):
+        metric_name = "foo.bar"
+        metric = bg_metric.Metric(name=metric_name, id="0", metadata=bg_metric.MetricMetadata())
+
+        metric_result = bg_glob.GlobMetricResult.from_value(metric)
+
+        self.assertEqual(metric_result.name, metric_name)
+
+    def test_GlobMetricResult_from_value_should_raise_if_value_is_not_a_metric(self):
+        with self.assertRaises(AssertionError):
+            bg_glob.GlobMetricResult.from_value("foo")
 
 
 if __name__ == "__main__":
