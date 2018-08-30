@@ -398,7 +398,7 @@ class Finder(BaseFinder):
             yield node.LeafNode(metric.name, reader)
 
         for directory in directories:
-            yield node.BranchNode(directory)
+            yield node.BranchNode(directory.name)
 
     def _find_glob(self, query, leaves_only, start_time, end_time):
         if leaves_only:
