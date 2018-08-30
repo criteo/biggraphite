@@ -19,6 +19,7 @@ import re
 
 import six
 from enum import Enum
+import metric as bg_metric
 
 # http://graphite.readthedocs.io/en/latest/render_api.html#paths-and-wildcards
 _GRAPHITE_GLOB_RE = re.compile(r"^[^*?{}\[\]]+$")
@@ -254,6 +255,38 @@ def glob(metric_names, glob_pattern):
     return list(filter(maybe_matched_prefilter, metric_names))
 
 
+class GlobMetricResult:
+    """Result from a glob search on metrics."""
+    def __init__(self, name, value):
+        """Create new instance of GlobMetricResult."""
+        self.name = name
+        self.value = value
+
+    @staticmethod
+    def from_name(name):
+        """Create a new instance of GlobMetricResult from a single name."""
+        return GlobMetricResult(name, None)
+
+    @staticmethod
+    def from_value(value):
+        """Create a new instance GlobMetricResult from a metric."""
+        assert isinstance(value, bg_metric.Metric)
+        return GlobMetricResult(value.name, value)
+
+
+class GlobDirectoryResult:
+    """Result from a glob search on directories."""
+    def __init__(self, name):
+        """Create new instance of GlobMetricResult."""
+        self.name = name
+        self.value = None
+
+    @staticmethod
+    def from_name(name):
+        """Create a new instance of GlobDirectoryResult from a single name."""
+        return GlobDirectoryResult(name)
+
+
 def graphite_glob(
     accessor,
     graphite_glob,
@@ -291,7 +324,8 @@ def graphite_glob(
     else:
         directories = []
 
-    return metrics, directories
+    return [GlobMetricResult.from_name(metric_name) for metric_name in metrics], \
+           [GlobDirectoryResult.from_name(directory_name) for directory_name in directories]
 
 
 def filter_from_glob(names, glob_repr):
