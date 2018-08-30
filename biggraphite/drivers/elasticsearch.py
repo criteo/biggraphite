@@ -36,6 +36,8 @@ from biggraphite import metric as bg_metric
 from biggraphite.drivers import _utils
 from biggraphite.drivers import ttls
 
+from opencensus.trace import config_integration
+
 UPDATED_ON = prometheus_client.Summary(
     "bg_elasticsearch_updated_on_latency_seconds", "create latency in seconds"
 )
@@ -303,6 +305,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__schema_path = schema_path
         self.client = None
         self.schema = None
+        config_integration.trace_integrations(['httplib'])
         log.debug(
             "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'"
             % (self._index_prefix, self._index_suffix)
@@ -310,6 +313,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         # This will be used for low-priority background operations.
         self._executor = None
 
+    @_utils.trace_accessor_func
     def connect(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).connect(*args, **kwargs)
@@ -351,6 +355,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         with open(self.__schema_path, "r") as es_schema_file:
             self.schema = json.load(es_schema_file)
 
+    @_utils.trace_accessor_func
     def shutdown(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).shutdown(*args, **kwargs)
@@ -430,6 +435,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.client.indices.delete("%s*" % self._index_prefix)
         self._known_indices = {}
 
+    @_utils.trace_accessor_func
     def create_metric(self, metric):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).create_metric(metric)
@@ -442,6 +448,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             ignore=409,
         )
 
+    @_utils.trace_accessor_func
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).update_metric(name, updated_metadata)
@@ -461,6 +468,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         )
         self.create_metric(updated_metric)
 
+    @_utils.trace_accessor_func
     def delete_metric(self, name):
         name = bg_metric.sanitize_metric_name(name)
 
@@ -469,6 +477,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         log.debug(json.dumps(query.to_dict(), default=str))
         query.delete()
 
+    @_utils.trace_accessor_func
     def delete_directory(self, name):
         components = _components_from_name(name)
         depth = _get_depth_from_components(components)
@@ -513,6 +522,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 search = search.filter(filter_type, **{"p%d" % i: value})
         return False, search
 
+    @_utils.trace_accessor_func
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).glob_metric_names(
@@ -540,6 +550,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         results.sort()
         return iter(results)
 
+    @_utils.trace_accessor_func
     def glob_directory_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).glob_directory_names(
@@ -587,15 +598,16 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         results.sort()
         return iter(results)
 
+    @_utils.trace_accessor_func
     def has_metric(self, metric_name):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).has_metric(metric_name)
         return self.get_metric(metric_name) is not None
 
+    @_utils.trace_accessor_func
     def get_metric(self, metric_name):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name)
-
         metric_name = bg_metric.sanitize_metric_name(metric_name)
 
         document = self.__get_document(metric_name)
@@ -633,6 +645,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         return response.hits[0]
 
+    @_utils.trace_accessor_func
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).fetch_points(
