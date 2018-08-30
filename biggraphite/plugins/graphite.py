@@ -69,7 +69,7 @@ class Reader(BaseReader):
         "_metric_name",
     )
 
-    def __init__(self, accessor, metadata_cache, carbonlink, metric_name):
+    def __init__(self, accessor, metadata_cache, carbonlink, metric_name, metric=None):
         """Create a new reader."""
         assert accessor
         assert metadata_cache
@@ -77,7 +77,7 @@ class Reader(BaseReader):
         self._accessor = accessor
         self._metadata_cache = metadata_cache
         self._carbonlink = carbonlink
-        self._metric = None
+        self._metric = metric
         self._metric_name = metric_name
 
     def __get_cached_datapoints(self, stage):
@@ -372,14 +372,7 @@ class Finder(BaseFinder):
                 else:
                     end_time = datetime.fromtimestamp(query.endTime)
 
-                results = glob_utils.graphite_glob(
-                    self.accessor(),
-                    query.pattern,
-                    metrics=True,
-                    directories=not leaves_only,
-                    start_time=start_time,
-                    end_time=end_time,
-                )
+                results = self._find_glob(query, leaves_only, start_time, end_time)
                 success = True
             except bg_accessor.Error as e:
                 success = False
@@ -400,12 +393,30 @@ class Finder(BaseFinder):
 
         for metric in metrics:
             reader = Reader(
-                self.accessor(), self.cache(), self.carbonlink(), metric.name
+                self.accessor(), self.cache(), self.carbonlink(), metric.name, metric.value
             )
             yield node.LeafNode(metric.name, reader)
 
         for directory in directories:
             yield node.BranchNode(directory)
+
+    def _find_glob(self, query, leaves_only, start_time, end_time):
+        if leaves_only:
+            return glob_utils.graphite_glob_leaves(
+                self.accessor(),
+                query.pattern,
+                start_time=start_time,
+                end_time=end_time,
+            )
+        else:
+            return glob_utils.graphite_glob(
+                self.accessor(),
+                query.pattern,
+                metrics=True,
+                directories=True,
+                start_time=start_time,
+                end_time=end_time,
+            )
 
     def fetch(self, patterns, start_time, end_time, now=None, requestContext=None):
         """Fetch multiple patterns at once.
