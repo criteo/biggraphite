@@ -18,7 +18,11 @@ from __future__ import print_function
 
 import threading
 
-from opencensus.trace import execution_context
+try:
+    from opencensus.trace import execution_context
+except ImportError:
+    execution_context = None
+
 
 from biggraphite import accessor as bg_accessor
 
@@ -109,6 +113,8 @@ def bool_from_str(value):
 
 
 def trace_accessor_func(func):
+    if not execution_context:
+        return func
     def tracer(self, *args, **kwargs):
         if not hasattr(self, 'module_name'):
             self.module_name = func.__module__.split('.')[-1]
