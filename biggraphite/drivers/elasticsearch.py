@@ -551,7 +551,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         for document in docs:
             if document.name not in documents_by_name:
-                documents_by_name[document.name] = document
+                documents_by_name[document.meta.id] = document
         return documents_by_name.values()
 
     def glob_metric_names(self, glob, start_time=None, end_time=None):
