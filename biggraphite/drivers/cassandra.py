@@ -1019,7 +1019,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
         # We do not set the serial_consistency, it defautls to SERIAL.
         self.__select_metric_metadata_statement = __prepare(
-            "SELECT id, config, toUnixTimestamp(updated_on)"
+            "SELECT id, config, toUnixTimestamp(updated_on), name"
             ' FROM "%s".metrics_metadata WHERE name = ?;' % self.keyspace_metadata,
             self._meta_read_consistency,
         )
@@ -1456,17 +1456,45 @@ class _CassandraAccessor(bg_accessor.Accessor):
             else:
                 return str(statement) + str(params)
 
+    def _get_metrics(self, metric_names):
+        metric_names = [".".join(self._components_from_name(metric_name)[:-1])
+                        for metric_name in metric_names]
+        metric_names = [bg_metric.encode_metric_name(metric_name) for metric_name in metric_names]
+
+        statements_with_params = [self._make_select_metric_statement(metric_name)
+                                  for metric_name in metric_names]
+
+        results = self._select_metrics(statements_with_params)
+
+        metrics = []
+        for (success, result) in results:
+            if not success:
+                raise CassandraError("Failed to concurrently get metrics", result)
+            if result[0] is not None:
+                row = result[0]
+                metric = self._bind_metric(row)
+                if metric is not None:
+                    metrics.append(metric)
+        return metrics
+
+    def _make_select_metric_statement(self, metric_name):
+        encoded_metric_name = bg_metric.encode_metric_name(metric_name)
+        return self.__select_metric_metadata_statement, (encoded_metric_name,)
+
+    def _select_metrics(self, statements_with_params):
+        return self._execute_concurrent_metadata(statements_with_params)
+
     def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
-        metric_name = ".".join(self._components_from_name(metric_name)[:-1])
-        metric_name = bg_metric.encode_metric_name(metric_name)
-        result = self._select_metric(metric_name)
-        if not result:
-            return None
-        uid = result[0]
-        config = result[1]
-        updated_on = datetime.datetime.fromtimestamp(result[2] / 1000)
+
+        return next(iter(self._get_metrics([metric_name])), None)
+
+    def _bind_metric(self, row):
+        uid = row[0]
+        config = row[1]
+        updated_on = datetime.datetime.fromtimestamp(row[2] / 1000)
+        metric_name = row[3]
 
         # Return None if any of the important column is missing.
         if not uid or not config:
@@ -1487,8 +1515,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def glob_metrics(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metrics matching this glob."""
-        return [self.get_metric(metric_name)
-                for metric_name in self.glob_metric_names(glob, start_time, end_time)]
+        metric_names = self.glob_metric_names(glob, start_time, end_time)
+        return self._get_metrics(metric_names)
 
     def glob_metric_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric names matching this glob."""
