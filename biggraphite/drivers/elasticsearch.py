@@ -616,9 +616,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             read_on=ttls.str_to_datetime(document.read_on),
         )
 
-    def __get_document(self, metric_name):
+    def __get_document(self, metric_name, index=None):
         search = (
-            self._create_search_query()
+            self._create_search_query(index=index)
             .source(["uuid", "name", "config", "created_on", "updated_on", "read_on"])
             .filter("term", name=metric_name)
             .sort({"updated_on": {"order": "desc"}})
@@ -661,21 +661,17 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def __touch_document(self, metric, updated_on):
         # Update Elasticsearch.
         metric_name = bg_metric.sanitize_metric_name(metric.name)
-        document = self.__get_document(metric_name)
 
-        # Ignore non-existing metrics.
+        # See if the metric is in the correct index
+        index = self.get_index(metric)
+        document = self.__get_document(metric_name, index)
+
         if not document:
-            return
-
-        metric = self._document_to_metric(document)
-        new_index = self.get_index(metric)
-
-        if new_index == document.meta.index:
-            self.__update_existing_document(document, updated_on)
-        else:
             # Re-create the metric.
             metric.updated_on = updated_on
             self.create_metric(metric)
+        else:
+            self.__update_existing_document(document, updated_on)
 
     def __update_existing_document(self, document, updated_on):
         index = document.meta.index
@@ -856,12 +852,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             ignore=[404, 409],
         )
 
-    def _create_search_query(self, start_time=None, end_time=None):
+    def _create_search_query(self, start_time=None, end_time=None, index=None):
+        if not index:
+            index = "%s*" % self._index_prefix
         search = (
             elasticsearch_dsl.Search()
             .using(self.client)
-            .index("%s*" % self._index_prefix)
+            .index(index)
         )
+
         if start_time is not None:
             # `updated_on` field has a delay before it is updated, so a metric can still be active
             # without having this value up to date.
