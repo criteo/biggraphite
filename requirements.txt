@@ -21,6 +21,9 @@ elasticsearch-dsl
 # To support https
 certifi
 
+# Faster date parsing
+ciso8601
+
 # Core
 six
 cachetools
