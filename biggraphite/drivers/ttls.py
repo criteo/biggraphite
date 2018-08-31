@@ -14,10 +14,9 @@
 # limitations under the License.
 """Time constants and functions used by accessors."""
 
+import ciso8601
 import datetime
 import time
-
-import dateutil
 
 MINUTE = 60
 HOUR = 60 * MINUTE
@@ -34,7 +33,7 @@ def str_to_datetime(str_repr):
         return str_repr
     if not str_repr:
         return None
-    return dateutil.parser.parse(str_repr)
+    return ciso8601.parse_datetime(str_repr)
 
 
 def str_to_timestamp(str_repr):
