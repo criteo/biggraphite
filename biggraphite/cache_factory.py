@@ -18,7 +18,11 @@ from biggraphite import metadata_cache
 
 
 CACHES = frozenset(
-    [("disk", metadata_cache.DiskCache), ("memory", metadata_cache.MemoryCache)]
+    [
+        ("disk", metadata_cache.DiskCache),
+        ("memory", metadata_cache.MemoryCache),
+        ("none", metadata_cache.NoneCache)
+    ]
 )
 DEFAULT_CACHE = "memory"
 
