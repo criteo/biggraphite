@@ -17,9 +17,12 @@ from __future__ import print_function
 
 import unittest
 
+from mock import Mock
+
 from freezegun import freeze_time
 
 from biggraphite import metadata_cache as bg_metadata_cache
+from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
 _TEST_METRIC = bg_test_utils.make_metric("a.b.c")
@@ -190,6 +193,38 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
 class TestMemoryCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
 
     CACHE_CLASS = bg_metadata_cache.MemoryCache
+
+
+class TestNoneCache(unittest.TestCase):
+
+    TEST_METRIC_NAME = "foo.bar"
+    TEST_METRIC = bg_metric.make_metric(
+        TEST_METRIC_NAME,
+        bg_metric.MetricMetadata()
+    )
+
+    def setUp(self):
+        self._accessor = Mock()
+        self._accessor.TYPE = 'mock'
+        self._cache = bg_metadata_cache.NoneCache(self._accessor, None)
+
+    def test_has_metric_should_always_be_true(self):
+        self.assertTrue(self._cache.has_metric("foo.bar"))
+
+    def test_has_metric_should_not_use_the_accessor(self):
+        self._cache.has_metric("foo.bar")
+        self.assert_empty(self._accessor.method_calls)
+
+    def test_get_metric_should_always_use_the_accessor(self):
+        self._accessor.get_metric.return_value = self.TEST_METRIC
+
+        self._cache.get_metric(self.TEST_METRIC_NAME)
+
+        self._accessor.get_metric.assert_called_once()
+        self._accessor.get_metric.assert_called_with(self.TEST_METRIC_NAME)
+
+    def assert_empty(self, iterable):
+        self.assertEqual(0, len(iterable))
 
 
 if __name__ == "__main__":
