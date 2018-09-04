@@ -681,3 +681,42 @@ class DiskCache(MetadataCache):
                     done = key - start_key if start_key else key
                     total = end_key - start_key if start_key and end_key else None
                     callback_on_progress(done, total)
+
+
+class NoneCache(MetadataCache):
+    """Dummy metadata cache used when no cache is required."""
+
+    def __init__(self, accessor, settings, name=None):
+        """Create a new NoneCache."""
+        super(NoneCache, self).__init__(accessor, settings, name)
+        assert accessor
+        self._accessor = accessor
+
+    def open(self):
+        """No resource has to be allocated for this cache. Does nothing."""
+        super(NoneCache, self).open()
+
+    def close(self):
+        """No resource have to be freed for this cache. Does nothing."""
+        super(NoneCache, self).close()
+
+    def clean(self):
+        """Cleaning this cache is useless. Does nothing."""
+        super(NoneCache, self).clean()
+
+    def repair(self, start_key=None, end_key=None, shard=0, nshards=1, callback_on_progress=None):
+        """Repairing this cache is useless. Does nothing."""
+        super(NoneCache, self).repair()
+
+    def _cache_has(self, metric_name):
+        return True
+
+    def _cache_get(self, metric_name):
+        return self._accessor.get_metric(metric_name), True
+
+    def _cache_set(self, metric_name, metric):
+        pass
+
+    def stats(self):
+        """Stats are not computed for this cache."""
+        return super(NoneCache, self).stats()
