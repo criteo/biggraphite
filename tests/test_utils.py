@@ -21,7 +21,6 @@ import shutil
 import sys
 import tempfile
 import unittest
-import uuid
 
 import mock
 
@@ -99,9 +98,6 @@ def prepare_graphite_imports():
         for path in to_add:
             if path not in sys.path:
                 sys.path.insert(0, path)
-
-
-_UUID_NAMESPACE = uuid.UUID("{00000000-0000-0000-0000-000000000000}")
 
 
 def make_metric(name, metadata=None, **kwargs):
