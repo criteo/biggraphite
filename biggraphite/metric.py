@@ -136,11 +136,13 @@ def make_metric(name, metadata, created_on=None, updated_on=None, read_on=None):
 
     Returns: a Metric object with a valid id.
     """
-    name = sanitize_metric_name(name)
-    uid = uuid.uuid5(_UUID_NAMESPACE, name)
+    encoded_name = encode_metric_name(
+        sanitize_metric_name(name)
+    )
+    uid = uuid.uuid5(_UUID_NAMESPACE, encoded_name)
     now = datetime.datetime.now()
     return Metric(
-        name,
+        encoded_name,
         uid,
         metadata,
         created_on=created_on or now,

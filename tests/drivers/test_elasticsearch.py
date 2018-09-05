@@ -618,6 +618,11 @@ class TestAccessorWithElasticsearch(
 
         self.assertEqual(len(results), 1, "Only one metric is expected")
 
+    def test_accessor_should_support_utf8_in_metric_paths(self):
+        metric_name = "foo.👍.Ｔｈｅ.𝐪𝐮𝐢𝐜𝐤.𝖇𝖗𝖔𝖜𝖓.𝒇𝒐𝒙.𝚕𝚊𝚣𝚢.⒟⒪⒢"
+        metric = self._create_updated_metric(metric_name)
+        self.assertEqual(metric_name, metric.name)
+
     def _create_updated_metric(self, metric_name):
         creation_date = datetime.datetime(2018, 1, 1)
         update_date = datetime.datetime(2018, 3, 1)
