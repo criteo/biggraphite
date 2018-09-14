@@ -133,7 +133,7 @@ class CassandraHelper:
         """Flush all kind of buffers related to Cassandra."""
         # When using Lucene, we need to force a refresh on the index as the default
         # refresh period is 60s.
-        if accessor.use_lucene:
+        if accessor.TYPE == 'cassandra-lucene':
             statements = accessor.metadata_query_generator.sync_queries()
             for statement in statements:
                 self.session.execute(statement)

@@ -873,6 +873,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         updated_on_ttl_sec=DEFAULT_UPDATED_ON_TTL_SEC,
         read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
         use_lucene=DEFAULT_USE_LUCENE,
+        enable_metadata=True,
     ):
         """Record parameters needed to connect.
 
@@ -896,6 +897,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for the same metric and restarts.
           replica: shord, Id of the replica. Values will be grouped by replicas
             during read to allow multiple simultanous writers.
+          enable_metadata: bool, whether if the driver should handle the metadata or not
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -977,12 +979,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 self.max_metrics_per_pattern,
             )
 
+        self.metadata_enabled = enable_metadata
+
     def connect(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).connect()
         if not self.is_connected:
             self._connect_clusters()
-            self._prepare_statements()
+            self._prepare_metadata_statements()
         self.is_connected = True
 
     @property
@@ -995,7 +999,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__lazy_statements:
             self.__lazy_statements._shard = value
 
-    def _prepare_statements(self):
+    def _prepare_metadata_statements(self):
+        if not self.metadata_enabled:
+            return
+
         def __prepare(cql, consistency=self._meta_write_consistency):
             statement = self.__session_metadata.prepare(cql)
             statement.consistency_level = consistency
@@ -1062,32 +1069,36 @@ class _CassandraAccessor(bg_accessor.Accessor):
         )
 
     def _connect_clusters(self):
-        self.__cluster_metadata, self.__session_metadata = self._connect(
-            self.__cluster_metadata,
-            self.__session_metadata,
-            self.contact_points_metadata,
-            self.port_metadata,
+        # data cluster
+        self.__cluster_data, self.__session_data = self._connect(
+            self.__cluster_data,
+            self.__session_data,
+            self.contact_points_data,
+            self.port,
         )
-        if self.contact_points_data != self.contact_points_metadata:
-            self.__cluster_data, self.__session_data = self._connect(
-                self.__cluster_data,
-                self.__session_data,
-                self.contact_points_data,
-                self.port,
-            )
-        else:
-            self.__session_data = self.__session_metadata
-            self.__cluster_data = self.__cluster_metadata
-
         self.__lazy_statements = _LazyPreparedStatements(
             self.__session_data, self.keyspace, self.__shard, self.__bulkimport
         )
-
         if self.__enable_metrics:
-            self.__metrics["metadata"] = expose_metrics(
-                self.__cluster_metadata.metrics, "metadata"
-            )
             self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, "data")
+
+        # metadata cluster
+        if self.metadata_enabled:
+            if self.contact_points_data != self.contact_points_metadata:
+                self.__cluster_metadata, self.__session_metadata = self._connect(
+                    self.__cluster_metadata,
+                    self.__session_metadata,
+                    self.contact_points_metadata,
+                    self.port_metadata,
+                )
+            else:
+                self.__session_metadata = self.__session_data
+                self.__cluster_metadata = self.__cluster_data
+
+            if self.__enable_metrics:
+                self.__metrics["metadata"] = expose_metrics(
+                    self.__cluster_metadata.metrics, "metadata"
+                )
 
     def _connect(self, cluster, session, contact_points, port):
         lb_policy = c_policies.TokenAwarePolicy(c_policies.DCAwareRoundRobinPolicy())
@@ -1302,8 +1313,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def drop_all_metrics(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).drop_all_metrics()
-        for keyspace in self.keyspace, self.keyspace_metadata:
-            session = self.__session_data if self.keyspace else self.__session_metadata
+
+        def drop_all_metrics_in_keyspace(keyspace, session):
             statement_str = (
                 "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
             )
@@ -1311,6 +1322,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             for table in tables:
                 self._execute(session, 'TRUNCATE "%s"."%s";' % (keyspace, table))
+
+        drop_all_metrics_in_keyspace(self.keyspace, self.__session_data)
+        if self.metadata_enabled:
+            drop_all_metrics_in_keyspace(self.keyspace_metadata, self.__session_metadata)
+
         if self.__downsampler:
             self.__downsampler.clear()
         if self.__delayed_writer:
@@ -1322,7 +1338,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             metric, time_start, time_end, stage
         )
 
-        self._update_metric_read_on(metric.name)
+        if self.metadata_enabled:
+            self._update_metric_read_on(metric.name)
 
         log.debug(
             "fetch: [%s, start=%d, end=%d, stage=%s]",
@@ -1723,28 +1740,28 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not self.is_connected:
             self._connect_clusters()
 
+        if self.metadata_enabled:
+            self.__cluster_metadata.refresh_schema_metadata()
+            keyspaces = self.__cluster_metadata.metadata.keyspaces.keys()
+            if self.keyspace_metadata not in keyspaces:
+                raise CassandraError("Missing keyspace '%s'." % self.keyspace_metadata)
+
+            queries = _METADATA_CREATION_CQL
+            if self.use_lucene:
+                queries += _METADATA_CREATION_CQL_LUCENE
+            else:
+                queries += _METADATA_CREATION_CQL_SASI
+
+            for cql in queries:
+                query = cql % {"keyspace": self.keyspace_metadata}
+                schema += query + "\n\n"
+                if not dry_run:
+                    self._execute_metadata(query)
+
         self.__cluster_data.refresh_schema_metadata()
-        self.__cluster_metadata.refresh_schema_metadata()
-
-        keyspaces = self.__cluster_metadata.metadata.keyspaces.keys()
-        if self.keyspace_metadata not in keyspaces:
-            raise CassandraError("Missing keyspace '%s'." % self.keyspace_metadata)
-
         keyspaces = self.__cluster_data.metadata.keyspaces.keys()
         if self.keyspace not in keyspaces:
             raise CassandraError("Missing keyspace '%s'." % self.keyspace)
-
-        queries = _METADATA_CREATION_CQL
-        if self.use_lucene:
-            queries += _METADATA_CREATION_CQL_LUCENE
-        else:
-            queries += _METADATA_CREATION_CQL_SASI
-
-        for cql in queries:
-            query = cql % {"keyspace": self.keyspace_metadata}
-            schema += query + "\n\n"
-            if not dry_run:
-                self._execute_metadata(query)
 
         schema += " -- Already Existing Tables (updated schemas)\n"
         tables = self.__cluster_data.metadata.keyspaces[self.keyspace].tables
@@ -2219,6 +2236,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 done = token - start_token
                 total = stop_token - start_token
                 callback_on_progress(done, total)
+
+    def metadata_enabled(self):
+        """See bg_accessor.Accessor."""
+        return self.metadata_enabled
 
 
 def build(*args, **kwargs):
