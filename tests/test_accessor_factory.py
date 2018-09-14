@@ -16,6 +16,7 @@
 from __future__ import print_function
 
 import unittest
+import mock
 
 from biggraphite import accessor_factory as bg_accessor_factory
 from biggraphite import settings as bg_settings
@@ -42,6 +43,17 @@ class TestAccessorFactory(unittest.TestCase):
         settings = bg_settings.settings_from_confattr(settings)
         accessor = bg_accessor_factory.accessor_from_settings(settings)
         self.assertNotEqual(accessor, None)
+
+    @mock.patch('biggraphite.drivers.cassandra._CassandraAccessor')
+    def test_hybrid_accessor(self, cassandra_accessor_mock):
+        settings = {
+                    "BG_DATA_DRIVER": "cassandra",
+                    "BG_METADATA_DRIVER": "memory"
+                }
+        settings = bg_settings.settings_from_confattr(settings)
+        accessor = bg_accessor_factory.accessor_from_settings(settings)
+        self.assertNotEqual(accessor, None)
+        cassandra_accessor_mock.assert_called_with(enable_metadata=False)
 
 
 if __name__ == "__main__":

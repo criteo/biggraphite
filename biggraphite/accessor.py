@@ -107,6 +107,7 @@ class Accessor(object):
         self.cache = None
         self.cache_data_ttl = None
         self.cache_metadata_ttl = None
+        self.metadata_enabled = True
 
     def __enter__(self):
         """Call connect()."""
@@ -291,7 +292,9 @@ class Accessor(object):
         if not isinstance(metric, bg_metric.Metric):
             raise InvalidArgumentError("%s is not a Metric instance" % metric)
         self._check_connected()
-        self.touch_metric(metric)
+
+        if self.metadata_enabled:
+            self.touch_metric(metric)
 
     def insert_downsampled_points(self, metric, datapoints):
         """Insert points for a given metric.

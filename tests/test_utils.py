@@ -204,6 +204,13 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
             cls.ACCESSOR_SETTINGS.update(
                 cls.elasticsearch_helper.get_accessor_settings()
             )
+        if "hybrid" in driver_name:
+            if cls.ACCESSOR_SETTINGS['data_driver'] == 'cassandra':
+                cls.cassandra_helper = CassandraHelper()
+                cls.cassandra_helper.setUpClass()
+                cls.ACCESSOR_SETTINGS.update(
+                    cls.cassandra_helper.get_accessor_settings()
+                )
 
         cls.accessor = bg_accessor_factory.accessor_from_settings(cls.ACCESSOR_SETTINGS)
         cls.accessor.syncdb()

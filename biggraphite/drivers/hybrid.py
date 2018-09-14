@@ -178,3 +178,8 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).shutdown()
         self._metadata_accessor.shutdown()
         self._data_accessor.shutdown()
+
+    def syncdb(self, retentions=None, dry_run=False):
+        """See the real Accessor for a description."""
+        self._metadata_accessor.syncdb(retentions, dry_run)
+        self._data_accessor.syncdb(retentions, dry_run)

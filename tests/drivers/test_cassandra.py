@@ -205,10 +205,10 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.flush()
         self.cassandra_helper.cluster.refresh_schema_metadata()
 
-        keyspace = None
-        for name, keyspace in self.cassandra_helper.cluster.metadata.keyspaces.items():
-            if name == self.accessor.keyspace:
-                break
+        self.assertTrue(
+            self.cassandra_helper.KEYSPACE in self.cassandra_helper.cluster.metadata.keyspaces
+        )
+        keyspace = self.cassandra_helper.cluster.metadata.keyspaces[self.cassandra_helper.KEYSPACE]
 
         datapoints_86400p_1s = keyspace.tables["datapoints_86400p_1s_0"]
         options = datapoints_86400p_1s.options
@@ -253,10 +253,10 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.flush()
         self.cassandra_helper.cluster.refresh_schema_metadata()
 
-        keyspace = None
-        for name, keyspace in self.cassandra_helper.cluster.metadata.keyspaces.items():
-            if name == self.accessor.keyspace:
-                break
+        self.assertTrue(
+            self.cassandra_helper.KEYSPACE in self.cassandra_helper.cluster.metadata.keyspaces
+        )
+        keyspace = self.cassandra_helper.cluster.metadata.keyspaces[self.cassandra_helper.KEYSPACE]
 
         datapoints_86400p_1s = keyspace.tables["datapoints_86400p_1s_0"]
         options = datapoints_86400p_1s.options
@@ -284,6 +284,18 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         retentions = [bg_metric.Retention.from_string("60*1s:60*60s")]
         self.accessor.syncdb(retentions=retentions, dry_run=True)
         self.accessor.syncdb(retentions=retentions, dry_run=False)
+
+
+@unittest.skipUnless(HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install")
+class TestAccessorWithHybridCassandraData(TestAccessorWithCassandraData):
+    ACCESSOR_SETTINGS = {
+        "driver": "hybrid",
+        "data_driver": "cassandra",
+        "metadata_driver": "memory"
+    }
+
+    def test_metadata_disabled(self):
+        self.assertFalse(self.accessor._data_accessor.metadata_enabled)
 
 
 if __name__ == "__main__":
