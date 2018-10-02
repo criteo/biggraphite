@@ -11,7 +11,7 @@
 cd $(git rev-parse --show-toplevel)
 . scripts/env.sh
 
-SITE_PACKAGES=$(find ${BG_VENV} -name "site-packages")
+SITE_PACKAGES=$(find ${BG_VENV} -name "site-packages" | grep -v tox)
 GRAPHITE_WEB_CONF="${SITE_PACKAGES}/graphite/local_settings.py"
 
 if [ ! -f "${GRAPHITE_WEB_CONF}" ]; then
