@@ -65,10 +65,48 @@ PM_EXPIRED_METRICS = prometheus_client.Counter(
 )
 
 UPDATED_ON = prometheus_client.Summary(
-    "bg_cassandra_updated_on_latency_seconds", "create latency in seconds"
+    "bg_cassandra_updated_on_latency_seconds",
+    "create latency in seconds"
 )
 READ_ON = prometheus_client.Summary(
-    "bg_cassandra_read_on_latency_seconds", "create latency in seconds"
+    "bg_cassandra_read_on_latency_seconds",
+    "create latency in seconds"
+)
+SYNCDB_DATA = prometheus_client.Summary(
+    "bg_cassandra_syncdb_data_latency_seconds",
+    "DB data sync latency in seconds"
+)
+SYNCDB_METADATA = prometheus_client.Summary(
+    "bg_cassandra_syncdb_metadata_latency_seconds",
+    "DB metadata sync latency in seconds"
+)
+CLEAN_EMPTY_DIR = prometheus_client.Summary(
+    "bg_cassandra_clean_empty_dir_latency_seconds",
+    "clean empty dir latency in seconds"
+)
+CLEAN_EXPIRED_METRICS = prometheus_client.Summary(
+    "bg_cassandra_clean_expired_metrics_latency_seconds",
+    "clean expired metrics latency in seconds"
+)
+REPAIR_MISSING_DIR = prometheus_client.Summary(
+    "bg_cassandra_repair_missing_dir_latency_seconds",
+    "repair missing directory latency in seconds"
+)
+SELECT_METRIC_METADATA = prometheus_client.Summary(
+    "bg_cassandra_select_metric_metadata_latency_seconds",
+    "select metric metadata latency in seconds"
+)
+DELETE_DIRECTORY = prometheus_client.Summary(
+    "bg_cassandra_delete_directory_latency_seconds",
+    "delete directory latency in seconds"
+)
+HAS_DIRECTORY = prometheus_client.Summary(
+    "bg_cassandra_has_directory_latency_seconds",
+    "has directory latency in seconds"
+)
+UPDATE_METRIC = prometheus_client.Summary(
+    "bg_cassandra_update_metric_latency_seconds",
+    "update_metric latency in seconds"
 )
 
 
@@ -1137,11 +1175,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 log.debug("%s: %s" % (e.source_elapsed, str(e)))
         return result
 
-    def _execute_data(self, *args, **kwargs):
-        return self._execute(self.__session_data, *args, **kwargs)
+    def _execute_data(self, timer, *args, **kwargs):
+        with timer.time():
+            return self._execute(self.__session_data, *args, **kwargs)
 
-    def _execute_metadata(self, *args, **kwargs):
-        return self._execute(self.__session_metadata, *args, **kwargs)
+    def _execute_metadata(self, timer, *args, **kwargs):
+        with timer.time():
+            return self._execute(self.__session_metadata, *args, **kwargs)
 
     def _execute_async(self, session, *args, **kwargs):
         """Wrapper for __session.execute_async()."""
@@ -1256,6 +1296,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         encoded_metric_name = bg_metric.encode_metric_name(name)
         metadata_dict = updated_metadata.as_string_dict()
         self._execute_metadata(
+            UPDATE_METRIC,
             self.__update_metric_metadata_statement,
             [metadata_dict, encoded_metric_name],
         )
@@ -1269,7 +1310,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def delete_directory(self, directory):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).delete_directory(directory)
-        self._execute_metadata(self.__delete_directory, [directory])
+        self._execute_metadata(DELETE_DIRECTORY, self.__delete_directory, [directory])
 
     def _create_parent_dirs_queries(self, components):
         queries = []
@@ -1408,8 +1449,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         encoded_metric_name = bg_metric.encode_metric_name(metric_name)
         result = list(
             self._execute_metadata(
-                self.__select_metric_metadata_statement, (encoded_metric_name,)
-            )
+                SELECT_METRIC_METADATA,
+                self.__select_metric_metadata_statement,
+                (encoded_metric_name,))
         )
         if not result:
             return None
@@ -1442,8 +1484,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         encoded_directory = bg_metric.encode_metric_name(directory)
         result = list(
             self._execute_metadata(
-                self.__select_directory_statement, (encoded_directory,)
-            )
+                HAS_DIRECTORY,
+                self.__select_directory_statement,
+                (encoded_directory,))
         )
         return bool(result)
 
@@ -1711,7 +1754,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             query = cql % {"keyspace": self.keyspace_metadata}
             schema += query + "\n\n"
             if not dry_run:
-                self._execute_metadata(query)
+                self._execute_metadata(SYNCDB_METADATA, query)
 
         schema += " -- Already Existing Tables (updated schemas)\n"
         tables = self.__cluster_data.metadata.keyspaces[self.keyspace].tables
@@ -1738,7 +1781,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 query = self.__lazy_statements._create_datapoints_table_stmt(stage)
                 schema += query + "\n\n"
                 if not dry_run:
-                    self._execute_data(query)
+                    self._execute_data(SYNCDB_DATA, query)
 
         if not was_connected:
             self.shutdown()
@@ -1948,6 +1991,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
+                REPAIR_MISSING_DIR,
                 dir_query, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
             )
             if len(result.current_rows) == 0:
@@ -2025,6 +2069,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
+                CLEAN_EMPTY_DIR,
                 dir_query, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
             )
             if len(result.current_rows) == 0:
@@ -2154,6 +2199,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         while token < stop_token:
             try:
                 rows = self._execute_metadata(
+                    CLEAN_EXPIRED_METRICS,
                     select, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
                 )
 
