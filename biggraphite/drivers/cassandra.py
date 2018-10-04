@@ -52,6 +52,78 @@ from biggraphite.drivers import cassandra_stratio_lucene as lucene
 from biggraphite.drivers.ttls import DAY, HOUR, MINUTE
 from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
 
+DELETE_METRIC_METADATA = prometheus_client.Counter(
+    "bg_cassandra_delete_metric_metadata",
+    "Number of metrics metadata that have been deleted",
+)
+DELETE_DIRECTORY = prometheus_client.Counter(
+    "bg_cassandra_delete_directory",
+    "Number of directories that have been deleted",
+)
+DELETE_METRIC = prometheus_client.Counter(
+    "bg_cassandra_delete_metric",
+    "Number of metrics that has been deleted",
+)
+UPDATE_READ_ON_METADATA = prometheus_client.Counter(
+    "bg_cassandra_update_metric_read_on",
+    "Number of 'read_on' that have been updated in metric metadata",
+)
+INSERT_METRIC_METADATA = prometheus_client.Counter(
+    "bg_cassandra_insert_metric_metadata",
+    "Number of metrics metadata that has been inserted",
+)
+TOUCH_METRIC_METADATA = prometheus_client.Counter(
+    "bg_cassandra_touch_metric_metadata",
+    "Number of metrics metadata that has been touched",
+)
+UPDATE_METRIC_METADATA = prometheus_client.Counter(
+    "bg_cassandra_update_metric_metadata",
+    "Number of metrics metadata that has been updated",
+)
+SELECT_METRIC_METADATA = prometheus_client.Counter(
+    "bg_cassandra_select_metric_metadata",
+    "Number of metrics metadata that has been selected",
+)
+INSERT_DIRECTORY = prometheus_client.Counter(
+    "bg_cassandra_insert_directory",
+    "Number of directories that has been inserted",
+)
+INSERT_METRIC = prometheus_client.Counter(
+    "bg_cassandra_insert_metric",
+    "Number of metrics that has been inserted",
+)
+SELECT_METRIC = prometheus_client.Counter(
+    "bg_cassandra_select_metric",
+    "Number of metrics that has been selected",
+)
+SELECT_DIRECTORY = prometheus_client.Counter(
+    "bg_cassandra_select_directory",
+    "Number of directories that has been selected",
+)
+SELECT = prometheus_client.Counter(
+    "bg_cassandra_select",
+    "Number of glob select",
+)
+METADATA_SCHEMA_UPDATE = prometheus_client.Counter(
+    "bg_cassandra_creation_cql_metadata",
+    "Number of schema changes that has been executed so far",
+)
+SELECT_TABLES_FROM_KEYSPACE = prometheus_client.Counter(
+    "bg_cassandra_select_tables_from_keyspace",
+    "Number of times tables from keyspace have been selected",
+)
+CLEAN_EXPIRED_METRICS_SELECT = prometheus_client.Counter(
+    "bg_cassandra_clean_expired_metrics_select",
+    "Number of select to prepare cleaning expired metrics",
+)
+CLEAN_EXPIRED_METRICS_DELETE = prometheus_client.Counter(
+    "bg_cassandra_clean_expired_metrics_delete",
+    "Number of expired metrics delete",
+)
+CLEAN_EXPIRED_METRICS_DELETE_METADATA = prometheus_client.Counter(
+    "bg_cassandra_clean_expired_metrics_delete_metadata",
+    "Number of expired metrics metadata delete",
+)
 PM_DELETED_DIRECTORIES = prometheus_client.Counter(
     "bg_cassandra_deleted_directories",
     "Number of directory that have been deleted so far",
@@ -63,6 +135,55 @@ PM_EXPIRED_METRICS = prometheus_client.Counter(
     "bg_cassandra_expired_metrics",
     "Number of metrics that has been cleaned due to expiration",
 )
+INSERT_DOWNSAMPLED_POINTS = prometheus_client.Counter(
+    "bg_cassandra_insert_downsampled_points",
+    "Number of downsampled point insertion",
+)
+INSERT_DOWNSAMPLED_POINTS_BATCH = prometheus_client.Counter(
+    "bg_cassandra_insert_downsampled_points_batch",
+    "Number of batched downsampled point insertion",
+)
+SYNCDB = prometheus_client.Counter(
+    "bg_cassandra_syncdb",
+    "Number of requests to syncdb",
+)
+CLEAN = prometheus_client.Counter(
+    "bg_cassandra_clean_empty_dir",
+    "Number of directory cleaning",
+)
+CLEAN_DIRECTORIES_TO_CHECK = prometheus_client.Counter(
+    "bg_cassandra_clean_empty_dir_directories_to_check",
+    "Number of queries performed to find directories to check during directory cleaning",
+)
+CLEAN_DIRECTORIES_TO_REMOVE = prometheus_client.Counter(
+    "bg_cassandra_clean_empty_dir_directories_to_remove",
+    "Number of queries performed to remove directories during directory cleaning",
+)
+REPAIR_MISSING_DIR_COUNT = prometheus_client.Counter(
+    "bg_cassandra_repair_missing_dir",
+    "Number of missing dir repair",
+)
+MAP_ITERATION = prometheus_client.Counter(
+    "bg_cassandra_map_iteration",
+    "Number of iteration on map so far",
+)
+DROP_ALL_METRICS = prometheus_client.Counter(
+    "bg_cassandra_drop_all_metrics",
+    "Number of drop all triggers",
+)
+FETCH_POINT = prometheus_client.Counter(
+    "bg_cassandra_fetch_point",
+    "Number of point fetch",
+)
+REPAIR_DIRECTORIES_TO_CHECK = prometheus_client.Counter(
+    "bg_cassandra_repair_directories_to_check",
+    "Number of queries to find directories to check during a repair",
+)
+REPAIR_DIRECTORIES_TO_CREATE = prometheus_client.Counter(
+    "bg_cassandra_repair_directories_to_create",
+    "Number of queries to create directories  during a repair",
+)
+
 
 UPDATED_ON = prometheus_client.Summary(
     "bg_cassandra_updated_on_latency_seconds",
@@ -92,11 +213,11 @@ REPAIR_MISSING_DIR = prometheus_client.Summary(
     "bg_cassandra_repair_missing_dir_latency_seconds",
     "repair missing directory latency in seconds"
 )
-SELECT_METRIC_METADATA = prometheus_client.Summary(
+SELECT_METRIC_METADATA_LATENCY = prometheus_client.Summary(
     "bg_cassandra_select_metric_metadata_latency_seconds",
     "select metric metadata latency in seconds"
 )
-DELETE_DIRECTORY = prometheus_client.Summary(
+DELETE_DIRECTORY_LATENCY = prometheus_client.Summary(
     "bg_cassandra_delete_directory_latency_seconds",
     "delete directory latency in seconds"
 )
@@ -874,6 +995,33 @@ def expose_metrics(metrics, cluster_name=""):
     return metrics_adp
 
 
+class _CassandraExecutionRequest(object):
+    """Wraps required data for a Cassandra query."""
+
+    def __init__(self, counter, statement, *params):
+        """Inits the execution request."""
+        self.counter = counter
+        self.statement = statement
+        self.params = params
+
+    def mark(self):
+        """Mark this context as executed."""
+        if self.counter:
+            self.counter.inc()
+
+    def args(self):
+        """Returns the query arguments as expected by the Cassandra driver."""
+        return self.statement, list(self.params)
+
+    def with_params(self, *params):
+        """Clone this execution request with parameters."""
+        return _CassandraExecutionRequest(self.counter, self.statement, *params)
+
+    def with_param_list(self, param_list):
+        """Clone this execution request with parameters as list."""
+        return self.with_params(*tuple(param_list))
+
+
 class _CassandraAccessor(bg_accessor.Accessor):
     """Provides Read/Write accessors to Cassandra.
 
@@ -1044,22 +1192,31 @@ class _CassandraAccessor(bg_accessor.Accessor):
             "component_%d" % n for n in range(_COMPONENTS_MAX_LEN)
         )
         components_marks = ", ".join("?" for n in range(_COMPONENTS_MAX_LEN))
-        self.__insert_metric_statement = __prepare(
-            'INSERT INTO "%s".metrics (name, parent, %s) VALUES (?, ?, %s);'
-            % (self.keyspace_metadata, components_names, components_marks)
+        self.__insert_metric_statement = _CassandraExecutionRequest(
+            INSERT_METRIC,
+            __prepare(
+                'INSERT INTO "%s".metrics (name, parent, %s) VALUES (?, ?, %s);'
+                % (self.keyspace_metadata, components_names, components_marks)
+            )
         )
-        self.__insert_directory_statement = __prepare(
-            'INSERT INTO "%s".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;'
-            % (self.keyspace_metadata, components_names, components_marks)
+        self.__insert_directory_statement = _CassandraExecutionRequest(
+            INSERT_DIRECTORY,
+            __prepare(
+                'INSERT INTO "%s".directories (name, parent, %s) VALUES (?, ?, %s) IF NOT EXISTS;'
+                % (self.keyspace_metadata, components_names, components_marks)
+            )
         )
-        self.__insert_directory_statement.serial_consistency_level = (
+        self.__insert_directory_statement.statement.serial_consistency_level = (
             self._meta_serial_consistency
         )
         # We do not set the serial_consistency, it defautls to SERIAL.
-        self.__select_metric_metadata_statement = __prepare(
-            "SELECT id, config, toUnixTimestamp(updated_on)"
-            ' FROM "%s".metrics_metadata WHERE name = ?;' % self.keyspace_metadata,
-            self._meta_read_consistency,
+        self.__select_metric_metadata_statement = _CassandraExecutionRequest(
+            SELECT_METRIC_METADATA,
+            __prepare(
+                "SELECT id, config, toUnixTimestamp(updated_on), name"
+                ' FROM "%s".metrics_metadata WHERE name = ?;' % self.keyspace_metadata,
+                self._meta_read_consistency,
+            )
         )
         self.__select_metric_statement = __prepare(
             'SELECT * FROM "%s".metrics WHERE name = ?;' % self.keyspace_metadata,
@@ -1069,34 +1226,54 @@ class _CassandraAccessor(bg_accessor.Accessor):
             'SELECT * FROM "%s".directories WHERE name = ?;' % self.keyspace_metadata,
             self._meta_read_consistency,
         )
-        self.__update_metric_metadata_statement = __prepare(
-            'UPDATE "%s".metrics_metadata SET config=?, updated_on=now()'
-            " WHERE name=?;" % self.keyspace_metadata
+        self.__update_metric_metadata_statement = _CassandraExecutionRequest(
+            UPDATE_METRIC_METADATA,
+            __prepare(
+                'UPDATE "%s".metrics_metadata SET config=?, updated_on=now()'
+                " WHERE name=?;" % self.keyspace_metadata
+            )
         )
-        self.__touch_metrics_metadata_statement = __prepare(
-            'UPDATE "%s".metrics_metadata SET updated_on=now()'
-            " WHERE name=?;" % self.keyspace_metadata
+        self.__touch_metrics_metadata_statement = _CassandraExecutionRequest(
+            TOUCH_METRIC_METADATA,
+            __prepare(
+                'UPDATE "%s".metrics_metadata SET updated_on=now()'
+                " WHERE name=?;" % self.keyspace_metadata
+            ))
+        self.__insert_metrics_metadata_statement = _CassandraExecutionRequest(
+            INSERT_METRIC_METADATA,
+            __prepare(
+                'INSERT INTO "%s".metrics_metadata (name, created_on, updated_on, id, config)'
+                " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
+            )
         )
-        self.__insert_metrics_metadata_statement = __prepare(
-            'INSERT INTO "%s".metrics_metadata (name, created_on, updated_on, id, config)'
-            " VALUES (?, now(), now(), ?, ?);" % self.keyspace_metadata
+        self.__update_metric_read_on_metadata_statement = _CassandraExecutionRequest(
+            UPDATE_READ_ON_METADATA,
+            __prepare(
+                'UPDATE "%s".metrics_metadata SET read_on=now()'
+                " WHERE name=?;" % self.keyspace_metadata
+            )
         )
-        self.__update_metric_read_on_metadata_statement = __prepare(
-            'UPDATE "%s".metrics_metadata SET read_on=now()'
-            " WHERE name=?;" % self.keyspace_metadata
+        self.__delete_metric = _CassandraExecutionRequest(
+            DELETE_METRIC,
+            __prepare(
+                'DELETE FROM "%s".metrics WHERE name=?;' % (self.keyspace_metadata),
+                consistency=cassandra.ConsistencyLevel.QUORUM,
+            )
         )
-        self.__delete_metric = __prepare(
-            'DELETE FROM "%s".metrics WHERE name=?;' % (self.keyspace_metadata),
-            consistency=cassandra.ConsistencyLevel.QUORUM,
+        self.__delete_directory = _CassandraExecutionRequest(
+            DELETE_DIRECTORY,
+            __prepare(
+                'DELETE FROM "%s".directories WHERE name=?;' % (self.keyspace_metadata),
+                consistency=cassandra.ConsistencyLevel.QUORUM,
+            )
         )
-        self.__delete_directory = __prepare(
-            'DELETE FROM "%s".directories WHERE name=?;' % (self.keyspace_metadata),
-            consistency=cassandra.ConsistencyLevel.QUORUM,
-        )
-        self.__delete_metric_metadata = __prepare(
-            'DELETE FROM "%s".metrics_metadata WHERE name=?;'
-            % (self.keyspace_metadata),
-            consistency=cassandra.ConsistencyLevel.QUORUM,
+        self.__delete_metric_metadata = _CassandraExecutionRequest(
+            DELETE_METRIC_METADATA,
+            __prepare(
+                'DELETE FROM "%s".metrics_metadata WHERE name=?;'
+                % (self.keyspace_metadata),
+                consistency=cassandra.ConsistencyLevel.QUORUM,
+            )
         )
 
     def _connect_clusters(self):
@@ -1155,7 +1332,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             session.default_timeout = self.__timeout
         return cluster, session
 
-    def _execute(self, session, *args, **kwargs):
+    def _execute(self, session, execution_request, **kwargs):
         """Wrapper for __session.execute_async()."""
         if self.__bulkimport:
             return []
@@ -1163,10 +1340,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__trace:
             kwargs["trace"] = True
 
+        args = execution_request.args()
+
         if args:
             log.debug(" ".join([str(arg) for arg in args]))
         if kwargs:
             log.debug(" ".join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
+        execution_request.mark()
         result = session.execute(*args, **kwargs)
 
         if self.__trace:
@@ -1175,15 +1355,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 log.debug("%s: %s" % (e.source_elapsed, str(e)))
         return result
 
-    def _execute_data(self, timer, *args, **kwargs):
+    def _execute_data(self, timer, execution_request, **kwargs):
         with timer.time():
-            return self._execute(self.__session_data, *args, **kwargs)
+            return self._execute(self.__session_data, execution_request, **kwargs)
 
-    def _execute_metadata(self, timer, *args, **kwargs):
+    def _execute_metadata(self, timer, execution_request, **kwargs):
         with timer.time():
-            return self._execute(self.__session_metadata, *args, **kwargs)
+            return self._execute(self.__session_metadata, execution_request, **kwargs)
 
-    def _execute_async(self, session, *args, **kwargs):
+    def _execute_async(self, session, execution_request, **kwargs):
         """Wrapper for __session.execute_async()."""
         if self.__bulkimport:
 
@@ -1196,11 +1376,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__trace:
             kwargs["trace"] = True
 
-        if args:
-            log.debug(" ".join([str(arg) for arg in args]))
+        if execution_request.params:
+            log.debug(" ".join([str(arg) for arg in execution_request.args()]))
         if kwargs:
             log.debug(" ".join(["%s:%s " % (k, v) for k, v in kwargs.items()]))
-        future = session.execute_async(*args, **kwargs)
+
+        execution_request.mark()
+        future = session.execute_async(*execution_request.args(), **kwargs)
 
         if self.__trace:
             trace = future.get_query_trace()
@@ -1208,28 +1390,29 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 log.debug(e.source_elapsed, e.description)
         return future
 
-    def _execute_async_data(self, *args, **kwargs):
-        return self._execute_async(self.__session_data, *args, **kwargs)
+    def _execute_async_data(self, execution_request, **kwargs):
+        return self._execute_async(self.__session_data, execution_request, **kwargs)
 
-    def _execute_async_metadata(self, *args, **kwargs):
-        return self._execute_async(self.__session_metadata, *args, **kwargs)
+    def _execute_async_metadata(self, execution_request, **kwargs):
+        return self._execute_async(self.__session_metadata, execution_request, **kwargs)
 
-    def _execute_concurrent(self, session, statements_and_parameters, **kwargs):
+    def _execute_concurrent(self, session, execution_requests, **kwargs):
         """Wrapper for concurrent.execute_concurrent()."""
         if self.__bulkimport:
             return []
 
-        log.debug(statements_and_parameters)
+        log.debug(execution_requests)
 
         if not self.__trace:
+            args = [ec.args() for ec in execution_requests]
             return c_concurrent.execute_concurrent(
-                session, statements_and_parameters, **kwargs
+                session, args, **kwargs
             )
 
         query_results = []
-        for statement, params in statements_and_parameters:
+        for execution_request in execution_requests:
             try:
-                result = self._execute(session, statement, params, trace=True)
+                result = self._execute(session, execution_request, trace=True)
                 success = True
             except Exception as e:
                 if kwargs.get("raise_on_first_error") is True:
@@ -1239,11 +1422,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 query_results.append((success, result))
         return query_results
 
-    def _execute_concurrent_data(self, *args, **kwargs):
-        return self._execute_concurrent(self.__session_data, *args, **kwargs)
+    def _execute_concurrent_data(self, execution_requests, **kwargs):
+        return self._execute_concurrent(self.__session_data, execution_requests, **kwargs)
 
-    def _execute_concurrent_metadata(self, *args, **kwargs):
-        return self._execute_concurrent(self.__session_metadata, *args, **kwargs)
+    def _execute_concurrent_metadata(self, execution_requests, **kwargs):
+        return self._execute_concurrent(self.__session_metadata, execution_requests, **kwargs)
 
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""
@@ -1270,14 +1453,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metadata_dict = metric.metadata.as_string_dict()
         queries.append(
             (
-                self.__insert_metric_statement,
-                [metric.name, parent_dir + "."] + components + padding,
+                self.__insert_metric_statement.with_param_list(
+                    [metric.name, parent_dir + "."] + components + padding
+                )
             )
         )
         queries.append(
             (
-                self.__insert_metrics_metadata_statement,
-                [metric.name, metric.id, metadata_dict],
+                self.__insert_metrics_metadata_statement.with_param_list(
+                    [metric.name, metric.id, metadata_dict]
+                )
             )
         )
 
@@ -1297,20 +1482,28 @@ class _CassandraAccessor(bg_accessor.Accessor):
         metadata_dict = updated_metadata.as_string_dict()
         self._execute_metadata(
             UPDATE_METRIC,
-            self.__update_metric_metadata_statement,
-            [metadata_dict, encoded_metric_name],
+            self.__update_metric_metadata_statement.with_param_list(
+                [metadata_dict, encoded_metric_name]
+            )
         )
 
     def delete_metric(self, name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).delete_metric(name)
-        self._execute_async_metadata(self.__delete_metric, [name])
-        self._execute_async_metadata(self.__delete_metric_metadata, [name])
+        self._execute_async_metadata(
+            self.__delete_metric.with_params(name)
+        )
+        self._execute_async_metadata(
+            self.__delete_metric_metadata.with_params(name)
+        )
 
     def delete_directory(self, directory):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).delete_directory(directory)
-        self._execute_metadata(DELETE_DIRECTORY, self.__delete_directory, [directory])
+        self._execute_metadata(
+            DELETE_DIRECTORY_LATENCY,
+            self.__delete_directory.with_params(directory)
+        )
 
     def _create_parent_dirs_queries(self, components):
         queries = []
@@ -1326,8 +1519,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             padding = [c_query.UNSET_VALUE] * padding_len
             queries.append(
                 (
-                    self.__insert_directory_statement,
-                    [name, parent + DIRECTORY_SEPARATOR] + path_components + padding,
+                    self.__insert_directory_statement.with_param_list(
+                        [name, parent + DIRECTORY_SEPARATOR] + path_components + padding
+                    )
                 )
             )
             parent = name
@@ -1343,15 +1537,30 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def drop_all_metrics(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).drop_all_metrics()
-        for keyspace in self.keyspace, self.keyspace_metadata:
-            session = self.__session_data if self.keyspace else self.__session_metadata
+
+        def drop_all_metrics_in_keyspace(keyspace, session):
             statement_str = (
                 "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s;"
             )
-            tables = [r[0] for r in self._execute(session, statement_str, (keyspace,))]
+
+            select_request = _CassandraExecutionRequest(
+                SELECT_TABLES_FROM_KEYSPACE,
+                statement_str,
+                keyspace)
+            tables = [r[0] for r in self._execute(session, select_request)]
 
             for table in tables:
-                self._execute(session, 'TRUNCATE "%s"."%s";' % (keyspace, table))
+                self._execute(
+                    session,
+                    _CassandraExecutionRequest(
+                        DROP_ALL_METRICS,
+                        'TRUNCATE "%s"."%s";' % (keyspace, table)
+                    )
+                )
+
+        drop_all_metrics_in_keyspace(self.keyspace, self.__session_data)
+        drop_all_metrics_in_keyspace(self.keyspace_metadata, self.__session_metadata)
+
         if self.__downsampler:
             self.__downsampler.clear()
         if self.__delayed_writer:
@@ -1377,14 +1586,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         time_end_ms = int(time_end) * 1000
         time_start_ms = max(time_end_ms - stage.duration_ms, time_start_ms)
 
-        statements_and_args = self._fetch_points_make_selects(
+        execution_requests = self._fetch_points_make_selects(
             metric.id, time_start_ms, time_end_ms, stage
         )
         # Note: it's unclear if this returns as soon as the first
         # query has been executed or not. If yes, consider using execute_async
         # directly.
         query_results = self._execute_concurrent_data(
-            statements_and_args, results_generator=True
+            execution_requests, results_generator=True
         )
 
         return bg_accessor.PointGrouper(
@@ -1425,7 +1634,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 row_max_offset=row_max_offset,
             )
             if select is not None:
-                res.append(select)
+                statement, args = select
+                res.append(_CassandraExecutionRequest(FETCH_POINT, statement, *args))
 
         return res
 
@@ -1441,7 +1651,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         with READ_ON.time():
             log.debug("updating read_on for %s" % metric_name)
             self._execute_async_metadata(
-                self.__update_metric_read_on_metadata_statement, (metric_name,)
+                self.__update_metric_read_on_metadata_statement.with_params(metric_name)
             )
 
     def _select_metric(self, metric_name):
@@ -1449,9 +1659,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
         encoded_metric_name = bg_metric.encode_metric_name(metric_name)
         result = list(
             self._execute_metadata(
-                SELECT_METRIC_METADATA,
-                self.__select_metric_metadata_statement,
-                (encoded_metric_name,))
+                SELECT_METRIC_METADATA_LATENCY,
+                self.__select_metric_metadata_statement.with_params(encoded_metric_name)
+            )
         )
         if not result:
             return None
@@ -1485,8 +1695,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         result = list(
             self._execute_metadata(
                 HAS_DIRECTORY,
-                self.__select_directory_statement,
-                (encoded_directory,))
+                _CassandraExecutionRequest(
+                    SELECT_DIRECTORY,
+                    self.__select_directory_statement,
+                    encoded_directory
+                )
+            )
         )
         return bool(result)
 
@@ -1545,6 +1759,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 % (len(components), _COMPONENTS_MAX_LEN)
             )
 
+        counter = None
         if self.__glob_parser.is_fully_defined(components):
             # When the glob is a fully defined metric, we can take a shortcut.
             # `glob` can't be used directly because, for example a.{b} would be a.b.
@@ -1552,38 +1767,42 @@ class _CassandraAccessor(bg_accessor.Accessor):
             # are combinations of fully defined paths.
             if table == "metrics":
                 query = self.__select_metric_statement
+                counter = SELECT_METRIC
             else:
                 query = self.__select_directory_statement
+                counter = SELECT_DIRECTORY
             path = DIRECTORY_SEPARATOR.join([c[0] for c in components])
             queries = [query.bind([path])]
         else:
             queries = self.metadata_query_generator.generate_queries(table, components)
+            counter = SELECT
 
-        statements_with_params = []
+        execution_requests = []
         for query in queries:
             if isinstance(query, six.string_types):
-                statement = c_query.SimpleStatement(
-                    query, consistency_level=self._meta_read_consistency
+                execution_request = _CassandraExecutionRequest(
+                    counter,
+                    c_query.SimpleStatement(query, consistency_level=self._meta_read_consistency)
                 )
             else:
-                statement = query
-            statements_with_params.append((statement, ()))
+                execution_request = _CassandraExecutionRequest(counter, query)
+            execution_requests.append(execution_request)
 
         if self.cache:
             # As queries can be statements, we use the string representation
             # (which always contains the query and the parameters).
             # WARNING: With the current code PrepareStatement would not be cached.
             keys_to_queries = {
-                self.__query_key(*sp): sp for sp in statements_with_params
+                self.__query_key(ec.statement, ec.params): ec for ec in execution_requests
             }
             cached_results = self.cache.get_many(keys_to_queries.keys())
             for key in cached_results:
-                statements_with_params.remove(keys_to_queries[key])
+                execution_requests.remove(keys_to_queries[key])
         else:
             cached_results = {}
 
         query_results = self._execute_concurrent_metadata(
-            statements_with_params,
+            execution_requests,
             concurrency=self.max_concurrent_queries_per_pattern,
             results_generator=True,
             raise_on_first_error=True,
@@ -1659,7 +1878,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if on_done:
             count_down = _CountDown(count=len(datapoints), on_zero=on_done)
 
-        statements = collections.defaultdict(list)
+        execution_requests = collections.defaultdict(list)
         for timestamp, value, count, stage in datapoints:
             timestamp_ms = int(timestamp) * 1000
             time_offset_ms = timestamp_ms % _row_size_ms(stage)
@@ -1677,26 +1896,30 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             # We group by table/partition.
             key = (stage, time_start_ms)
-            statements[key].append((statement, args))
+            execution_requests[key].append(
+                _CassandraExecutionRequest(INSERT_DOWNSAMPLED_POINTS, statement, *args)
+            )
 
-        for statements_and_args in statements.values():
-            if len(statements_and_args) == 1:
-                statement, args = statements_and_args[0]
+        for execution_requests_for_partition in execution_requests.values():
+            execution_request = None
+            if len(execution_requests_for_partition) == 1:
+                execution_request = execution_requests_for_partition[0]
                 count = 1
             else:
                 batch = c_query.BatchStatement(
                     consistency_level=self._data_write_consistency,
                     batch_type=c_query.BatchType.UNLOGGED,
                 )
-                for statement, args in statements_and_args:
-                    if statement is not None:
-                        batch.add(statement, args)
-                statement = batch
-                args = None
-                count = len(statements_and_args)
+                for execution_request in execution_requests_for_partition:
+                    if execution_request is not None:
+                        batch.add(execution_request.statement, execution_request.params)
+                        execution_request = _CassandraExecutionRequest(
+                            INSERT_DOWNSAMPLED_POINTS_BATCH, batch
+                        )
+                count = len(execution_requests_for_partition)
 
             future = self._execute_async(
-                session=self.__session_data, query=statement, parameters=args
+                session=self.__session_data, execution_request=execution_request
             )
             if count_down:
                 if count > 1:
@@ -1754,7 +1977,29 @@ class _CassandraAccessor(bg_accessor.Accessor):
             query = cql % {"keyspace": self.keyspace_metadata}
             schema += query + "\n\n"
             if not dry_run:
-                self._execute_metadata(SYNCDB_METADATA, query)
+                self._execute_metadata(
+                    SYNCDB_DATA,
+                    _CassandraExecutionRequest(METADATA_SCHEMA_UPDATE, query)
+                )
+
+        keyspaces = self.__cluster_data.metadata.keyspaces.keys()
+        if self.keyspace not in keyspaces:
+            raise CassandraError("Missing keyspace '%s'." % self.keyspace)
+
+        queries = _METADATA_CREATION_CQL
+        if self.use_lucene:
+            queries += _METADATA_CREATION_CQL_LUCENE
+        else:
+            queries += _METADATA_CREATION_CQL_SASI
+
+        for cql in queries:
+            query = cql % {"keyspace": self.keyspace_metadata}
+            schema += query + "\n\n"
+            if not dry_run:
+                self._execute_metadata(
+                    SYNCDB_METADATA,
+                    _CassandraExecutionRequest(METADATA_SCHEMA_UPDATE, query)
+                )
 
         schema += " -- Already Existing Tables (updated schemas)\n"
         tables = self.__cluster_data.metadata.keyspaces[self.keyspace].tables
@@ -1781,7 +2026,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 query = self.__lazy_statements._create_datapoints_table_stmt(stage)
                 schema += query + "\n\n"
                 if not dry_run:
-                    self._execute_data(SYNCDB_DATA, query)
+                    self._execute_data(
+                        SYNCDB_DATA,
+                        _CassandraExecutionRequest(SYNCDB, query)
+                    )
 
         if not was_connected:
             self.shutdown()
@@ -1807,7 +2055,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             # Update Cassandra.
             self._execute_async_metadata(
-                self.__touch_metrics_metadata_statement, (metric.name,)
+                self.__touch_metrics_metadata_statement.with_params(metric.name)
             )
 
     def map(
@@ -1848,7 +2096,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         while token < stop_token:
             # Schedule read first.
             future = self._execute_async_metadata(
-                select, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
+                _CassandraExecutionRequest(
+                    MAP_ITERATION,
+                    select,
+                    int(token)
+                ),
+                timeout=DEFAULT_TIMEOUT_QUERY_UTIL
             )
 
             # Then execute callback for the *previous* result while C* is
@@ -1967,7 +2220,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 name, next_token = row
                 parent_dir = name.rpartition(".")[0]
                 if parent_dir:
-                    yield has_directory_query, (parent_dir,)
+                    yield _CassandraExecutionRequest(
+                        REPAIR_DIRECTORIES_TO_CHECK,
+                        has_directory_query,
+                        parent_dir
+                    )
 
         def directories_to_create(result):
             for response in result:
@@ -1985,14 +2242,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 queries = self._create_parent_dirs_queries(components)
                 for query in queries:
                     PM_REPAIRED_DIRECTORIES.inc()
-                    yield query
+                    yield _CassandraExecutionRequest(
+                        REPAIR_DIRECTORIES_TO_CREATE,
+                        query
+                    )
 
         log.info("Start creating missing directories")
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
                 REPAIR_MISSING_DIR,
-                dir_query, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
+                _CassandraExecutionRequest(
+                    REPAIR_MISSING_DIR_COUNT,
+                    dir_query,
+                    int(token)
+                ),
+                timeout=DEFAULT_TIMEOUT_QUERY_UTIL
             )
             if len(result.current_rows) == 0:
                 break
@@ -2049,7 +2314,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
             for row in result:
                 name, next_token = row
                 if name:
-                    yield (has_metric_query, (name + DIRECTORY_SEPARATOR + "%",))
+                    yield _CassandraExecutionRequest(
+                        CLEAN_DIRECTORIES_TO_CHECK,
+                        has_metric_query,
+                        name + DIRECTORY_SEPARATOR + "%"
+                    )
 
         def directories_to_remove(result):
             for response in result:
@@ -2063,15 +2332,25 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 dir_name = str(dir_name).rpartition(".")[0]
                 log.info("Scheduling delete for empty dir '%s'" % dir_name)
                 PM_DELETED_DIRECTORIES.inc()
-                yield delete_empty_dir_stm, (dir_name,)
+                yield _CassandraExecutionRequest(
+                    CLEAN_DIRECTORIES_TO_REMOVE,
+                    delete_empty_dir_stm,
+                    dir_name
+                )
 
         log.info("Starting cleanup of empty dir")
         token = start_token
         while token < stop_token:
             result = self._execute_metadata(
                 CLEAN_EMPTY_DIR,
-                dir_query, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
+                _CassandraExecutionRequest(
+                    CLEAN,
+                    dir_query,
+                    int(token)
+                ),
+                timeout=DEFAULT_TIMEOUT_QUERY_UTIL
             )
+
             if len(result.current_rows) == 0:
                 break
 
@@ -2173,26 +2452,35 @@ class _CassandraAccessor(bg_accessor.Accessor):
         log.info("Cleaning with cutoff time %d", cutoff)
 
         # statements
-        select = self._prepare_background_request_on_index(
-            'SELECT name, token(name) FROM "%s".metrics_metadata'
-            " WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d ;"
-            % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL)
+        select = _CassandraExecutionRequest(
+            CLEAN_EXPIRED_METRICS_SELECT,
+            self._prepare_background_request_on_index(
+                'SELECT name, token(name) FROM "%s".metrics_metadata'
+                " WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d ;"
+                % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL)
+            )
         )
 
-        delete = self._prepare_background_request(
-            'DELETE FROM "%s".metrics WHERE name = ? ;' % (self.keyspace_metadata)
+        delete = _CassandraExecutionRequest(
+            CLEAN_EXPIRED_METRICS_DELETE,
+            self._prepare_background_request(
+                'DELETE FROM "%s".metrics WHERE name = ? ;' % (self.keyspace_metadata)
+            )
         )
-        delete_metadata = self._prepare_background_request(
-            'DELETE FROM "%s".metrics_metadata WHERE name = ? ;'
-            % (self.keyspace_metadata)
+        delete_metadata = _CassandraExecutionRequest(
+            CLEAN_EXPIRED_METRICS_DELETE_METADATA,
+            self._prepare_background_request(
+                'DELETE FROM "%s".metrics_metadata WHERE name = ? ;'
+                % (self.keyspace_metadata)
+            )
         )
 
         def run(rows):
             for name, _ in rows:
                 log.info("Scheduling delete for obsolete metric %s", name)
                 PM_EXPIRED_METRICS.inc()
-                yield (delete, (name,))
-                yield (delete_metadata, (name,))
+                yield (delete.with_params(name))
+                yield (delete_metadata.with_params(name))
 
         ignored_errors = 0
         token = start_token
@@ -2200,7 +2488,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             try:
                 rows = self._execute_metadata(
                     CLEAN_EXPIRED_METRICS,
-                    select, (int(token),), DEFAULT_TIMEOUT_QUERY_UTIL
+                    select.with_params(int(token)),
+                    timeout=DEFAULT_TIMEOUT_QUERY_UTIL
                 )
 
                 # Empty results means that we've reached the end.
