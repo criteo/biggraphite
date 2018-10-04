@@ -37,6 +37,7 @@ from cassandra import marshal as c_marshal
 from cassandra import murmur3
 from cassandra import policies as c_policies
 from cassandra import query as c_query
+from future.utils import raise_with_traceback
 
 from biggraphite import accessor as bg_accessor
 from biggraphite import glob_utils as bg_glob
@@ -2407,7 +2408,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             log.exception("Failed to clean metrics.")
 
         if first_exception is not None:
-            raise first_exception
+            raise_with_traceback(first_exception)
 
     def _prepare_background_request(self, query_str):
         select = self.__session_metadata.prepare(query_str)
