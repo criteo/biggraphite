@@ -186,10 +186,6 @@ REPAIR_DIRECTORIES_TO_CREATE = prometheus_client.Counter(
 )
 
 
-UPDATED_ON = prometheus_client.Summary(
-    "bg_cassandra_updated_on_latency_seconds",
-    "create latency in seconds"
-)
 READ_ON = prometheus_client.Summary(
     "bg_cassandra_read_on_latency_seconds",
     "create latency in seconds"
@@ -2063,7 +2059,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.shutdown()
         return schema
 
-    @UPDATED_ON.time()
     def touch_metric(self, metric):
         """See the real Accessor for a description."""
         super(_CassandraAccessor, self).touch_metric(metric)
