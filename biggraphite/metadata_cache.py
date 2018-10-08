@@ -30,16 +30,14 @@ import abc
 import logging
 import os
 import random
-import sys
 import threading
 import time
 import uuid
 from os import path as os_path
 
 import cachetools
-import lmdb
 import prometheus_client
-import six
+from diskcache import Cache as disk_cache
 
 from biggraphite import metric as bg_metric
 
@@ -350,20 +348,6 @@ class DiskCache(MetadataCache):
 
     TYPE = "disk"
 
-    __SINGLETONS = {}
-    __SINGLETONS_LOCK = threading.Lock()
-    # Maximum number of concurrent readers.
-    # Used to size a file that is mmapped in all readers. Cannot be raised while the DB is opened.
-    # According to LMDB's author, 128 readers is about 8KiB of RAM, 1024 is about 128kiB and even
-    # 4096 is safe: https://twitter.com/armon/status/534867803426533376
-    _MAX_READERS = 2048
-    _METRIC_SEPARATOR = "|"
-    _EMPTY = b"nil"
-
-    # 1G on 32 bits systems
-    # 16G on 64 bits systems
-    MAP_SIZE = 1024 * 1024 * 1024 * 16 if sys.maxsize > 2 ** 32 else 1024 * 1024 * 1024
-
     def __init__(self, accessor, settings, name=None):
         """Create a new DiskCache."""
         super(DiskCache, self).__init__(accessor, settings, name)
@@ -371,14 +355,9 @@ class DiskCache(MetadataCache):
         path = settings.get("path")
         assert path
 
-        self.__env = None
+        self.__cache = None
         self.__path = os_path.join(path, "biggraphite", "cache", "version0")
-        self.__size = settings.get("size", self.MAP_SIZE)
         self.__ttl = int(settings.get("ttl", 24 * 60 * 60))
-        self.__sync = settings.get("sync", True)
-        self.__databases = {"metric_to_meta": None}
-        self.__metric_to_metadata_db = None
-        self._max_size.set(self.__size)
 
     def open(self):
         """Allocate ressources used by the cache.
@@ -386,7 +365,7 @@ class DiskCache(MetadataCache):
         Safe to call again after close() returned.
         """
         super(DiskCache, self).open()
-        if self.__env:
+        if self.__cache:
             return
         try:
             os.makedirs(self.__path)
@@ -394,233 +373,65 @@ class DiskCache(MetadataCache):
             pass  # Directory already exists
 
         logging.info(
-            "Opening cache %s (ttl: %s, sync: %s)", self.__path, self.__ttl, self.__sync
+            "Opening cache %s (ttl: %s)", self.__path, self.__ttl
         )
-        self.__env = lmdb.open(
-            self.__path,
-            map_size=self.__size,
-            # Only one sync per transaction, system crash can undo a transaction.
-            metasync=False,
-            # Actually, don't sync at all.
-            sync=self.__sync,
-            map_async=not self.__sync,
-            # Use mmap()
-            writemap=True,
-            # Max number of concurrent readers, see _MAX_READERS for details
-            max_readers=self._MAX_READERS,
-            # How many DBs we may create (until we increase version prefix).
-            max_dbs=8,
-            # A cache of read-only transactions, should match max number of threads.
-            # Only transactions that are actually used concurrently allocate memory,
-            # so setting a high number doesn't cost much even if thread count is low.
-            max_spare_txns=128,
-        )
-
-        # Clean stale readers. This can be needed if a previous instance crashed or
-        # was killed abruptly (HUP, TERM, KILL...) and the lock file was always used
-        # typically by other UWSGI workers.
-        cleaned_stale_reader = self.__env.reader_check()
-        logging.info("%d stale readers cleared." % cleaned_stale_reader)
-
-        databases = {}
-        for name in self.__databases:
-            databases[name] = self.__env.open_db(name.encode())
-        self.__databases = databases
-
-        self.__metric_to_metadata_db = databases["metric_to_meta"]
+        self.__cache = disk_cache(self.__path)
 
     def close(self):
         """Free resources allocated by open().
 
         Safe to call multiple time.
         """
-        if self.__env:
-            self.__env.close()
-            self.__env = None
+        if self.__cache:
+            self.__cache.close()
+            self.__cache = None
         super(DiskCache, self).close()
+
+    def __serialize(self, data):
+        if data is None:
+            return data
+        return data.as_string_dict()
+
+    def __deserialize(self, data):
+        if data is None:
+            return data
+        metadata = bg_metric.MetricMetadata.from_string_dict(data['metadata'])
+        metric = bg_metric.Metric(data['name'], uuid.UUID(str(data['id'])), metadata,
+                                  created_on=data['created_on'],
+                                  updated_on=data['updated_on'],
+                                  read_on=data['read_on'])
+        return metric
 
     def _cache_has(self, metric_name):
         """Check if metric is cached."""
-        encoded_metric_name = self._encode(metric_name)
-        with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            payload = txn.get(encoded_metric_name)
-            return payload is not None
-
-    def __expired_timestamp(self, timestamp):
-        """Check if timestamp is expired.
-
-        A timestamp expires when it is older than half the TTL from now
-        """
-        return int(time.time()) > timestamp + self.__ttl
-
-    def _encode(self, value):
-        """Make sure we have only str (or bytes)."""
-        if value is None:
-            return value
-        if isinstance(value, six.binary_type):
-            return value
-        return value.encode("utf-8")
-
-    def _decode(self, value):
-        if value is None:
-            return value
-        return value.decode("utf-8")
+        metric = self.__deserialize(
+            self.__cache.get(metric_name, default=None))
+        return metric is not None
 
     def _cache_get(self, metric_name):
         """Return a Metric from a the cache, None if no such metric."""
-        encoded_metric_name = self._encode(metric_name)
-        with self.__env.begin(self.__metric_to_metadata_db, write=False) as txn:
-            payload = txn.get(encoded_metric_name)
-
-        if payload == self._EMPTY:
-            return None, True
-
-        if payload is not None:
-            payload = self._decode(payload)
-
-        if not payload:
-            # cache miss
+        metric = self.__deserialize(
+            self.__cache.get(metric_name, default=None))
+        if metric is None:
             return None, False
-
-        # found something in the cache
-        split = self.__split_payload(payload)
-
-        if split is None:
-            # invalid string => evict from cache
-            with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-                txn.delete(key=encoded_metric_name)
-            return None, False
-
-        # valid value => get id and metadata string
-        # TODO: optimization: id is a UUID (known length)
-        id_str, metadata_str, timestamp = split
-        try:
-            id = uuid.UUID(id_str)
-        except Exception as e:
-            logging.debug(str(e))
-            with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-                txn.delete(key=encoded_metric_name)
-            return None, False
-
-        # if the timestamp expired evict it in order to force
-        # its recreation for the next time
-        if self.__expired_timestamp(timestamp):
-            with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-                txn.delete(key=encoded_metric_name)
-
-        metadata = self.metadata_from_str(metadata_str)
-        return bg_metric.Metric(metric_name, id, metadata), True
+        else:
+            return metric, True
 
     def _cache_set(self, metric_name, metric):
-        """If metric is valid, add it to the cache.
-
-        The metric is stored in the cache as follows:
-          - its id, which is a UUID.
-          - vertical bar (pipe) separator.
-          - its metadata JSON representation.
-        """
-        encoded_metric_name = self._encode(metric_name)
-        key = encoded_metric_name
-        value = self.__value_from_metric(metric)
-        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            txn.put(key, value, dupdata=False, overwrite=True)
+        """Add metric to the cache."""
+        return self.__cache.set(metric_name,
+                                self.__serialize(metric),
+                                expire=self.__ttl)
 
     def stats(self):
         """Count number of cached entries."""
         ret = super(DiskCache, self).stats()
-        ret["root"] = (self.__env.stat(),)
-        for name, database in self.__databases.items():
-            with self.__env.begin(database, write=False) as txn:
-                ret[name] = txn.stat(database)
 
         return ret
 
-    def __value_from_strings(self, metric_id, metric_metadata):
-        """Build cache value from strings.
-
-        The cache value is a combination of:
-          - id
-          - _METRIC_SEPARATOR
-          - metadata
-          - _METRIC_SEPARATOR
-          - timestamp
-        """
-        timestamp = str(int(time.time()))
-        return self._encode(
-            self._METRIC_SEPARATOR.join([metric_id, metric_metadata, timestamp])
-        )
-
-    def __value_from_metric(self, metric):
-        """Build cache value for a metric."""
-        if not metric:
-            return self._EMPTY
-        return self.__value_from_strings(str(metric.id), metric.metadata.as_json())
-
-    def __split_payload(self, payload):
-        """Split the payload in components.
-
-        Returns None if it cannot parse the payload.
-        """
-        if not payload:
-            return None
-
-        split = payload.split(self._METRIC_SEPARATOR, 2)
-        # check for exaclt 3 fields
-        if len(split) != 3:
-            return None
-        metric_id, metric_metadata, timestamp_str = split
-        # check timestamp conversion to int
-        try:
-            timestamp = int(timestamp_str)
-        except (TypeError, ValueError, OverflowError):
-            return None
-        return (metric_id, metric_metadata, timestamp)
-
     def clean(self):
-        """Remove all expired metrics.
-
-        Note: This will also remove metrics without a timestamp or
-              whose timestamp value is not a digit.
-        """
-        cutoff = int(time.time()) - int(self.__ttl)
-        logging.info("Cleaning cache with cutoff time %d" % cutoff)
-
-        start_key = None
-        while True:
-            # Split in small transactions to avoid blocking other processes.
-            with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-                with txn.cursor() as cursor:
-                    if start_key is not None:
-                        if not cursor.set_range(self._encode(start_key)):
-                            break
-                    start_key = self._clean_some(txn, cursor, cutoff)
-                    if start_key is None:
-                        break
-
-    def _clean_some(self, txn, cursor, cutoff):
-        """Clean a few rows of cursor and stop."""
-        count = 0
-        for key, value in cursor:
-            count += 1
-            # Limit to 100 keys per iteration.
-            if count > 100:
-                return key
-
-            split = self.__split_payload(self._decode(value))
-            if split is None:
-                logging.warning(
-                    "Removing undecodable key '%s' with value %s" % (key, value)
-                )
-                txn.delete(key=key)
-                continue
-
-            _, _, timestamp = split
-            if timestamp < cutoff:
-                logging.warning(
-                    "Removing expired key '%s' with timestamp %d" % (key, timestamp)
-                )
-                txn.delete(key=key)
-        return None
+        """Remove is not handled by us."""
+        pass
 
     def repair(
         self,
@@ -630,57 +441,8 @@ class DiskCache(MetadataCache):
         nshards=1,
         callback_on_progress=None,
     ):
-        """Remove spurious entries from the cache.
-
-        During the repair the keyspace is split in nshards and
-        this function will only take care of 1/n th of the data
-        as specified by shard. This allows the caller to parallelize
-        the repair if needed.
-
-        Args:
-          start_key: string, start at key >= start_key.
-          end_key: string, stop at key < end_key.
-          shard: int, shard to repair.
-          nshards: int, number of shards.
-          callback_on_progress: Take 2 parameters, current key, last_key to check
-        """
-        i = 0
-        with self.__env.begin(self.__metric_to_metadata_db, write=True) as txn:
-            cursor = txn.cursor()
-            if start_key is not None:
-                if not cursor.set_range(start_key.encode()):
-                    return
-            for key, value in cursor:
-                i += 1
-                if end_key is not None and key >= end_key:
-                    break
-                if nshards > 1 and (i % nshards) != shard:
-                    continue
-
-                metric = self._accessor.get_metric(self._decode(key))
-                expected_value = self.__value_from_metric(metric) if metric else None
-
-                split = self.__split_payload(self._decode(value))
-                v_id, v_metadata, _ = split if split is not None else (None, None, None)
-
-                split = self.__split_payload(self._decode(expected_value))
-                e_id, e_metadata, _ = split if split is not None else (None, None, None)
-
-                if (
-                    v_id is None
-                    or e_id is None
-                    or (v_id, v_metadata) != (e_id, e_metadata)
-                ):
-                    logging.warning(
-                        "Removing invalid key '%s': expected: %s cached: %s"
-                        % (key, expected_value, value)
-                    )
-                    txn.delete(key=key)
-
-                if callback_on_progress:
-                    done = key - start_key if start_key else key
-                    total = end_key - start_key if start_key and end_key else None
-                    callback_on_progress(done, total)
+        """Repair is not handled by us."""
+        pass
 
 
 class NoneCache(MetadataCache):

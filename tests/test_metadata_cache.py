@@ -54,7 +54,7 @@ class CacheBaseTest(object):
         self._assert_hit_miss(hit, miss)
 
     def test_instance_cache(self):
-        """Check that we do cache JSON instances."""
+        """Check that we do cache metrics."""
         name = _TEST_METRIC.name
         self.assertEqual(self.metadata_cache.has_metric(name), False)
         self.assertEqual(self.metadata_cache.get_metric(name), None)
@@ -73,6 +73,44 @@ class CacheBaseTest(object):
         metric = bg_test_utils.make_metric(metric_name)
         self.metadata_cache.create_metric(metric)
         self.metadata_cache.get_metric(metric_name)
+
+    def test_stats(self):
+        ret = self.metadata_cache.stats()
+        self.assertNotEqual(len(ret), 0)
+
+        metric_name = "a.b.test"
+        metric = bg_test_utils.make_metric(metric_name)
+
+        self.metadata_cache.create_metric(metric)
+
+        ret = self.metadata_cache.stats()
+        self.assertNotEqual(len(ret), 0)
+
+
+class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
+
+    CACHE_CLASS = bg_metadata_cache.DiskCache
+
+    def test_cache_clean(self):
+        """Check that the cache is cleared out of metrics older than the TTL."""
+        with freeze_time("2014-01-01 00:00:00"):
+            old_metric = bg_test_utils.make_metric("i.am.old")
+            self.metadata_cache.create_metric(old_metric)
+            self.assertEqual(self.metadata_cache._cache_has(old_metric.name),
+                             True)
+        with freeze_time("2015-01-01 00:00:00"):
+            new_metric = bg_test_utils.make_metric("i.am.new")
+            self.metadata_cache.create_metric(new_metric)
+        with freeze_time("2015-01-01 00:00:00"):
+            self.metadata_cache.clean()
+
+            self.assertEqual(self.metadata_cache._cache_has(new_metric.name), True)
+            self.assertEqual(self.metadata_cache._cache_has(old_metric.name), False)
+
+
+class TestMemoryCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
+
+    CACHE_CLASS = bg_metadata_cache.MemoryCache
 
     def test_repair(self):
         # Add a normal metric.
@@ -128,71 +166,6 @@ class CacheBaseTest(object):
         # repair() will remove it, and the get will produce a miss.
         self.assertEqual(self.metadata_cache.hit_count, 2)
         self.assertEqual(self.metadata_cache.miss_count, 1)
-
-    def test_stats(self):
-        ret = self.metadata_cache.stats()
-        self.assertNotEqual(len(ret), 0)
-
-        metric_name = "a.b.test"
-        metric = bg_test_utils.make_metric(metric_name)
-
-        self.metadata_cache.create_metric(metric)
-
-        ret = self.metadata_cache.stats()
-        self.assertNotEqual(len(ret), 0)
-
-
-class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
-
-    CACHE_CLASS = bg_metadata_cache.DiskCache
-
-    def _get_metric_timestamp(self):
-        """Get the metric timestamp directly from DiskCache."""
-        with self.metadata_cache._DiskCache__env.begin(
-            self.metadata_cache._DiskCache__metric_to_metadata_db, write=False
-        ) as txn:
-            payload = txn.get(_TEST_METRIC.name.encode()).decode()
-        return self.metadata_cache._DiskCache__split_payload(payload)[-1]
-
-    def test_timestamp_update(self):
-        """Check that the timestamp is updated if older than half the TTL.
-
-        This test will create a metric at 00:00:00 and then get the same metric
-        at two different points in time to check if it the timestamp is updated
-        only when older than now + the default TTL.
-        """
-        with freeze_time("2014-01-01 00:00:00"):
-            self.metadata_cache.create_metric(_TEST_METRIC)
-        timestamp_creation = self._get_metric_timestamp()
-
-        with freeze_time("2014-01-01 11:00:00"):
-            self.metadata_cache.get_metric(_TEST_METRIC.name)
-
-        timestamp_get_within_half_ttl = self._get_metric_timestamp()
-        self.assertEqual(timestamp_creation, timestamp_get_within_half_ttl)
-
-        with freeze_time("2014-01-02 04:00:00"):
-            self.assertIsNot(self.metadata_cache.get_metric(_TEST_METRIC.name), None)
-            self.assertIs(self.metadata_cache.cache_has(_TEST_METRIC.name), False)
-
-    def test_cache_clean(self):
-        """Check that the cache is cleared out of metrics older than the TTL."""
-        with freeze_time("2014-01-01 00:00:00"):
-            old_metric = bg_test_utils.make_metric("i.am.old")
-            self.metadata_cache.create_metric(old_metric)
-        with freeze_time("2015-01-01 00:00:00"):
-            new_metric = bg_test_utils.make_metric("i.am.new")
-            self.metadata_cache.create_metric(new_metric)
-        with freeze_time("2015-01-01 20:00:00"):
-            self.metadata_cache.clean()
-
-        self.assertEqual(self.metadata_cache._cache_has(new_metric.name), True)
-        self.assertEqual(self.metadata_cache._cache_has(old_metric.name), False)
-
-
-class TestMemoryCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
-
-    CACHE_CLASS = bg_metadata_cache.MemoryCache
 
 
 class TestNoneCache(unittest.TestCase):
