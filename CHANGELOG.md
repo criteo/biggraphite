@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Improved
+- —
+
+### Fixed
+- —
+
+## [0.14.0]
+
+### Improved
+- performance of Elasticsearch driver
+
+### Fixed
+- isolation between metadata and data in Cassandra driver
+- metric name UTF-8 support in Elasticsearch driver
+
+### Added
+- ability to disable BigGraphite cache
+
+### Removed
+- irrelevant metrics on `bg_cassandra_updated_on_latency_seconds` and
+  `bg_cassandra_read_on_latency_seconds` for Cassandra driver
+
+## [0.13.10] - 2018-10-08
+
+### Improved
+- cassandra accessor observability: add metrics on query usage 
+
 ## [0.13.9] - 2018-08-28
 
 ### Fixed
@@ -306,8 +333,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
-
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.9...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.10...HEAD
+[0.14.0]: https://github.com/criteo/biggraphite/compare/v0.13.10...v0.14.0
+[0.13.10]: https://github.com/criteo/biggraphite/compare/v0.13.9...v0.13.10
 [0.13.9]: https://github.com/criteo/biggraphite/compare/v0.13.8...v0.13.9
 [0.13.8]: https://github.com/criteo/biggraphite/compare/v0.13.7...v0.13.8
 [0.13.7]: https://github.com/criteo/biggraphite/compare/v0.13.6...v0.13.7
