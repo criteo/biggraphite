@@ -186,10 +186,6 @@ REPAIR_DIRECTORIES_TO_CREATE = prometheus_client.Counter(
 )
 
 
-READ_ON = prometheus_client.Summary(
-    "bg_cassandra_read_on_latency_seconds",
-    "create latency in seconds"
-)
 SYNCDB_DATA = prometheus_client.Summary(
     "bg_cassandra_syncdb_data_latency_seconds",
     "DB data sync latency in seconds"
@@ -1658,11 +1654,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if skip:
             return
 
-        with READ_ON.time():
-            log.debug("updating read_on for %s" % metric_name)
-            self._execute_async_metadata(
-                self.__update_metric_read_on_metadata_statement.with_params(metric_name)
-            )
+        log.debug("updating read_on for %s" % metric_name)
+        self._execute_async_metadata(
+            self.__update_metric_read_on_metadata_statement.with_params(metric_name)
+        )
 
     def _select_metric(self, metric_name):
         """Fetch metric metadata."""
