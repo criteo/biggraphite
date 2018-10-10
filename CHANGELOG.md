@@ -6,8 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Breaking changes
+- the previous metric `bg_creates` becomes `bg_creates_enqueued` for Cassandra driver
+
 ### Improved
-- —
+- improved observability on metric creation
 
 ### Fixed
 - —
