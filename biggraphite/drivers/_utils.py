@@ -113,12 +113,14 @@ def bool_from_str(value):
 
 
 def trace_accessor_func(func):
+    """Decorator for tracing of functions."""
     if not execution_context:
         return func
+
     def tracer(self, *args, **kwargs):
         if not hasattr(self, 'module_name'):
             self.module_name = func.__module__.split('.')[-1]
         tracer = execution_context.get_opencensus_tracer()
-        with tracer.span(name=self.module_name + '.' + func.__name__) as span:
+        with tracer.span(name=self.module_name + '.' + func.__name__):
             return func(self, *args, **kwargs)
     return tracer
