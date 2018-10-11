@@ -56,6 +56,10 @@ EXISTS_TIME = prometheus_client.Summary(
     "bg_exists_latency_seconds", "create latency in seconds"
 )
 
+CREATES = prometheus_client.Counter(
+    "bg_creates", "metric creations"
+)
+
 CREATES_ENQUEUED = prometheus_client.Counter(
     "bg_creates_enqueued", "metrics scheduled for creation"
 )
@@ -305,6 +309,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         except queue.Empty:
             return
 
+        CREATES_DEQUEUED.inc()
+
         existing_metric = self.accessor.get_metric(metric.name)
 
         if metric == existing_metric:
@@ -322,7 +328,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         self.cache.create_metric(metric)
         self.tag(metric_name)
-        CREATES_DEQUEUED.inc()
+        CREATES.inc()
 
 
 class MultiDatabase(database.TimeSeriesDatabase):
