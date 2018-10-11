@@ -36,11 +36,6 @@ from biggraphite import metric as bg_metric
 from biggraphite.drivers import _utils
 from biggraphite.drivers import ttls
 
-try:
-    from opencensus.trace import config_integration
-except ImportError:
-    config_integration = None
-
 
 UPDATED_ON = prometheus_client.Summary(
     "bg_elasticsearch_updated_on_latency_seconds", "create latency in seconds"
@@ -309,8 +304,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__schema_path = schema_path
         self.client = None
         self.schema = None
-        if config_integration:
-            config_integration.trace_integrations(['httplib'])
         log.debug(
             "Created Elasticsearch accessor with index prefix: '%s' and index suffix: '%s'"
             % (self._index_prefix, self._index_suffix)
