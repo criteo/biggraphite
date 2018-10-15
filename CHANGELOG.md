@@ -6,11 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.1] - 2018-10-15
+
 ### Improved
 - improved observability on metric creation
-
-### Fixed
-- —
 
 ## [0.14.0]
 
@@ -333,7 +332,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.10...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/criteo/biggraphite/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/criteo/biggraphite/compare/v0.13.10...v0.14.0
 [0.13.10]: https://github.com/criteo/biggraphite/compare/v0.13.9...v0.13.10
 [0.13.9]: https://github.com/criteo/biggraphite/compare/v0.13.8...v0.13.9
