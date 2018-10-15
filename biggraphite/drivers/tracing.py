@@ -28,7 +28,7 @@ def trace(func):
     def tracer(self, *args, **kwargs):
         if not hasattr(self, 'module_name'):
             self.module_name = func.__module__.split('.')[-1]
-        tracer = execution_context.get_opencensus_tracer()
-        with tracer.span(name=self.module_name + '.' + func.__name__):
+        _tracer = execution_context.get_opencensus_tracer()
+        with _tracer.span(name="%s.%s" % (self.module_name, func.__name__)):
             return func(self, *args, **kwargs)
     return tracer
