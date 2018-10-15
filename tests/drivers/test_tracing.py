@@ -17,6 +17,7 @@
 import unittest
 import mock
 
+from opencensus.trace import tracer
 from opencensus.trace import execution_context
 
 from biggraphite.drivers import tracing
@@ -26,39 +27,26 @@ class TestTracingTrace(unittest.TestCase):
     def testDecoratorTrace(self):
         """Test that we wrap correctly the function and that a span
         is created."""
-        mock_span = mock.Mock()
-        mock_span.span_id = '1234'
-        mock_tracer = MockTracer(mock_span)
+        test_tracer = tracer.Tracer()
 
-        mock_accessor_func = mock.Mock()
-        mock_accessor_func.__name__ = 'func_name'
-        mock_accessor_func.__module__ = 'module_path.module_name'
+        def test_traced_func(self):
+            _tracer = execution_context.get_opencensus_tracer()
+            _span = _tracer.current_span()
+            return _span.name
 
-        execution_context.set_opencensus_tracer(mock_tracer)
+        execution_context.set_opencensus_tracer(test_tracer)
 
-        wrapped = tracing.trace(mock_accessor_func)
+        wrapped = tracing.trace(test_traced_func)
 
         mock_self = mock.Mock()
-        wrapped(mock_self)
+        mock_self.module_name = 'module_name'
 
-        expected_name = 'module_name.func_name'
+        span_name = wrapped(mock_self)
 
-        self.assertEqual(expected_name, mock_tracer.span.name)
+        expected_name = 'module_name.test_traced_func'
+
+        self.assertEqual(expected_name, span_name)
 
 
-class MockTracer(object):
-    def __init__(self, span=None):
-        self.span = span
-
-    def current_span(self):
-        return self.span
-
-    def start_span(self):
-        span = mock.Mock()
-        span.attributes = {}
-        span.context_tracer = mock.Mock()
-        span.context_tracer.span_context = mock.Mock()
-        span.context_tracer.span_context.trace_id = '123'
-        span.context_tracer.span_context.span_id = '456'
-        self.span = span
-        return span
+if __name__ == "__main__":
+    unittest.main()

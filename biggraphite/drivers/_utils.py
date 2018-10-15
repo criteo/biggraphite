@@ -18,7 +18,6 @@ from __future__ import print_function
 
 import threading
 
-
 from biggraphite import accessor as bg_accessor
 
 
