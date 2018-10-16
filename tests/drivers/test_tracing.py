@@ -24,9 +24,10 @@ from biggraphite.drivers import tracing
 
 
 class TestTracingTrace(unittest.TestCase):
+    """Test tracing integration of Biggraphite."""
+
     def testDecoratorTrace(self):
-        """Test that we wrap correctly the function and that a span
-        is created."""
+        """Test that we wrap correctly the function and that a span is created."""
         test_tracer = tracer.Tracer()
 
         def test_traced_func(self):
@@ -39,11 +40,11 @@ class TestTracingTrace(unittest.TestCase):
         wrapped = tracing.trace(test_traced_func)
 
         mock_self = mock.Mock()
-        mock_self.module_name = 'module_name'
+        mock_self.module_name = "module_name"
 
         span_name = wrapped(mock_self)
 
-        expected_name = 'module_name.test_traced_func'
+        expected_name = "module_name.test_traced_func"
 
         self.assertEqual(expected_name, span_name)
 
