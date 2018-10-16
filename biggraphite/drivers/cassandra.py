@@ -39,14 +39,13 @@ from cassandra import policies as c_policies
 from cassandra import query as c_query
 from future.utils import raise_with_traceback
 
-from biggraphite import accessor as bg_accessor
+from biggraphite import accessor as bg_accessor, tracing
 from biggraphite import glob_utils as bg_glob
 from biggraphite import metric as bg_metric
 from biggraphite import utils as bg_utils
 from biggraphite.drivers import _delayed_writer
 from biggraphite.drivers import _downsampling
 from biggraphite.drivers import _utils
-from biggraphite.drivers import tracing
 from biggraphite.drivers import cassandra_common as common
 from biggraphite.drivers import cassandra_policies as bg_cassandra_policies
 from biggraphite.drivers import cassandra_sasi as sasi

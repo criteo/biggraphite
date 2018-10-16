@@ -20,13 +20,13 @@ import mock
 from opencensus.trace import tracer
 from opencensus.trace import execution_context
 
-from biggraphite.drivers import tracing
+from biggraphite import tracing
 
 
 class TestTracingTrace(unittest.TestCase):
     """Test tracing integration of Biggraphite."""
 
-    def testDecoratorTrace(self):
+    def test_decorator_correctly_wrap_and_trace_func(self):
         """Test that we wrap correctly the function and that a span is created."""
         test_tracer = tracer.Tracer()
 
