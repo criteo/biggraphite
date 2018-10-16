@@ -230,7 +230,7 @@ log = logging.getLogger(__name__)
 _ROW_SIZE_PRECISION_MS = 1000 * 1000
 
 DEFAULT_KEYSPACE = "biggraphite"
-DEFAULT_CONTACT_POINTS = ["127.0.0.1"]
+DEFAULT_CONTACT_POINTS = [os.environ.get("BG_CASSANDRA_CONTACT_POINTS", "127.0.0.1")]
 DEFAULT_PORT = 9042
 DEFAULT_TIMEOUT = 10.0
 # Disable compression per default as this is clearly useless for writes and

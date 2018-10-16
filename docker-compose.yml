@@ -1,0 +1,61 @@
+version: '3'
+services:
+
+  graphite_web:
+    container_name: graphite_web
+    environment:
+      BG_METADATA_DRIVER: elasticsearch
+      BG_DATA_DRIVER: cassandra
+      BG_CASSANDRA_CONTACT_POINTS: cassandra
+      BG_ELASTICSEARCH_HOST: elasticsearch
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - cassandra
+      - elasticsearch
+    links:
+      - cassandra
+      - elasticsearch
+
+  cassandra:
+    container_name: cassandra
+    image: cassandra:3.11.3
+    ports:
+      - "9042:9042"
+    environment:
+      JVM_OPTS: "-Xmx512m -Xms512m"
+
+  # This is used for an easy access to cqlsh.
+  cqlsh:
+    container_name: cqlsh
+    image: cassandra:3.11.3
+    entrypoint: cqlsh cassandra
+    links:
+      - cassandra
+
+  elasticsearch:
+    container_name: elasticsearch
+    image: elasticsearch:6.4.1
+    # docker.elastic.co/elasticsearch/elasticsearch:
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+
+  kibana:
+    container_name: kibana
+    image: kibana:6.4.1
+    ports:
+      - "5601:5601"
+    environment:
+      - "ELASTICSEARCH_URL=http://elasticsearch:9200"
+    links:
+      - elasticsearch
+
+# TODO:
+# logs and data volumes
+# optional tmpfs for data volume
+# carbon
+# graphite-web

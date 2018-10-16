@@ -197,3 +197,9 @@ django-admin migrate
 django-admin migrate --run-syncdb
 run-graphite-devel-server.py ${BG_VENV}
 ```
+
+## Using Docker (New!)
+
+https://hub.docker.com/_/cassandra/
+
+docker run -it --link cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'

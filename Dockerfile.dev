@@ -1,0 +1,15 @@
+FROM iksaif/biggraphite:latest
+
+ENV BG_COMPONENTS_MAX_LEN=12
+
+# Copy the current code.
+COPY . /opt/biggraphite
+
+WORKDIR /opt/biggraphite/
+
+# Install the dev version (you can skip this)
+RUN /opt/venv/bin/pip install \
+	-r /opt/biggraphite/requirements.txt \
+	-r /opt/biggraphite/tests-requirements.txt \
+	-e /opt/biggraphite/
+

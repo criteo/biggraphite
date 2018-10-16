@@ -14,6 +14,8 @@
 # limitations under the License.
 """Module to create accessors."""
 
+import os
+
 from biggraphite.drivers import cassandra as bg_cassandra
 from biggraphite.drivers import elasticsearch as bg_elasticsearch
 from biggraphite.drivers import hybrid as bg_hybrid
@@ -73,8 +75,14 @@ def accessor_from_settings(settings):
       Accessor (not connected).
     """
     driver_name = settings.get("driver", DEFAULT_DRIVER)
-    metadata_driver = settings.get("metadata_driver", None)
-    data_driver = settings.get("data_driver", None)
+    metadata_driver = settings.get(
+        "metadata_driver",
+        os.environ.get("BG_METADATA_DRIVER")
+    )
+    data_driver = settings.get(
+        "data_driver",
+        os.environ.get("BG_DATA_DRIVER")
+    )
 
     if metadata_driver is None and data_driver is None:
         return _build_simple_accessor(driver_name, settings)

@@ -15,8 +15,8 @@ SITE_PACKAGES=$(find ${BG_VENV} -name "site-packages" | grep -v tox)
 GRAPHITE_WEB_CONF="${SITE_PACKAGES}/graphite/local_settings.py"
 
 if [ ! -f "${GRAPHITE_WEB_CONF}" ]; then
-echo "No Graphite Web configuration, creating default one"
-tee -a ${GRAPHITE_WEB_CONF} << END
+    echo "No Graphite Web configuration, creating default one"
+    tee -a ${GRAPHITE_WEB_CONF} << END
 import os
 DEBUG = True
 LOG_DIR = '/tmp'
