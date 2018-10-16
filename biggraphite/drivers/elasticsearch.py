@@ -30,13 +30,11 @@ import elasticsearch_dsl
 import prometheus_client
 import six
 
-from biggraphite import accessor as bg_accessor
+from biggraphite import accessor as bg_accessor, tracing
 from biggraphite import glob_utils as bg_glob
 from biggraphite import metric as bg_metric
 from biggraphite.drivers import _utils
 from biggraphite.drivers import ttls
-from biggraphite.drivers import tracing
-
 
 UPDATED_ON = prometheus_client.Summary(
     "bg_elasticsearch_updated_on_latency_seconds", "create latency in seconds"
