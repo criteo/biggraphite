@@ -41,7 +41,7 @@ _INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
 
 
 if not PY3:
-  _INSTALL_REQUIRES += ('futures', 'enum34')
+    _INSTALL_REQUIRES += ('futures', 'enum34')
 
 
 packages = setuptools.find_packages()
