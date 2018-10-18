@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- CVE-2017-12629 on graphiteindex (upgrade to Lucene 7.1.0)
+
 ## [0.14.1] - 2018-10-15
 
 ### Improved

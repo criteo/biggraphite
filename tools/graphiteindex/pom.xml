@@ -41,7 +41,7 @@
   </description>
 
   <properties>
-    <lucene.version>6.6.1</lucene.version>
+    <lucene.version>7.1.0</lucene.version>
   </properties>
 
   <dependencyManagement>
