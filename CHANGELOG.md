@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.2] - 2018-10-18
+
 ### Fixed
 
 - CVE-2017-12629 on graphiteindex (upgrade to Lucene 7.1.0)
@@ -336,7 +338,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/criteo/biggraphite/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/criteo/biggraphite/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/criteo/biggraphite/compare/v0.13.10...v0.14.0
 [0.13.10]: https://github.com/criteo/biggraphite/compare/v0.13.9...v0.13.10
