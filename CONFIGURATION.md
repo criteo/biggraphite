@@ -71,3 +71,20 @@ from logging import config
 
 config.dictConfig(LOGGING)
 ```
+
+## Tracing
+
+Biggraphite supports tracing of its functions from Graphite-web. It's implemented
+using the OpenCensus library. OpenTracing was not chosen because it didn't support
+Zipkin for python. 
+
+See for configuration:
+* https://github.com/census-instrumentation/opencensus-python
+
+
+You need to configure integrations to have traces on /render in local_settings.py
+```python
+from opencensus.trace import config_integration
+config_integration.trace_integrations(["threading"])
+```
+You can also add the `httplib` integration to trace calls to Elasticsearch
