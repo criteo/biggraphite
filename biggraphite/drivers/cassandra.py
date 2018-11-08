@@ -1741,8 +1741,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         for (success, result) in results:
             if not success:
                 raise CassandraError("Failed to concurrently get metrics", result)
-            if result[0] is not None:
-                row = result[0]
+            for row in result:
                 metric = self._bind_metric(row)
                 if metric is not None:
                     metrics.append(metric)

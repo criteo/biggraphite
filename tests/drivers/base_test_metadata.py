@@ -400,3 +400,7 @@ class BaseTestAccessorMetadata(object):
         self.accessor.touch_metric(metric)
         self.accessor.create_metric(metric)
         self.accessor.touch_metric(metric)
+
+    def test_get_metric_unknown(self):
+        unknown_metric_name = 'this.metric.is.unknown'
+        self.assertEqual(self.accessor.get_metric(unknown_metric_name), None)
