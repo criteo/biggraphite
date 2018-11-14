@@ -36,11 +36,62 @@ from biggraphite import metric as bg_metric
 from biggraphite.drivers import _utils
 from biggraphite.drivers import ttls
 
-UPDATED_ON = prometheus_client.Summary(
-    "bg_elasticsearch_updated_on_latency_seconds", "create latency in seconds"
+READ_ON = prometheus_client.Counter(
+    "bg_elasticsearch_read_on",
+    "Number of updates on the metric field read_on"
 )
-READ_ON = prometheus_client.Summary(
-    "bg_elasticsearch_read_on_latency_seconds", "create latency in seconds"
+UPDATED_ON = prometheus_client.Counter(
+    "bg_elasticsearch_updated_on",
+    "Number of updates on the metric field updated_on"
+)
+
+CLEAN_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_clean_latency_seconds",
+    "clean latency in seconds"
+)
+CREATE_METRIC_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_create_metric_latency_seconds",
+    "create metric latency in seconds"
+)
+DELETE_DIRECTORY_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_delete_directory_latency_seconds",
+    "delete directory latency in seconds"
+)
+DELETE_METRIC_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_delete_metric_latency_seconds",
+    "delete metric latency in seconds"
+)
+DROP_ALL_METRICS_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_drop_all_metrics_latency_seconds",
+    "drop all metrics latency in seconds",
+)
+FLUSH_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_flush_latency_seconds",
+    "flush latency in seconds"
+)
+GET_INDEX_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_get_index_latency_seconds",
+    "get index latency in seconds"
+)
+GLOB_DIRECTORY_NAMES_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_glob_directory_names_latency_seconds",
+    "glob directory names latency in seconds"
+)
+GLOB_METRICS_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_glob_metrics_latency_seconds",
+    "glob metrics latency in seconds"
+)
+METRIC_STATS_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_metric_stats_latency_seconds",
+    "metric stats latency in seconds"
+)
+READ_METRIC_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_read_metric_latency_seconds",
+    "read metric latency in seconds"
+)
+UPDATE_METRIC_LATENCY = prometheus_client.Summary(
+    "bg_elasticsearch_update_metric_latency_seconds",
+    "update metric latency in seconds"
 )
 
 log = logging.getLogger(__name__)
@@ -372,6 +423,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """Perform periodic background operations."""
         pass
 
+    @FLUSH_LATENCY.time()
     def flush(self):
         """Flush any internal buffers."""
         # First, flush background tasks.
@@ -394,6 +446,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 ignore_unavailable=True,
             )
 
+    @GET_INDEX_LATENCY.time()
     def get_index(self, metric):
         """Get the index where a metric should be stored."""
         # Here the index could be sharded further by looking at the
@@ -425,6 +478,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         )
         _raise_unsupported()
 
+    @DROP_ALL_METRICS_LATENCY.time()
     def drop_all_metrics(self, *args, **kwargs):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).drop_all_metrics(*args, **kwargs)
@@ -432,6 +486,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.client.indices.delete("%s*" % self._index_prefix)
         self._known_indices = {}
 
+    @CREATE_METRIC_LATENCY.time()
     @tracing.trace
     def create_metric(self, metric):
         """See the real Accessor for a description."""
@@ -465,6 +520,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         )
         self.create_metric(updated_metric)
 
+    @DELETE_METRIC_LATENCY.time()
     @tracing.trace
     def delete_metric(self, name):
         name = bg_metric.sanitize_metric_name(name)
@@ -474,6 +530,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         log.debug(json.dumps(query.to_dict(), default=str))
         query.delete()
 
+    @DELETE_DIRECTORY_LATENCY.time()
     @tracing.trace
     def delete_directory(self, name):
         components = _components_from_name(name)
@@ -518,6 +575,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 search = search.filter(filter_type, **{"p%d" % i: value})
         return False, search
 
+    @GLOB_METRICS_LATENCY.time()
     def glob_metrics(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metrics matching this glob."""
         super(_ElasticSearchAccessor, self).glob_metrics(glob, start_time, end_time)
@@ -568,6 +626,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         results = [h.name for h in self.glob_metrics(glob, start_time, end_time)]
         return iter(results)
 
+    @GLOB_DIRECTORY_NAMES_LATENCY.time()
     @tracing.trace
     def glob_directory_names(self, glob, start_time=None, end_time=None):
         """See the real Accessor for a description."""
@@ -646,6 +705,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             read_on=ttls.str_to_datetime(document.read_on),
         )
 
+    @READ_METRIC_LATENCY.time()
     def __get_document(self, metric_name, index=None):
         search = (
             self._create_search_query(index=index)
@@ -672,7 +732,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.__update_read_on_on_need(metric)
         return []
 
-    @UPDATED_ON.time()
     def touch_metric(self, metric):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).touch_metric(metric)
@@ -704,6 +763,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         else:
             self.__update_existing_document(document, updated_on)
 
+        UPDATED_ON.inc()
+
     def __update_existing_document(self, document, updated_on):
         index = document.meta.index
         document_id = document.uuid
@@ -724,6 +785,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         self.map(_callback, *args, **kwargs)
 
+    @CLEAN_LATENCY.time()
     def clean(
         self,
         max_age=None,
@@ -809,6 +871,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         for i, metric in enumerate(metrics):
             callback(metric, i, total)
 
+    @METRIC_STATS_LATENCY.time()
     def metric_stats(self, namespaces):
         """See bg_accessor.Accessor."""
         # TODO: implement sharding using this
@@ -842,7 +905,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         return n_metrics, n_points
 
-    @READ_ON.time()
     def __update_read_on_on_need(self, metric):
         # TODO: remove the sampling rate once graphite.py stops using a cache
         # (that doesn't get updated when we updated read_on). Instead we
@@ -874,6 +936,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         document = self.__get_document(metric.name)
         self.__update_document(data, document.meta.index, metric.id)
 
+        READ_ON.inc()
+
+    @UPDATE_METRIC_LATENCY.time()
     def __update_document(self, data, index, document_id):
         self.client.update(
             index=index,
