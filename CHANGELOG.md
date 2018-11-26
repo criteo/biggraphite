@@ -5,7 +5,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.14.3] - 2018-11-26
+
+### Fixed
+- fix list index out of range in _get_metrics when the metric doesn't exists
+
+### Added
 - support tracing of biggraphite
+- expose metrics from the elasticsearch driver
 
 ## [0.14.2] - 2018-10-18
 
@@ -339,7 +347,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.3...HEAD
+[0.14.3]: https://github.com/criteo/biggraphite/compare/v0.14.2...0.14.3
 [0.14.2]: https://github.com/criteo/biggraphite/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/criteo/biggraphite/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/criteo/biggraphite/compare/v0.13.10...v0.14.0
