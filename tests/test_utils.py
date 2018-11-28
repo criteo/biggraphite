@@ -109,7 +109,7 @@ def make_metric(name, metadata=None, **kwargs):
         assert isinstance(metadata, bg_metric.MetricMetadata)
         assert not kwargs
     else:
-        metadata = bg_metric.MetricMetadata(**kwargs)
+        metadata = bg_metric.MetricMetadata.create(**kwargs)
     return bg_metric.make_metric(name, metadata)
 
 

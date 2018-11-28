@@ -109,8 +109,9 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertTrue(self._plugin.exists(metric_name))
 
         # See if we can update.
-        metric = bg_test_utils.make_metric(metric_name)
-        metric.metadata.retention = bg_metric.Retention([bg_metric.Stage(1, 1)])
+        metric = bg_test_utils.make_metric(
+            metric_name, retention=bg_metric.Retention([bg_metric.Stage(1, 1)])
+        )
         self._plugin._createAsyncOrig(metric, metric_name)
         self._plugin._createOneMetric()
         retention = self._plugin.getMetadata(metric_name, "retention")

@@ -89,7 +89,7 @@ class _Worker(object):
             ]
         )
         aggregator = bg_metric.Aggregator.from_carbon_name(info["aggregationMethod"])
-        return bg_metric.MetricMetadata(
+        return bg_metric.MetricMetadata.create(
             aggregator=aggregator,
             retention=retentions,
             carbon_xfilesfactor=info["xFilesFactor"],

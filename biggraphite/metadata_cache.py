@@ -333,12 +333,15 @@ class MemoryCache(MetadataCache):
 
     def stats(self):
         """Current stats about the cache the cache."""
-        return {
-            "size": self.__cache.currsize,
-            "maxsize": self.__cache.maxsize,
-            "hits": self._hits._value.get(),
-            "miss": self._misses._value.get(),
-        }
+        if self.__cache:
+            return {
+                    "size": self.__cache.currsize,
+                    "maxsize": self.__cache.maxsize,
+                    "hits": self._hits._value.get(),
+                    "miss": self._misses._value.get(),
+                }
+        else:
+            return super(MemoryCache, self).stats()
 
 
 class DiskCache(MetadataCache):

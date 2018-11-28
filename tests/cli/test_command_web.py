@@ -15,9 +15,8 @@
 from __future__ import print_function
 
 import argparse
+import mock
 import unittest
-
-import prometheus_client
 
 try:
     import gourde
@@ -33,13 +32,9 @@ from tests import test_utils as bg_test_utils
 class TestCommandWeb(bg_test_utils.TestCaseWithFakeAccessor):
     def tearDown(self):
         super(TestCommandWeb, self).tearDown()
-        # Reset the registry to make sure we can instantiate the app again.
-        # TODO: Try to use mock instead to do that.
-        prometheus_client.REGISTRY = prometheus_client.core.CollectorRegistry(
-            auto_describe=True
-        )
 
-    def test_run(self):
+    @mock.patch('prometheus_client.REGISTRY')
+    def test_run(self, prometheus_registry_mock):
         cmd = command_web.CommandWeb()
 
         parser = argparse.ArgumentParser()

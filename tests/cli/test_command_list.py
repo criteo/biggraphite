@@ -34,7 +34,7 @@ class TestCommandList(bg_test_utils.TestCaseWithFakeAccessor):
         cmd.add_arguments(parser)
 
         name = "foo.bar"
-        metadata = bg_metric.MetricMetadata(
+        metadata = bg_metric.MetricMetadata.create(
             retention=bg_metric.Retention.from_string("1440*60s")
         )
 

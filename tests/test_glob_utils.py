@@ -256,7 +256,8 @@ class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
 class TestGraphiteGlobResult(unittest.TestCase):
 
     def test_GlobMetricResult_be_built_from_a_metric(self):
-        metric = bg_metric.Metric(name="foo.bar", id="0", metadata=bg_metric.MetricMetadata())
+        metric = bg_metric.Metric(
+            name="foo.bar", id="0", metadata=bg_metric.MetricMetadata.create())
 
         metric_result = bg_glob.GlobMetricResult.from_value(metric)
 
@@ -264,7 +265,8 @@ class TestGraphiteGlobResult(unittest.TestCase):
 
     def test_GlobMetricResult_built_from_a_metric_should_discover_its_name(self):
         metric_name = "foo.bar"
-        metric = bg_metric.Metric(name=metric_name, id="0", metadata=bg_metric.MetricMetadata())
+        metric = bg_metric.Metric(
+            name=metric_name, id="0", metadata=bg_metric.MetricMetadata.create())
 
         metric_result = bg_glob.GlobMetricResult.from_value(metric)
 

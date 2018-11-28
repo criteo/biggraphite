@@ -22,7 +22,7 @@ from biggraphite import metric as bg_metric
 from biggraphite.drivers import hybrid
 
 DEFAULT_METRIC_NAME = "foo.bar"
-DEFAULT_METADATA = bg_metric.MetricMetadata()
+DEFAULT_METADATA = bg_metric.MetricMetadata.create()
 DEFAULT_METRIC = bg_metric.Metric(DEFAULT_METRIC_NAME, "id", DEFAULT_METADATA)
 
 DEFAULT_GLOB = "foo.bar.**"
