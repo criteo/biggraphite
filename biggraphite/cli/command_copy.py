@@ -16,7 +16,6 @@
 
 from __future__ import print_function
 
-import copy
 import datetime
 import logging
 import time
@@ -130,8 +129,11 @@ class CommandCopy(command.BaseCommand):
             dst_retention = bg_metric.Retention.from_string(dst_retention)
 
         for src_metric in src_metrics:
+            src_metadata = src_metric.metadata
+
             if src_retention and src_metric.metadata.retention != src_retention:
-                src_metric.metadata.retention = src_retention
+                src_metric.metadata = bg_metric.MetricMetadata.create(
+                        src_metadata.aggregator, src_retention, src_metadata.carbon_xfilesfactor)
 
             dst_metric_name = src_metric.name.replace(src, dst, 1)
             dst_metric = accessor.get_metric(dst_metric_name)
@@ -140,9 +142,8 @@ class CommandCopy(command.BaseCommand):
                 log.debug(
                     "Metric '%s' was not found and will be created" % dst_metric_name
                 )
-                dst_metadata = copy.deepcopy(src_metric.metadata)
-                if dst_retention:
-                    dst_metadata.retention = dst_retention
+                dst_metadata = bg_metric.MetricMetadata.create(
+                        src_metadata.aggregator, dst_retention, src_metadata.carbon_xfilesfactor)
                 dst_metric = bg_metric.make_metric(dst_metric_name, dst_metadata)
                 if not dry_run:
                     accessor.create_metric(dst_metric)
@@ -151,7 +152,9 @@ class CommandCopy(command.BaseCommand):
                     "Metric '%s' was found without '%s' retention and will be updated"
                     % (dst_metric_name, dst_retention.as_string)
                 )
-                dst_metric.metadata.retention = dst_retention
+                dst_metadata = dst_metric.metadata
+                dst_metric.metadata = bg_metric.MetricMetadata.create(
+                        dst_metadata.aggregator, dst_retention, dst_metadata.carbon_xfilesfactor)
                 if not dry_run:
                     accessor.update_metric(dst_metric_name, dst_metric.metadata)
 

@@ -95,7 +95,7 @@ class Reader(BaseReader):
         if self._metric is not None:
             return self._metric.metadata
         else:
-            return bg_metric.MetricMetadata()
+            return bg_metric.MetricMetadata.create()
 
     def __get_time_info(self, start_time, end_time, now, shift=False):
         """Constrain the provided range in an aligned interval within retention."""

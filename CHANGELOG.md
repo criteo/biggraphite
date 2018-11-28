@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Improved
+
+- reduced number of metadata objects handled by biggraphite
+
 ## [0.14.5] - 2018-12-13
 
 ### Fixed

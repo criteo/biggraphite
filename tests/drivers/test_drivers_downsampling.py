@@ -44,13 +44,13 @@ class TestDownsampler(unittest.TestCase):
         self.stage_0 = retention.stages[0]
         self.stage_1 = retention.stages[1]
         uid = uuid.uuid4()
-        metric_metadata = bg_metric.MetricMetadata(
+        metric_metadata = bg_metric.MetricMetadata.create(
             aggregator=bg_metric.Aggregator.total, retention=retention
         )
         self.metric_sum = bg_metric.Metric(self.METRIC_NAME_SUM, uid, metric_metadata)
 
         uid = uuid.uuid4()
-        metric_metadata = bg_metric.MetricMetadata(
+        metric_metadata = bg_metric.MetricMetadata.create(
             aggregator=bg_metric.Aggregator.average, retention=retention
         )
         self.metric_avg = bg_metric.Metric(self.METRIC_NAME_AVG, uid, metric_metadata)

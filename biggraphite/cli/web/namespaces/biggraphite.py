@@ -76,7 +76,7 @@ class MetricResource(rp.Resource):
         if not context.accessor.has_metric(name):
             return "Unknown metric: '%s'" % name, 404
         payload = request.json
-        metadata = bg_metric.MetricMetadata(
+        metadata = bg_metric.MetricMetadata.create(
             aggregator=bg_metric.Aggregator.from_config_name(payload["aggregator"]),
             retention=bg_metric.Retention.from_string(payload["retention"]),
             carbon_xfilesfactor=payload["carbon_xfilesfactor"],

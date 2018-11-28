@@ -17,8 +17,10 @@ import codecs
 import datetime
 import json
 import math
+import prometheus_client
 import re
 import uuid
+import weakref
 
 import enum
 import six
@@ -28,6 +30,10 @@ from biggraphite import utils as bg_utils
 _UTF8_CODEC = codecs.getencoder("utf8")
 _UUID_NAMESPACE = uuid.UUID("{00000000-1111-2222-3333-444444444444}")
 _NAN = float("nan")
+
+METADATA_INSTANCES_COUNT = prometheus_client.Gauge(
+    "bg_metadata_instances_count", "Number of metadata actively used"
+)
 
 
 class Error(Exception):
@@ -597,11 +603,16 @@ class MetricMetadata(object):
     Not meant to be mutated.
     """
 
-    __slots__ = ("aggregator", "retention", "carbon_xfilesfactor")
+    __slots__ = ("aggregator", "retention", "carbon_xfilesfactor", "__weakref__")
 
     _DEFAULT_AGGREGATOR = Aggregator.average
     _DEFAULT_RETENTION = Retention.from_string("86400*1s:10080*60s")
     _DEFAULT_XFILESFACTOR = 0.5
+
+    # defines how many digits are kept after the comma for the xfilesfactor
+    _XFILESFACTOR_PRECISION = 2
+
+    __metadata_instances = weakref.WeakValueDictionary()
 
     def __init__(self, aggregator=None, retention=None, carbon_xfilesfactor=None):
         """Record its arguments."""
@@ -640,6 +651,30 @@ class MetricMetadata(object):
         }
 
     @classmethod
+    def create(cls, aggregator=None, retention=None, carbon_xfilesfactor=None):
+        """Wrapper function to create MetricMetadata objects.
+
+        This function stores already created MetricMetadata objects
+        and shares them with other consumers.
+        """
+        # Normalize carbon_xfilesfactor with 2 digits after the comma.
+        # This is required in order to avoid the relative error in float representation
+        # since the value this used as a dictionnary key.
+        carbon_xfilesfactor_normalized = None
+        if carbon_xfilesfactor:
+            carbon_xfilesfactor_normalized = round(carbon_xfilesfactor, cls._XFILESFACTOR_PRECISION)
+        metadata = cls.__metadata_instances.setdefault(
+                                    (aggregator, retention, carbon_xfilesfactor_normalized),
+                                    cls(aggregator, retention, carbon_xfilesfactor_normalized))
+
+        return metadata
+
+    @classmethod
+    def get_metadata_instances_count(cls):
+        """Returns the number of metadata objects currently in use."""
+        return len(cls.__metadata_instances)
+
+    @classmethod
     def from_json(cls, s):
         """Parse MetricMetadata from a JSon string produced by as_json()."""
         return cls.from_string_dict(json.loads(s))
@@ -648,10 +683,13 @@ class MetricMetadata(object):
     def from_string_dict(cls, d):
         """Turn a dict of string to string into a MetricMetadata."""
         if d is None:
-            return cls()
+            return cls.create()
 
-        return cls(
+        return cls.create(
             aggregator=Aggregator.from_config_name(d.get("aggregator")),
             retention=Retention.from_string(d.get("retention")),
             carbon_xfilesfactor=float(d.get("carbon_xfilesfactor")),
         )
+
+
+METADATA_INSTANCES_COUNT.set_function(MetricMetadata.get_metadata_instances_count)

@@ -71,5 +71,5 @@ def _create_default_metadata():
     retention_str = "42*1s:43*60s"
     retention = Retention.from_string(retention_str)
     carbon_xfilesfactor = 0.5
-    metadata = MetricMetadata(aggregator, retention, carbon_xfilesfactor)
+    metadata = MetricMetadata.create(aggregator, retention, carbon_xfilesfactor)
     return metadata

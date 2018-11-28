@@ -72,7 +72,7 @@ class DocumentFromMetricTest(unittest.TestCase):
         retention_str = "42*1s:43*60s"
         retention = Retention.from_string(retention_str)
         carbon_xfilesfactor = 0.5
-        metadata = MetricMetadata(aggregator, retention, carbon_xfilesfactor)
+        metadata = MetricMetadata.create(aggregator, retention, carbon_xfilesfactor)
         metric = bg_metric.Metric(
             metric_name,
             metric_id,
@@ -298,7 +298,7 @@ def _create_default_metadata():
     retention_str = "42*1s:43*60s"
     retention = Retention.from_string(retention_str)
     carbon_xfilesfactor = 0.5
-    metadata = MetricMetadata(aggregator, retention, carbon_xfilesfactor)
+    metadata = MetricMetadata.create(aggregator, retention, carbon_xfilesfactor)
     return metadata
 
 
@@ -430,14 +430,14 @@ class TestAccessorWithElasticsearch(
 
     def test_update_metric_should_update_metric_metadata(self):
         metric_name = "test_update_metric_should_update_metric_metadata.a.b.c"
-        initial_metadata = MetricMetadata(
+        initial_metadata = MetricMetadata.create(
             aggregator=Aggregator.total,
             retention=Retention.from_string("42*1s"),
             carbon_xfilesfactor=0.5,
         )
         create_date = datetime.datetime(2014, 1, 1)
         update_date = datetime.datetime(2018, 1, 1)
-        new_metadata = MetricMetadata(
+        new_metadata = MetricMetadata.create(
             aggregator=Aggregator.average,
             retention=Retention.from_string("43*100s"),
             carbon_xfilesfactor=0.25,

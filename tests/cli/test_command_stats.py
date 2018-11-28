@@ -30,7 +30,7 @@ from tests import test_utils as bg_test_utils
 class TestCommandStats(bg_test_utils.TestCaseWithFakeAccessor):
 
     metrics = ["metric1", "metric2"]
-    metadata = MetricMetadata(retention=Retention.from_string("1440*60s"))
+    metadata = MetricMetadata.create(retention=Retention.from_string("1440*60s"))
 
     @patch("sys.stdout", new_callable=StringIO)
     def get_output(self, args, mock_stdout):

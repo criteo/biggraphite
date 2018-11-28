@@ -97,9 +97,8 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_carbon_protocol_read(self):
         metric_name = "fake.name"
-        metric = bg_test_utils.make_metric(_METRIC_NAME)
         # Custom aggregator to make sure all goes right.
-        metric.metadata.aggregator = bg_metric.Aggregator.minimum
+        metric = bg_test_utils.make_metric(_METRIC_NAME, aggregator=bg_metric.Aggregator.minimum)
         self.accessor.create_metric(metric)
         self.accessor.flush()
         self.reader = bg_graphite.Reader(

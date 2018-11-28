@@ -200,7 +200,7 @@ class TestNoneCache(unittest.TestCase):
     TEST_METRIC_NAME = "foo.bar"
     TEST_METRIC = bg_metric.make_metric(
         TEST_METRIC_NAME,
-        bg_metric.MetricMetadata()
+        bg_metric.MetricMetadata.create()
     )
 
     def setUp(self):

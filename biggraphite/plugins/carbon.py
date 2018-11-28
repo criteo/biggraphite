@@ -187,7 +187,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         orig_metric_name = metric_name
         metric_name = self.encode(metric_name)
 
-        metadata = bg_metric.MetricMetadata(
+        metadata = bg_metric.MetricMetadata.create(
             aggregator=bg_metric.Aggregator.from_carbon_name(aggregation_method),
             retention=bg_metric.Retention.from_carbon(retentions),
             carbon_xfilesfactor=xfilesfactor,

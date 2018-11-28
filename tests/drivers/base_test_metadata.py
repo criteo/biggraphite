@@ -256,7 +256,7 @@ class BaseTestAccessorMetadata(object):
             "retention": bg_metric.Retention.from_string("60*1s:60*60s"),
             "carbon_xfilesfactor": 0.3,
         }
-        metadata = bg_metric.MetricMetadata(**meta_dict)
+        metadata = bg_metric.MetricMetadata.create(**meta_dict)
         metric_name = "a.b.c.d.e.f"
         self.accessor.create_metric(bg_test_utils.make_metric(metric_name, metadata))
         self.flush()
@@ -270,7 +270,7 @@ class BaseTestAccessorMetadata(object):
             "retention": bg_metric.Retention.from_string("30*1s:120*30s"),
             "carbon_xfilesfactor": 0.5,
         }
-        updated_metadata = bg_metric.MetricMetadata(**updated_meta_dict)
+        updated_metadata = bg_metric.MetricMetadata.create(**updated_meta_dict)
         # Setting a known metric name should work
         self.accessor.update_metric(metric_name, updated_metadata)
         updated_metric = self.accessor.get_metric(metric_name)

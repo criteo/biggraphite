@@ -26,7 +26,7 @@ from tests import test_utils as bg_test_utils
 class TestCommandGraphiteWeb(bg_test_utils.TestCaseWithFakeAccessor):
     def test_run(self):
         name = "foo.bar"
-        metadata = bg_metric.MetricMetadata(
+        metadata = bg_metric.MetricMetadata.create(
             retention=bg_metric.Retention.from_string("1440*60s")
         )
         self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
