@@ -1403,13 +1403,19 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
     def _execute_concurrent(self, session, execution_requests, **kwargs):
         """Wrapper for concurrent.execute_concurrent()."""
+        def marked_args(request):
+            # Hackish but this is la last checkpoint where we can mark
+            # the execution request as executed
+            request.mark()
+            return request.args()
+
         if self.__bulkimport:
             return []
 
         log.debug(execution_requests)
 
         if not self.__trace:
-            args = [ec.args() for ec in execution_requests]
+            args = [marked_args(ec) for ec in execution_requests]
             return c_concurrent.execute_concurrent(
                 session, args, **kwargs
             )
