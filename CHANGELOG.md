@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.13.10] - 2018-10-08
 
 ### Improved
-- cassandra accessor observability: add metrics on query usage 
+- cassandra accessor observability: add metrics on query usage
 
 ## [0.13.9] - 2018-08-28
 
