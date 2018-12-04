@@ -14,8 +14,8 @@
 # limitations under the License.
 from __future__ import print_function
 
-import unittest
 import time
+import unittest
 from distutils import version
 
 from biggraphite import accessor as bg_accessor
@@ -296,6 +296,26 @@ class TestAccessorWithHybridCassandraData(TestAccessorWithCassandraData):
 
     def test_metadata_disabled(self):
         self.assertFalse(self.accessor._data_accessor.metadata_enabled)
+
+
+@unittest.skipUnless(HAS_CASSANDRA, "CASSANDRA_HOME must be set to a >=3.5 install")
+class TestAccessorMonitoring(bg_test_utils.TestCaseWithAccessor):
+    ACCESSOR_SETTINGS = {
+        "driver": "cassandra"
+    }
+
+    def test_counters_are_incremented(self):
+        insert_counter = bg_cassandra.INSERT_METRIC
+        insert_init_value = insert_counter._value._value
+        select_counter = bg_cassandra.SELECT_METRIC_METADATA
+        select_init_value = select_counter._value._value
+
+        self.accessor.create_metric(_METRIC)
+        self.assertGreater(insert_counter._value._value, insert_init_value)
+        self.assertEqual(select_counter._value._value, select_init_value)
+
+        self.accessor.get_metric(_METRIC.name)
+        self.assertGreater(select_counter._value._value, select_init_value)
 
 
 if __name__ == "__main__":
