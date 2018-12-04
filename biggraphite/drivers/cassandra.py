@@ -1430,7 +1430,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     raise e
                 result = e
                 success = False
-                query_results.append((success, result))
+            query_results.append((success, result))
         return query_results
 
     def _execute_concurrent_data(self, execution_requests, **kwargs):

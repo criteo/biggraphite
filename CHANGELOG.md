@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+
 - monitoring: some Cassandra counters were stuck at 0
+- Cassandra backend returned empty results in traced environment
 
 ## [0.14.3] - 2018-11-26
 
