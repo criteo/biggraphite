@@ -87,21 +87,23 @@ def accessor_from_settings(settings):
             raise ConfigError(
                 "Data driver is not provided. Please specify --data_driver"
             )
+        if metadata_driver == data_driver:
+            return _build_simple_accessor(data_driver, settings)
+        else:
+            # The data accessor may still update the metadata in its own storage
+            # (update_on on insert_points(), read_on on fetch_points()). Since we
+            # are in hybrid mode, the metadata accessor is responsible for these
+            # actions, therefore we can disable the metadata handling in the data
+            # accessor.
+            enable_metadata_key = data_driver + '_enable_metadata'
+            settings[enable_metadata_key] = False
 
-        # The data accessor may still update the metadata in its own storage
-        # (update_on on insert_points(), read_on on fetch_points()). Since we
-        # are in hybrid mode, the metadata accessor is responsible for these
-        # actions, therefore we can disable the metadata handling in the data
-        # accessor.
-        enable_metadata_key = data_driver + '_enable_metadata'
-        settings[enable_metadata_key] = False
+            metadata_accessor = _build_simple_accessor(metadata_driver, settings)
+            data_accessor = _build_simple_accessor(data_driver, settings)
 
-        metadata_accessor = _build_simple_accessor(metadata_driver, settings)
-        data_accessor = _build_simple_accessor(data_driver, settings)
-
-        return bg_hybrid.HybridAccessor(
-            "%s_%s" % (metadata_driver, data_driver), metadata_accessor, data_accessor
-        )
+            return bg_hybrid.HybridAccessor(
+                "%s_%s" % (metadata_driver, data_driver), metadata_accessor, data_accessor
+            )
 
 
 def add_driver_options(options):
