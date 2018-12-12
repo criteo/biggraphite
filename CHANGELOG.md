@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - —
 
+## [0.13.11] - 2018-12-12
+
+### Fixed
+- cassandra accessor observability: Fix counters used in concurrent environment
+
 ## [0.13.10] - 2018-10-08
 
 ### Improved
@@ -317,7 +322,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.10...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.11...HEAD
+[0.13.11]: https://github.com/criteo/biggraphite/compare/v0.13.10...v0.13.11
 [0.13.10]: https://github.com/criteo/biggraphite/compare/v0.13.9...v0.13.10
 [0.13.9]: https://github.com/criteo/biggraphite/compare/v0.13.8...v0.13.9
 [0.13.8]: https://github.com/criteo/biggraphite/compare/v0.13.7...v0.13.8
