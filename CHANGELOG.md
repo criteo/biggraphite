@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.4] - 2018-12-13
+
 ### Fixed
 
 - monitoring: some Cassandra counters were stuck at 0
 - Cassandra backend returned empty results in traced environment
 - specifing the same data driver as metadata driver lead to runtime errors
+- diskcache not used with Cassandra
 
 ## [0.14.3] - 2018-11-26
 
@@ -432,7 +435,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.4...HEAD
+[0.14.4]: https://github.com/criteo/biggraphite/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/criteo/biggraphite/compare/v0.14.2...0.14.3
 [0.14.2]: https://github.com/criteo/biggraphite/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/criteo/biggraphite/compare/v0.14.0...v0.14.1
