@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - —
 
+## [0.13.12] - 2018-12-13
+
+### Fixed
+- adapt biggraphite to use the new prometheus client API
+
 ## [0.13.11] - 2018-12-12
 
 ### Fixed
@@ -322,7 +327,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.11...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.13.12...HEAD
+[0.13.11]: https://github.com/criteo/biggraphite/compare/v0.13.11...v0.13.12
 [0.13.11]: https://github.com/criteo/biggraphite/compare/v0.13.10...v0.13.11
 [0.13.10]: https://github.com/criteo/biggraphite/compare/v0.13.9...v0.13.10
 [0.13.9]: https://github.com/criteo/biggraphite/compare/v0.13.8...v0.13.9
