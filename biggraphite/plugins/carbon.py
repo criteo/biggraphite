@@ -250,16 +250,16 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         log.cache("background operations")
         for metric in prometheus_client.REGISTRY.collect():
-            for name, labels, value in metric.samples:
-                name = name
-                if labels:
+            for sample in metric.samples:
+                name = sample.name
+                if sample.labels:
                     name += "." + ".".join(
                         [
                             "%s.%s" % (k, v.replace(".", "_"))
-                            for k, v in sorted(labels.items())
+                            for k, v in sorted(sample.labels.items())
                         ]
                     )
-                instrumentation.cache_record(name, value)
+                instrumentation.cache_record(name, sample.value)
         if self._accessor:
             self.reactor.callInThread(self.accessor.background)
 

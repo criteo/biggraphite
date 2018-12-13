@@ -24,7 +24,7 @@ certifi
 # Core
 six
 cachetools
-prometheus_client
+prometheus_client==0.5.0
 
 # Metadata cache
 lmdb
