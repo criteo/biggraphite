@@ -350,8 +350,13 @@ def graphite_glob_leaves(accessor,
     if not _is_valid_glob(graphite_glob):
         return [], []
 
-    metrics = accessor.glob_metrics(graphite_glob, start_time, end_time)
-    return [GlobMetricResult.from_value(metric) for metric in metrics], []
+    if accessor.TYPE == "cassandra":
+        metrics = accessor.glob_metric_names(graphite_glob, start_time, end_time)
+        results = [GlobMetricResult.from_name(metric) for metric in metrics], []
+    else:
+        metrics = accessor.glob_metrics(graphite_glob, start_time, end_time)
+        results = [GlobMetricResult.from_value(metric) for metric in metrics], []
+    return results
 
 
 def filter_from_glob(names, glob_repr):
