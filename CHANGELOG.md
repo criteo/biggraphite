@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - reduced number of metadata objects handled by biggraphite
 
+### Fixed
+
+- some bgutils commands were printing python objects instead of string representation
+
 ## [0.14.5] - 2018-12-13
 
 ### Fixed
