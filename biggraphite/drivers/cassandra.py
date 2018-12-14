@@ -1014,6 +1014,9 @@ class _CassandraExecutionRequest(object):
         """Clone this execution request with parameters as list."""
         return self.with_params(*tuple(param_list))
 
+    def __repr__(self):
+        return str(self.statement)
+
 
 class _CassandraAccessor(bg_accessor.Accessor):
     """Provides Read/Write accessors to Cassandra.

@@ -281,12 +281,17 @@ class GlobDirectoryResult:
     def __init__(self, name):
         """Create new instance of GlobMetricResult."""
         self.name = name
+        # value needs to be defined because this class and GlobMetricResult
+        # are meant to be used indifferently
         self.value = None
 
     @staticmethod
     def from_name(name):
         """Create a new instance of GlobDirectoryResult from a single name."""
         return GlobDirectoryResult(name)
+
+    def __str__(self):
+        return self.name
 
 
 def graphite_glob(
