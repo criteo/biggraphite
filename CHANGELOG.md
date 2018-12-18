@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.6] - 2018-12-18
+
 ### Improved
 
 - reduced number of metadata objects handled by biggraphite
@@ -449,8 +451,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.5...HEAD
-[0.14.4]: https://github.com/criteo/biggraphite/compare/v0.14.4...v0.14.5
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.6...HEAD
+[0.14.6]: https://github.com/criteo/biggraphite/compare/v0.14.5...v0.14.6
+[0.14.5]: https://github.com/criteo/biggraphite/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/criteo/biggraphite/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/criteo/biggraphite/compare/v0.14.2...0.14.3
 [0.14.2]: https://github.com/criteo/biggraphite/compare/v0.14.1...v0.14.2
