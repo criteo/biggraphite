@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.7] - 2018-12-27
+
+### Improved
+
+- Tracing shows more relevant data in spans (metric names/globs if available)
+- Middleware is provided to improve tracing:
+  - more options to configure when to trace
+  - more data in spans (the executed query and the format)
+
 ## [0.14.6] - 2018-12-18
 
 ### Improved
@@ -451,7 +460,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.6...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.7...HEAD
+[0.14.7]: https://github.com/criteo/biggraphite/compare/v0.14.6...v0.14.7
 [0.14.6]: https://github.com/criteo/biggraphite/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/criteo/biggraphite/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/criteo/biggraphite/compare/v0.14.3...v0.14.4
