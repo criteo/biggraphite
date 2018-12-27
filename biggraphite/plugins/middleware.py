@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.from biggraphite import tracing
-"""Middleware for Django (Graphite web). Provides wrapper on queries before
-they reach Graphite."""
+"""Middleware for Django (Graphite web). Provides wrapper on queries before they reach Graphite."""
+
 from django.conf import settings
 from biggraphite import tracing
 
@@ -32,7 +32,8 @@ class BiggraphiteMiddleware(object):
     def __call__(self, request):
         """Code to be executed for each request before request execution."""
         tracing_methods = getattr(settings, 'BG_TRACING_METHODS', BG_TRACING_METHODS_DEFAULT)
-        tracing_whitelist = getattr(settings, 'BG_TRACING_TARGET_WHITELIST', BG_TRACING_TARGET_WHITELIST_DEFAULT)
+        tracing_whitelist = getattr(settings, 'BG_TRACING_TARGET_WHITELIST',
+                                    BG_TRACING_TARGET_WHITELIST_DEFAULT)
 
         if request.method not in tracing_methods:
             tracing.stop_trace()
