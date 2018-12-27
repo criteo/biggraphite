@@ -76,7 +76,7 @@ config.dictConfig(LOGGING)
 
 Biggraphite supports tracing of its functions from Graphite-web. It's implemented
 using the OpenCensus library. OpenTracing was not chosen because it didn't support
-Zipkin for python. 
+Zipkin for python.
 
 See for configuration:
 * https://github.com/census-instrumentation/opencensus-python
@@ -88,3 +88,18 @@ from opencensus.trace import config_integration
 config_integration.trace_integrations(["threading"])
 ```
 You can also add the `httplib` integration to trace calls to Elasticsearch
+
+### Middleware
+
+Biggraphite also provides a middleware to call after the one from Opencensus.
+It is used to improve tracing and supports two options:
+
+```python
+BG_TRACING_METHODS = ["POST", "GET"]
+```
+The list of method type to trace request (default is `["POST", "GET"]`).
+
+```python
+BG_TRACING_TARGET_WHITELIST = ["sum(carbon.relays.*local*01*.*)"]
+```
+A whitelist system to trace only specific requests (set to None and it will trace everything)
