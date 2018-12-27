@@ -1442,7 +1442,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _execute_concurrent_metadata(self, execution_requests, **kwargs):
         return self._execute_concurrent(self.__session_metadata, execution_requests, **kwargs)
 
-    @tracing.trace
     def create_metric(self, metric):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).create_metric(metric)
@@ -1483,7 +1482,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         self._execute_concurrent_metadata(queries, raise_on_first_error=False)
 
-    @tracing.trace
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).update_metric(name, updated_metadata)
@@ -1503,7 +1501,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             )
         )
 
-    @tracing.trace
     def delete_metric(self, name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).delete_metric(name)
@@ -1514,7 +1511,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__delete_metric_metadata.with_params(name)
         )
 
-    @tracing.trace
     def delete_directory(self, directory):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).delete_directory(directory)
@@ -1552,7 +1548,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         res.append(_LAST_COMPONENT)
         return list(filter(None, res))
 
-    @tracing.trace
     def drop_all_metrics(self):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).drop_all_metrics()
@@ -1592,6 +1587,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).fetch_points(
             metric, time_start, time_end, stage
         )
+        tracing.add_attr_to_trace("metric.name", metric.name)
 
         if self.metadata_enabled:
             self._update_metric_read_on(metric.name)
@@ -1700,6 +1696,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         super(_CassandraAccessor, self).has_metric(metric_name)
         metric_name = ".".join(self._components_from_name(metric_name)[:-1])
         metric_name = bg_metric.encode_metric_name(metric_name)
+        tracing.add_attr_to_trace("metric.name", metric_name)
         if not self._select_metric(metric_name):
             return False
 
@@ -1715,6 +1712,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     @tracing.trace
     def has_directory(self, directory):
         encoded_directory = bg_metric.encode_metric_name(directory)
+        tracing.add_attr_to_trace("directory", encoded_directory)
         result = list(
             self._execute_metadata(
                 HAS_DIRECTORY,
@@ -1767,7 +1765,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def get_metric(self, metric_name):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
-
+        tracing.add_attr_to_trace("metric.name", bg_metric.encode_metric_name(metric_name))
         return next(iter(self._get_metrics([metric_name])), None)
 
     def _bind_metric(self, row):
@@ -1791,6 +1789,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def glob_directory_names(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metric directories matching this glob."""
         super(_CassandraAccessor, self).glob_directory_names(glob)
+        tracing.add_attr_to_trace("glob", glob)
         directory_names = self.__glob_names("directories", glob)
         return bg_glob.filter_from_glob(directory_names, glob)
 
