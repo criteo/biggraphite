@@ -102,7 +102,8 @@ The list of method type to trace request (default is `["POST", "GET"]`).
 ```python
 BG_TRACING_TARGET_WHITELIST = ["sum(carbon.relays.*local*01*.*)"]
 ```
-A whitelist system to trace only specific requests (set to None and it will trace everything)
+A whitelist system to trace only specific queries (target parameter in graphite's API).
+If it is set to None, it will trace everything.
 
 To configure it, add the middleware to Django's list:
 ```
