@@ -53,6 +53,7 @@ def stop_trace():
     tracer.span_context = SpanContext(trace_options=trace_options.TraceOptions(0))
     tracer.sampler = always_off.AlwaysOffSampler()
 
+
 def add_attr_to_trace(key, value):
     """Add an attribute to the current span if tracing is enabled."""
     if not execution_context:

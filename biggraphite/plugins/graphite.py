@@ -25,7 +25,7 @@ from graphite import readers
 from graphite.logger import log
 from graphite.render import hashing
 
-from biggraphite import accessor as bg_accessor, tracing
+from biggraphite import accessor as bg_accessor
 from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import glob_utils
 from biggraphite import graphite_utils

@@ -579,7 +579,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """Return a sorted list of metrics matching this glob."""
         super(_ElasticSearchAccessor, self).glob_metrics(glob, start_time, end_time)
 
-
         tracing.add_attr_to_trace("glob", str(glob))
         tracing.add_attr_to_trace("time.start", str(start_time))
         tracing.add_attr_to_trace("time.stop", str(end_time))
