@@ -580,8 +580,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).glob_metrics(glob, start_time, end_time)
 
         tracing.add_attr_to_trace("glob", str(glob))
-        tracing.add_attr_to_trace("time.start", str(start_time))
-        tracing.add_attr_to_trace("time.stop", str(end_time))
 
         if glob == "":
             return []
@@ -637,8 +635,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             glob, start_time, end_time
         )
         tracing.add_attr_to_trace("glob", str(glob))
-        tracing.add_attr_to_trace("time.start", str(start_time))
-        tracing.add_attr_to_trace("time.stop", str(end_time))
 
         if glob == "":
             return []
