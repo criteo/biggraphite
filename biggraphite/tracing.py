@@ -16,6 +16,10 @@
 
 try:
     from opencensus.trace import execution_context
+    from opencensus.trace.samplers import always_off
+    from opencensus.trace.tracers import noop_tracer
+    from opencensus.trace import trace_options
+    from opencensus.trace.span_context import SpanContext
 except ImportError:
     execution_context = None
 
@@ -38,6 +42,16 @@ def trace(func):
             return func(self, *args, **kwargs)
     return tracer
 
+
+def stop_trace():
+    """Stop the current trace."""
+    if not execution_context:
+        pass
+    execution_context.set_current_span(None)
+    tracer = execution_context.get_opencensus_tracer()
+    tracer.tracer = noop_tracer.NoopTracer()
+    tracer.span_context = SpanContext(trace_options=trace_options.TraceOptions(0))
+    tracer.sampler = always_off.AlwaysOffSampler()
 
 def add_attr_to_trace(key, value):
     """Add an attribute to the current span if tracing is enabled."""
