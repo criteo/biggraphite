@@ -487,7 +487,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self._known_indices = {}
 
     @CREATE_METRIC_LATENCY.time()
-    @tracing.trace
     def create_metric(self, metric):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).create_metric(metric)
@@ -504,6 +503,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def update_metric(self, name, updated_metadata):
         """See bg_accessor.Accessor."""
         super(_ElasticSearchAccessor, self).update_metric(name, updated_metadata)
+        tracing.add_attr_to_trace("metric.name", name)
 
         name = bg_metric.sanitize_metric_name(name)
         metric = self.get_metric(name)
@@ -521,7 +521,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self.create_metric(updated_metric)
 
     @DELETE_METRIC_LATENCY.time()
-    @tracing.trace
     def delete_metric(self, name):
         name = bg_metric.sanitize_metric_name(name)
 
@@ -531,7 +530,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         query.delete()
 
     @DELETE_DIRECTORY_LATENCY.time()
-    @tracing.trace
     def delete_directory(self, name):
         components = _components_from_name(name)
         depth = _get_depth_from_components(components)
@@ -576,9 +574,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         return False, search
 
     @GLOB_METRICS_LATENCY.time()
+    @tracing.trace
     def glob_metrics(self, glob, start_time=None, end_time=None):
         """Return a sorted list of metrics matching this glob."""
         super(_ElasticSearchAccessor, self).glob_metrics(glob, start_time, end_time)
+
+
+        tracing.add_attr_to_trace("glob", str(glob))
+        tracing.add_attr_to_trace("time.start", str(start_time))
+        tracing.add_attr_to_trace("time.stop", str(end_time))
 
         if glob == "":
             return []
@@ -633,6 +637,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).glob_directory_names(
             glob, start_time, end_time
         )
+        tracing.add_attr_to_trace("glob", str(glob))
+        tracing.add_attr_to_trace("time.start", str(start_time))
+        tracing.add_attr_to_trace("time.stop", str(end_time))
+
         if glob == "":
             return []
 
@@ -723,7 +731,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
 
         return response.hits[0]
 
-    @tracing.trace
     def fetch_points(self, metric, time_start, time_end, stage, aggregated=True):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).fetch_points(
@@ -929,7 +936,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             # the metric.
             metric.read_on = datetime.datetime.now()
 
+    @tracing.trace
     def __update_read_on(self, metric):
+        tracing.add_attr_to_trace("metric.name", metric.name)
         data = {"doc": {"read_on": datetime.datetime.now()}}
 
         # Get the latest version of the metric and update it.
