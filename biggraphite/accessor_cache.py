@@ -17,6 +17,8 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import sys
+
 import abc
 import hashlib
 
@@ -93,6 +95,8 @@ class DjangoCache(AccessorCache):
 
     def _make_key(self, key):
         """Construct a clean key from a key."""
+        if sys.version_info > (3, 0):
+            key = key.encode('utf-8')
         return hashlib.md5(key).hexdigest()
 
     def set(self, key, value, timeout=None, version=None):
