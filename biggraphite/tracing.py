@@ -46,7 +46,7 @@ def trace(func):
 def stop_trace():
     """Stop the current trace."""
     if not execution_context:
-        pass
+        return
     execution_context.set_current_span(None)
     tracer = execution_context.get_opencensus_tracer()
     tracer.tracer = noop_tracer.NoopTracer()
@@ -57,7 +57,7 @@ def stop_trace():
 def add_attr_to_trace(key, value):
     """Add an attribute to the current span if tracing is enabled."""
     if not execution_context:
-        pass
+        return
     tracer = execution_context.get_opencensus_tracer()
     tracer.add_attribute_to_current_span(
                 attribute_key=key,
