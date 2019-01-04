@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.8] - 2018-01-04
+
+### Fixed
+
+- crash when opencensus is not installed
+
 ## [0.14.7] - 2018-12-27
 
 ### Improved
@@ -460,7 +466,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.7...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.8...HEAD
+[0.14.8]: https://github.com/criteo/biggraphite/compare/v0.14.7...v0.14.8
 [0.14.7]: https://github.com/criteo/biggraphite/compare/v0.14.6...v0.14.7
 [0.14.6]: https://github.com/criteo/biggraphite/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/criteo/biggraphite/compare/v0.14.4...v0.14.5
