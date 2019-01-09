@@ -23,7 +23,7 @@ from tests import test_utils as bg_test_utils
 
 class TestMetric(unittest.TestCase):
     def test_dir(self):
-        metric = bg_test_utils.make_metric("a.b.c")
+        metric = bg_test_utils.make_metric_with_defaults("a.b.c")
         self.assertIn("name", dir(metric))
         self.assertIn("carbon_xfilesfactor", dir(metric))
 

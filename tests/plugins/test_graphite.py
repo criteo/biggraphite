@@ -40,7 +40,9 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
     _POINTS = bg_test_utils._make_easily_queryable_points(
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision
     )
-    _METRIC = bg_test_utils.make_metric(_METRIC_NAME, retention=_RETENTION)
+    _METRIC = bg_test_utils.make_metric_with_defaults(
+        _METRIC_NAME, retention=_RETENTION
+    )
 
     def setUp(self):
         super(TestReader, self).setUp()
@@ -98,7 +100,9 @@ class TestReader(bg_test_utils.TestCaseWithFakeAccessor):
     def test_carbon_protocol_read(self):
         metric_name = "fake.name"
         # Custom aggregator to make sure all goes right.
-        metric = bg_test_utils.make_metric(_METRIC_NAME, aggregator=bg_metric.Aggregator.minimum)
+        metric = bg_test_utils.make_metric_with_defaults(
+            _METRIC_NAME, aggregator=bg_metric.Aggregator.minimum
+        )
         self.accessor.create_metric(metric)
         self.accessor.flush()
         self.reader = bg_graphite.Reader(
@@ -157,7 +161,7 @@ class TestFinder(bg_test_utils.TestCaseWithFakeAccessor):
     def setUp(self):
         super(TestFinder, self).setUp()
         for metric_name in "a", "a.a", "a.b.c", "x.y":
-            metric = bg_test_utils.make_metric(metric_name)
+            metric = bg_test_utils.make_metric_with_defaults(metric_name)
             self.accessor.create_metric(metric)
         self.finder = bg_graphite.Finder(
             accessor=self.accessor, metadata_cache=self.metadata_cache

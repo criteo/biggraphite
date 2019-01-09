@@ -130,8 +130,32 @@ def encode_metric_name(name):
     return _UTF8_CODEC(name)[0]
 
 
-def make_metric(name, metadata, created_on=None, updated_on=None, read_on=None):
-    """Create a Metric object from its definition as name and metadata.
+def make_metric_with_defaults(
+    name, metadata, created_on=None, updated_on=None, read_on=None
+):
+    """Helper to create a Metric object from its definition as name and metadata.
+
+    Args:
+      name: metric name.
+      metadata: metric metadata.
+      created_on: metric creation date, current date if None
+      updated_on: metric last update date, current date if None
+      read_on: metric last read date, defaults to None
+
+    Returns: a Metric object with a valid id.
+    """
+    now = datetime.datetime.now()
+    return make_metric(
+        name,
+        metadata,
+        created_on=created_on or now,
+        updated_on=updated_on or now,
+        read_on=read_on,
+    )
+
+
+def make_metric(name, metadata, created_on, updated_on, read_on):
+    """Create a Metric object.
 
     Args:
       name: metric name.
@@ -142,17 +166,14 @@ def make_metric(name, metadata, created_on=None, updated_on=None, read_on=None):
 
     Returns: a Metric object with a valid id.
     """
-    encoded_name = encode_metric_name(
-        sanitize_metric_name(name)
-    )
+    encoded_name = encode_metric_name(sanitize_metric_name(name))
     uid = uuid.uuid5(_UUID_NAMESPACE, encoded_name)
-    now = datetime.datetime.now()
     return Metric(
         encoded_name,
         uid,
         metadata,
-        created_on=created_on or now,
-        updated_on=updated_on or now,
+        created_on=created_on,
+        updated_on=updated_on,
         read_on=read_on,
     )
 
@@ -662,10 +683,13 @@ class MetricMetadata(object):
         # since the value this used as a dictionnary key.
         carbon_xfilesfactor_normalized = None
         if carbon_xfilesfactor:
-            carbon_xfilesfactor_normalized = round(carbon_xfilesfactor, cls._XFILESFACTOR_PRECISION)
+            carbon_xfilesfactor_normalized = round(
+                carbon_xfilesfactor, cls._XFILESFACTOR_PRECISION
+            )
         metadata = cls.__metadata_instances.setdefault(
-                                    (aggregator, retention, carbon_xfilesfactor_normalized),
-                                    cls(aggregator, retention, carbon_xfilesfactor_normalized))
+            (aggregator, retention, carbon_xfilesfactor_normalized),
+            cls(aggregator, retention, carbon_xfilesfactor_normalized),
+        )
 
         return metadata
 

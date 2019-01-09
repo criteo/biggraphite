@@ -101,7 +101,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_create_async(self):
         metric_name = "a.b.c"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
 
         self._plugin._createAsyncOrig(metric, metric_name)
         self.assertFalse(self._plugin.exists(metric_name))
@@ -109,7 +109,7 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertTrue(self._plugin.exists(metric_name))
 
         # See if we can update.
-        metric = bg_test_utils.make_metric(
+        metric = bg_test_utils.make_metric_with_defaults(
             metric_name, retention=bg_metric.Retention([bg_metric.Stage(1, 1)])
         )
         self._plugin._createAsyncOrig(metric, metric_name)
@@ -190,8 +190,8 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self.assertEqual(points, list(actual_points))
 
     def test_write_doubledots(self):
-        metric = bg_test_utils.make_metric("a.b..c")
-        metric_1 = bg_test_utils.make_metric("a.b.c")
+        metric = bg_test_utils.make_metric_with_defaults("a.b..c")
+        metric_1 = bg_test_utils.make_metric_with_defaults("a.b.c")
         points = [(1, 42)]
         self.accessor.create_metric(metric)
         self._plugin.write(metric.name, points)

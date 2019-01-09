@@ -193,10 +193,13 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
             carbon_xfilesfactor=xfilesfactor,
         )
         metric = bg_metric.make_metric(
-            metric_name, metadata,
-            # Set updated_on to something far in the past to make sure it gets updated
-            # This also means all `updated_on` gets re-written after each carbon restart.
-            updated_on=datetime.datetime.utcfromtimestamp(0),
+            metric_name,
+            metadata,
+            created_on=None,
+            # Set updated_on to None in order to avoid any touch on metadata
+            # until we get the value stored in database
+            updated_on=None,
+            read_on=None
         )
         self.cache.cache_set(metric_name, metric)
         self._createAsync(metric, orig_metric_name)
@@ -314,6 +317,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         existing_metric = self.accessor.get_metric(metric.name)
 
         if metric == existing_metric:
+            # Update current cache value with the one coming from DB.
+            # It contains the last updated_on value set in DB that
+            # will be used when touching the metadata
+            self.cache.cache_set(metric.name, existing_metric)
             return
 
         if existing_metric:
@@ -325,6 +332,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         else:
             # The metric doesn't exists, create it.
             log.creates("creating database metric %s" % metric.name)
+
+        # we will create it right now, no need to touch it
+        metric.updated_on = datetime.datetime.now()
 
         self.cache.create_metric(metric)
         self.tag(metric_name)

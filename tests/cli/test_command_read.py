@@ -29,7 +29,7 @@ class TestCommandRead(bg_test_utils.TestCaseWithFakeAccessor):
         metadata = bg_metric.MetricMetadata.create(
             retention=bg_metric.Retention.from_string("1440*60s")
         )
-        self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
+        self.accessor.create_metric(bg_test_utils.make_metric_with_defaults(name, metadata))
 
         cmd = command_read.CommandRead()
 

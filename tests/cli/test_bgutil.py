@@ -31,7 +31,7 @@ class TestBgutil(bg_test_utils.TestCaseWithFakeAccessor):
     def test_run(self, mock_stdout):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
-            self.accessor.create_metric(bg_test_utils.make_metric(metric))
+            self.accessor.create_metric(bg_test_utils.make_metric_with_defaults(metric))
         bgutil.main(["--driver=memory", "read", "**"], self.accessor)
         output = mock_stdout.getvalue()
         for metric in self.metrics:

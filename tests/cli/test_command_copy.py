@@ -31,11 +31,11 @@ class TestCommandCopy(bg_test_utils.TestCaseWithFakeAccessor):
         start=_POINTS_START, end=_POINTS_END, period=_RETENTION[1].precision
     )
     _METRIC_1_NAME = "test.origin.metric_1.toto"
-    _METRIC_1 = bg_test_utils.make_metric(_METRIC_1_NAME, retention=_RETENTION)
+    _METRIC_1 = bg_test_utils.make_metric_with_defaults(_METRIC_1_NAME, retention=_RETENTION)
     _METRIC_2_NAME = "test.origin.metric_2.tata"
-    _METRIC_2 = bg_test_utils.make_metric(_METRIC_2_NAME, retention=_RETENTION)
+    _METRIC_2 = bg_test_utils.make_metric_with_defaults(_METRIC_2_NAME, retention=_RETENTION)
     _METRIC_3_NAME = "test.origin.metric_3.tata"
-    _METRIC_3 = bg_test_utils.make_metric(_METRIC_3_NAME, retention=_RETENTION_BIS)
+    _METRIC_3 = bg_test_utils.make_metric_with_defaults(_METRIC_3_NAME, retention=_RETENTION_BIS)
 
     def setUp(self):
         """Set up a subdirectory of metrics to copy."""

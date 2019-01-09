@@ -23,7 +23,7 @@ from biggraphite import accessor as bg_accessor
 from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
-_METRIC = bg_test_utils.make_metric("test.metric")
+_METRIC = bg_test_utils.make_metric_with_defaults("test.metric")
 _NAN = float("nan")
 
 
@@ -180,7 +180,7 @@ class TestRetention(unittest.TestCase):
 
 class TestMetricMetadata(unittest.TestCase):
     def test_setattr(self):
-        m = bg_test_utils.make_metric("test")
+        m = bg_test_utils.make_metric_with_defaults("test")
         self.assertTrue(hasattr(m, "carbon_xfilesfactor"))
         self.assertRaises(AttributeError, setattr, m, "carbon_xfilesfactor", 0.5)
 

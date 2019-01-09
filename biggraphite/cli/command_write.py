@@ -81,7 +81,7 @@ class CommandWrite(command.BaseCommand):
                 retention=bg_metric.Retention.from_string(opts.retention),
                 carbon_xfilesfactor=opts.x_files_factor,
             )
-            metric = bg_metric.make_metric(opts.metric, metadata)
+            metric = bg_metric.make_metric_with_defaults(opts.metric, metadata)
             accessor.create_metric(metric)
 
         timestamp = int(time.mktime(opts.timestamp.timetuple()))

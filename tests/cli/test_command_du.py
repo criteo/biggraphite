@@ -37,7 +37,7 @@ class TestCommandDu(bg_test_utils.TestCaseWithFakeAccessor):
         self.accessor.drop_all_metrics()
         for metric in self.metrics:
             self.accessor.create_metric(
-                bg_test_utils.make_metric(metric, self.metadata)
+                bg_test_utils.make_metric_with_defaults(metric, self.metadata)
             )
 
         cmd = command_du.CommandDu()

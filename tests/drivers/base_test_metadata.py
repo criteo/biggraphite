@@ -61,7 +61,7 @@ class BaseTestAccessorMetadata(object):
         metrics.sort()
 
         for name in metrics:
-            metric = bg_test_utils.make_metric(name)
+            metric = bg_test_utils.make_metric_with_defaults(name)
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -163,7 +163,7 @@ class BaseTestAccessorMetadata(object):
     def test_glob_directories(self):
         IS_ELASTICSEARCH = self.ACCESSOR_SETTINGS.get("driver", "") == "elasticsearch"
         for name in "a", "a.b", "x.y.z":
-            metric = bg_test_utils.make_metric(name)
+            metric = bg_test_utils.make_metric_with_defaults(name)
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -196,7 +196,7 @@ class BaseTestAccessorMetadata(object):
 
         metrics = ["a", "a.b", "x.y.z"]
         for name in metrics:
-            metric = bg_test_utils.make_metric(name)
+            metric = bg_test_utils.make_metric_with_defaults(name)
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -232,7 +232,7 @@ class BaseTestAccessorMetadata(object):
             "retention": bg_metric.Retention.from_string("60*1s:60*60s"),
             "carbon_xfilesfactor": 0.3,
         }
-        metric = bg_test_utils.make_metric("a.b.c.d.e.f", **meta_dict)
+        metric = bg_test_utils.make_metric_with_defaults("a.b.c.d.e.f", **meta_dict)
 
         self.assertEqual(self.accessor.has_metric(metric.name), False)
         self.accessor.create_metric(metric)
@@ -258,7 +258,7 @@ class BaseTestAccessorMetadata(object):
         }
         metadata = bg_metric.MetricMetadata.create(**meta_dict)
         metric_name = "a.b.c.d.e.f"
-        self.accessor.create_metric(bg_test_utils.make_metric(metric_name, metadata))
+        self.accessor.create_metric(bg_test_utils.make_metric_with_defaults(metric_name, metadata))
         self.flush()
         metric = self.accessor.get_metric(metric_name)
         for k, v in meta_dict.items():
@@ -285,7 +285,7 @@ class BaseTestAccessorMetadata(object):
         )
 
     def test_has_metric(self):
-        metric = bg_test_utils.make_metric("a.b.c.d.e.f")
+        metric = bg_test_utils.make_metric_with_defaults("a.b.c.d.e.f")
 
         self.assertEqual(self.accessor.has_metric(metric.name), False)
         self.accessor.create_metric(metric)
@@ -299,7 +299,7 @@ class BaseTestAccessorMetadata(object):
                 "delete_metric is not implemented for _ElasticSearchAccessor."
             )
 
-        metric = bg_test_utils.make_metric("a.b.c.d.e.f")
+        metric = bg_test_utils.make_metric_with_defaults("a.b.c.d.e.f")
 
         self.accessor.create_metric(metric)
         self.flush()
@@ -318,8 +318,8 @@ class BaseTestAccessorMetadata(object):
         self.accessor.repair()
 
     def test_get_metric_doubledots(self):
-        metric = bg_test_utils.make_metric("a.b..c")
-        metric_1 = bg_test_utils.make_metric("a.b.c")
+        metric = bg_test_utils.make_metric_with_defaults("a.b..c")
+        metric_1 = bg_test_utils.make_metric_with_defaults("a.b.c")
         self.accessor.create_metric(metric)
         self.accessor.create_metric(metric_1)
         self.flush()
@@ -333,10 +333,10 @@ class BaseTestAccessorMetadata(object):
             # TODO (t.chataigner) Remove once clean is implemented.
             self.skipTest("clean is not implemented for _ElasticSearchAccessor.")
 
-        metric1 = bg_test_utils.make_metric("a.b.c.d.e.f")
+        metric1 = bg_test_utils.make_metric_with_defaults("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
 
-        metric2 = bg_test_utils.make_metric("g.h.i.j.k.l")
+        metric2 = bg_test_utils.make_metric_with_defaults("g.h.i.j.k.l")
         self.accessor.create_metric(metric2)
         self.flush()
 
@@ -358,10 +358,10 @@ class BaseTestAccessorMetadata(object):
             # TODO (t.chataigner) Remove once clean is implemented.
             self.skipTest("clean is not implemented for _ElasticSearchAccessor.")
 
-        metric1 = bg_test_utils.make_metric("a.b.c.d.e.f")
+        metric1 = bg_test_utils.make_metric_with_defaults("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
 
-        metric2 = bg_test_utils.make_metric("g.h.i.j.k.l")
+        metric2 = bg_test_utils.make_metric_with_defaults("g.h.i.j.k.l")
         self.accessor.create_metric(metric2)
         self.flush()
 
@@ -379,10 +379,10 @@ class BaseTestAccessorMetadata(object):
         self.addCleanup(self.accessor.drop_all_metrics)
 
     def test_map(self):
-        metric1 = bg_test_utils.make_metric("a.b.c.d.e.f")
+        metric1 = bg_test_utils.make_metric_with_defaults("a.b.c.d.e.f")
         self.accessor.create_metric(metric1)
 
-        metric2 = bg_test_utils.make_metric("g.h.i.j.k.l")
+        metric2 = bg_test_utils.make_metric_with_defaults("g.h.i.j.k.l")
         self.accessor.create_metric(metric2)
         self.flush()
 
@@ -396,7 +396,7 @@ class BaseTestAccessorMetadata(object):
         self.accessor.map(_callback, errback=_errback)
 
     def test_touch_without_create(self):
-        metric = bg_test_utils.make_metric("foo")
+        metric = bg_test_utils.make_metric_with_defaults("foo")
         self.accessor.touch_metric(metric)
         self.accessor.create_metric(metric)
         self.accessor.touch_metric(metric)

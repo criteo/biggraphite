@@ -38,7 +38,7 @@ class TestCommandList(bg_test_utils.TestCaseWithFakeAccessor):
             retention=bg_metric.Retention.from_string("1440*60s")
         )
 
-        self.accessor.create_metric(bg_test_utils.make_metric(name, metadata))
+        self.accessor.create_metric(bg_test_utils.make_metric_with_defaults(name, metadata))
 
         opts = parser.parse_args(["foo.*"])
         cmd.run(self.accessor, opts)
