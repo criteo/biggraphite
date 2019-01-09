@@ -100,7 +100,7 @@ def prepare_graphite_imports():
                 sys.path.insert(0, path)
 
 
-def make_metric(name, metadata=None, **kwargs):
+def make_metric_with_defaults(name, metadata=None, **kwargs):
     """Create a bg_accessor.Metric with specified metadata."""
     retention = kwargs.get("retention")
     if isinstance(retention, str):
@@ -110,7 +110,7 @@ def make_metric(name, metadata=None, **kwargs):
         assert not kwargs
     else:
         metadata = bg_metric.MetricMetadata.create(**kwargs)
-    return bg_metric.make_metric(name, metadata)
+    return bg_metric.make_metric_with_defaults(name, metadata)
 
 
 def _make_easily_queryable_points(start, end, period):

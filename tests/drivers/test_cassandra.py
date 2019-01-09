@@ -25,7 +25,7 @@ from tests import test_utils as bg_test_utils
 from tests.drivers.base_test_metadata import BaseTestAccessorMetadata
 from tests.test_utils_cassandra import HAS_CASSANDRA
 
-_METRIC = bg_test_utils.make_metric("test.metric")
+_METRIC = bg_test_utils.make_metric_with_defaults("test.metric")
 
 # Points test query.
 _QUERY_RANGE = 3600
@@ -47,7 +47,7 @@ class TestAccessorWithCassandraSASI(
 ):
     def test_glob_too_many_directories(self):
         for name in "a", "a.b", "x.y.z":
-            metric = bg_test_utils.make_metric(name)
+            metric = bg_test_utils.make_metric_with_defaults(name)
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -59,7 +59,7 @@ class TestAccessorWithCassandraSASI(
 
     # FIXME (t.chataigner) some duplication with ElasticsearchTestAccessorMetadata.
     def test_metric_is_updated_after_ttl(self):
-        metric = bg_test_utils.make_metric("foo")
+        metric = bg_test_utils.make_metric_with_defaults("foo")
         self.accessor.create_metric(metric)
         self.flush()
 
@@ -101,7 +101,7 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         return list(ret)
 
     def test_fetch_empty(self):
-        no_such_metric = bg_test_utils.make_metric("no.such.metric")
+        no_such_metric = bg_test_utils.make_metric_with_defaults("no.such.metric")
         self.accessor.insert_points(_METRIC, _POINTS)
         self.flush()
         self.accessor.drop_all_metrics()
@@ -161,8 +161,8 @@ class TestAccessorWithCassandraData(bg_test_utils.TestCaseWithAccessor):
         self.assertEqual(_USEFUL_POINTS, fetched)
 
     def test_fetch_doubledots(self):
-        metric = bg_test_utils.make_metric("a.b..c")
-        metric_1 = bg_test_utils.make_metric("a.b.c")
+        metric = bg_test_utils.make_metric_with_defaults("a.b..c")
+        metric_1 = bg_test_utils.make_metric_with_defaults("a.b.c")
         points = [(1, 42)]
         self.accessor.create_metric(metric)
         self.accessor.create_metric(metric_1)

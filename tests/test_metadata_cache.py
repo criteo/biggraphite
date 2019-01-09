@@ -25,7 +25,7 @@ from biggraphite import metadata_cache as bg_metadata_cache
 from biggraphite import metric as bg_metric
 from tests import test_utils as bg_test_utils
 
-_TEST_METRIC = bg_test_utils.make_metric("a.b.c")
+_TEST_METRIC = bg_test_utils.make_metric_with_defaults("a.b.c")
 
 
 class CacheBaseTest(object):
@@ -70,14 +70,14 @@ class CacheBaseTest(object):
 
     def test_unicode(self):
         metric_name = u"a.b.testé"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
         self.metadata_cache.create_metric(metric)
         self.metadata_cache.get_metric(metric_name)
 
     def test_repair(self):
         # Add a normal metric.
         metric_name = "a.b.test"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
 
         self.metadata_cache.create_metric(metric)
         self.metadata_cache.repair()
@@ -88,7 +88,7 @@ class CacheBaseTest(object):
 
         # Add a spurious metric.
         metric_name = "a.b.fake"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
 
         self.metadata_cache._cache_set(metric_name, metric)
         self.metadata_cache.repair()
@@ -100,7 +100,7 @@ class CacheBaseTest(object):
     def test_repair_shard(self):
         # Add a normal metric.
         metric_name = "a.b.test"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
 
         self.metadata_cache.create_metric(metric)
         self.metadata_cache.repair(shard=0, nshards=2)
@@ -112,7 +112,7 @@ class CacheBaseTest(object):
 
         # Add a spurious metric.
         metric_name = "a.b.fake"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
 
         self.metadata_cache._cache_set(metric_name, metric)
 
@@ -134,7 +134,7 @@ class CacheBaseTest(object):
         self.assertNotEqual(len(ret), 0)
 
         metric_name = "a.b.test"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
 
         self.metadata_cache.create_metric(metric)
 
@@ -178,10 +178,10 @@ class TestDiskCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
     def test_cache_clean(self):
         """Check that the cache is cleared out of metrics older than the TTL."""
         with freeze_time("2014-01-01 00:00:00"):
-            old_metric = bg_test_utils.make_metric("i.am.old")
+            old_metric = bg_test_utils.make_metric_with_defaults("i.am.old")
             self.metadata_cache.create_metric(old_metric)
         with freeze_time("2015-01-01 00:00:00"):
-            new_metric = bg_test_utils.make_metric("i.am.new")
+            new_metric = bg_test_utils.make_metric_with_defaults("i.am.new")
             self.metadata_cache.create_metric(new_metric)
         with freeze_time("2015-01-01 20:00:00"):
             self.metadata_cache.clean()
@@ -198,7 +198,7 @@ class TestMemoryCache(CacheBaseTest, bg_test_utils.TestCaseWithFakeAccessor):
 class TestNoneCache(unittest.TestCase):
 
     TEST_METRIC_NAME = "foo.bar"
-    TEST_METRIC = bg_metric.make_metric(
+    TEST_METRIC = bg_metric.make_metric_with_defaults(
         TEST_METRIC_NAME,
         bg_metric.MetricMetadata.create()
     )

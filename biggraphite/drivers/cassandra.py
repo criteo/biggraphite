@@ -2085,7 +2085,9 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return
 
         if not metric.updated_on:
-            delta = self.__metadata_touch_ttl_sec + 1
+            # updated_on is not set, it means the metric has
+            # not been read yet from cassandra and we do nothing
+            return
         else:
             delta = int(time.time()) - int(time.mktime(metric.updated_on.timetuple()))
 

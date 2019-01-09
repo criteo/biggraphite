@@ -312,7 +312,9 @@ class TestAccessorWithElasticsearch(
         metric_name = "test_created_on_is_set_upon_current_date.a.b.c"
         expected_created_on = datetime.datetime(2017, 1, 2)
         with freezegun.freeze_time(expected_created_on):
-            metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
+            metric = bg_test_utils.make_metric_with_defaults(
+                metric_name, _create_default_metadata()
+            )
             self.accessor.create_metric(metric)
             self.accessor.flush()
 
@@ -327,7 +329,9 @@ class TestAccessorWithElasticsearch(
         expected_created_on = datetime.datetime(2000, 1, 1)
         expected_updated_on = datetime.datetime(2011, 1, 1)
         with freezegun.freeze_time(expected_created_on):
-            metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
+            metric = bg_test_utils.make_metric_with_defaults(
+                metric_name, _create_default_metadata()
+            )
             self.accessor.create_metric(metric)
             self.accessor.flush()
         with freezegun.freeze_time(expected_updated_on):
@@ -340,7 +344,7 @@ class TestAccessorWithElasticsearch(
 
     def test_metric_is_updated_after_ttl(self):
         with freezegun.freeze_time("2014-01-01 00:00:00"):
-            metric = bg_test_utils.make_metric("foo")
+            metric = bg_test_utils.make_metric_with_defaults("foo")
             self.accessor.create_metric(metric)
         self.flush()
 
@@ -368,7 +372,7 @@ class TestAccessorWithElasticsearch(
         self.accessor.get_index = get_index_mock
 
         with freezegun.freeze_time("2014-01-01 00:00:00"):
-            metric = bg_test_utils.make_metric(
+            metric = bg_test_utils.make_metric_with_defaults(
                 "elasticsearch.test_metric_is_recreated_if_index_has_changed"
             )
             self.accessor.create_metric(metric)
@@ -407,7 +411,7 @@ class TestAccessorWithElasticsearch(
         self.accessor._ElasticSearchAccessor__updated_on_ttl_sec = old_ttl
 
     def test_fetch_points_updates_read_on(self):
-        metric = bg_test_utils.make_metric("foo")
+        metric = bg_test_utils.make_metric_with_defaults("foo")
         self.accessor.create_metric(metric)
         self.flush()
 
@@ -443,7 +447,9 @@ class TestAccessorWithElasticsearch(
             carbon_xfilesfactor=0.25,
         )
         with freezegun.freeze_time(create_date):
-            metric = bg_test_utils.make_metric(metric_name, initial_metadata)
+            metric = bg_test_utils.make_metric_with_defaults(
+                metric_name, initial_metadata
+            )
             self.accessor.create_metric(metric)
             self.accessor.flush()
         with freezegun.freeze_time(update_date):
@@ -456,7 +462,7 @@ class TestAccessorWithElasticsearch(
 
     def test_delete_metric_should_remove_metric_from_name(self):
         metric_name = "test_delete_metric_should_remove_metric_from_name.a.b.c"
-        metric = bg_test_utils.make_metric(metric_name)
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
         self.accessor.create_metric(metric)
         self.accessor.flush()
 
@@ -481,7 +487,9 @@ class TestAccessorWithElasticsearch(
         ]
 
         for metric_name in expected_metrics + unexpected_metrics:
-            self.accessor.create_metric(bg_test_utils.make_metric(metric_name))
+            self.accessor.create_metric(
+                bg_test_utils.make_metric_with_defaults(metric_name)
+            )
             self.accessor.flush()
 
         self.accessor.delete_directory(to_delete_prefix)
@@ -497,9 +505,11 @@ class TestAccessorWithElasticsearch(
         to_delete_metric_name = "%s.to_delete" % prefix
         not_to_delete_metric_name = "%s.not_to_delete" % prefix
 
-        self.accessor.create_metric(bg_test_utils.make_metric(to_delete_metric_name))
         self.accessor.create_metric(
-            bg_test_utils.make_metric(not_to_delete_metric_name)
+            bg_test_utils.make_metric_with_defaults(to_delete_metric_name)
+        )
+        self.accessor.create_metric(
+            bg_test_utils.make_metric_with_defaults(not_to_delete_metric_name)
         )
         self.accessor.flush()
 
@@ -510,12 +520,12 @@ class TestAccessorWithElasticsearch(
         self.assertIsNotNone(self.accessor.get_metric(not_to_delete_metric_name))
 
     def test_insert_points_async_is_not_supported(self):
-        metric = bg_test_utils.make_metric("foo")
+        metric = bg_test_utils.make_metric_with_defaults("foo")
         with self.assertRaises(Exception):
             self.accessor.insert_points_async(metric, [])
 
     def test_insert_downsampled_points_async_is_not_supported(self):
-        metric = bg_test_utils.make_metric("foo")
+        metric = bg_test_utils.make_metric_with_defaults("foo")
         with self.assertRaises(Exception):
             self.accessor.insert_downsampled_points_async(metric, [])
 
@@ -525,7 +535,7 @@ class TestAccessorWithElasticsearch(
 
         globs = [
             "test_glob_metrics_should_return_metrics_matching_glob.*.*.*",
-            "test_glob_metrics_should_return_metrics_matching_glob.{a}.b.c"
+            "test_glob_metrics_should_return_metrics_matching_glob.{a}.b.c",
         ]
         for glob in globs:
             results = self.accessor.glob_metrics(glob)
@@ -537,10 +547,14 @@ class TestAccessorWithElasticsearch(
             self.assertEqual(metric.created_on, found_metric.created_on)
 
     def test_glob_metric_names_should_return_empty_results_when_out_of_bounds(self):
-        self._metric_out_of_search_bounds_should_not_be_found(self.accessor.glob_metric_names)
+        self._metric_out_of_search_bounds_should_not_be_found(
+            self.accessor.glob_metric_names
+        )
 
     def test_glob_metrics_should_return_empty_results_when_out_of_bounds(self):
-        self._metric_out_of_search_bounds_should_not_be_found(self.accessor.glob_metrics)
+        self._metric_out_of_search_bounds_should_not_be_found(
+            self.accessor.glob_metrics
+        )
 
     def _metric_out_of_search_bounds_should_not_be_found(self, glob_search_function):
         metric_name = "test_metric_out_of_search_bounds_should_not_be_found.a.b.c"
@@ -559,7 +573,9 @@ class TestAccessorWithElasticsearch(
         ]
 
         for start_time, end_time in bounds:
-            should_not_be_found_metric = glob_search_function(metric_name, start_time, end_time)
+            should_not_be_found_metric = glob_search_function(
+                metric_name, start_time, end_time
+            )
             self.assert_iter_empty(should_not_be_found_metric, start_time, end_time)
 
     def test_glob_metric_names_should_return_results_when_in_bounds(self):
@@ -610,7 +626,9 @@ class TestAccessorWithElasticsearch(
         ]
 
         for start_time, end_time in bounds:
-            should_be_found_metric = glob_search_function(metric_name, start_time, end_time)
+            should_be_found_metric = glob_search_function(
+                metric_name, start_time, end_time
+            )
             self.assert_iter_not_empty(should_be_found_metric, start_time, end_time)
 
     def test_glob_metrics_should_return_deduplicated_results(self):
@@ -631,7 +649,7 @@ class TestAccessorWithElasticsearch(
         creation_date = datetime.datetime(2018, 1, 1)
         update_date = datetime.datetime(2018, 3, 1)
         with freeze_time(creation_date):
-            metric = bg_test_utils.make_metric(metric_name)
+            metric = bg_test_utils.make_metric_with_defaults(metric_name)
             self.accessor.create_metric(metric)
             self.accessor.flush()
             metric = self.accessor.get_metric(metric_name)

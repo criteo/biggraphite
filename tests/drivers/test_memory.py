@@ -23,7 +23,7 @@ class TestInMemoryAccessor(bg_test_utils.TestCaseWithAccessor):
 
     def test_glob_metric_names_should_return_names_matching_glob(self):
         metric_name = "test_glob_metric_names_should_return_names_matching_glob.a.b.c"
-        metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
+        metric = bg_test_utils.make_metric_with_defaults(metric_name, _create_default_metadata())
         self.accessor.create_metric(metric)
         self.accessor.flush()
 
@@ -35,7 +35,7 @@ class TestInMemoryAccessor(bg_test_utils.TestCaseWithAccessor):
 
     def test_glob_metric_names_should_not_return_names_not_matching_glob(self):
         metric_name = "test_glob_metric_names_should_not_return_names_not_matching_glob.a.b.c"
-        metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
+        metric = bg_test_utils.make_metric_with_defaults(metric_name, _create_default_metadata())
         self.accessor.create_metric(metric)
         self.accessor.flush()
 
@@ -45,7 +45,7 @@ class TestInMemoryAccessor(bg_test_utils.TestCaseWithAccessor):
 
     def test_glob_metrics_should_return_metrics_matching_glob(self):
         metric_name = "test_glob_metrics_should_return_metrics_matching_glob.a.b.c"
-        metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
+        metric = bg_test_utils.make_metric_with_defaults(metric_name, _create_default_metadata())
         self.accessor.create_metric(metric)
         self.accessor.flush()
 
@@ -57,7 +57,7 @@ class TestInMemoryAccessor(bg_test_utils.TestCaseWithAccessor):
 
     def test_glob_metrics_should_not_return_metrics_not_matching_glob(self):
         metric_name = "test_glob_metrics_should_not_return_metrics_not_matching_glob.a.b.c"
-        metric = bg_test_utils.make_metric(metric_name, _create_default_metadata())
+        metric = bg_test_utils.make_metric_with_defaults(metric_name, _create_default_metadata())
         self.accessor.create_metric(metric)
         self.accessor.flush()
 

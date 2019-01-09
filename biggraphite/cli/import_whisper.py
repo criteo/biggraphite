@@ -140,7 +140,7 @@ class _Worker(object):
         if not metadata:
             return 0
 
-        metric = bg_metric.make_metric(name, metadata)
+        metric = bg_metric.make_metric_with_defaults(name, metadata)
         if not self._opts.no_metadata:
             self._accessor.create_metric(metric)
 

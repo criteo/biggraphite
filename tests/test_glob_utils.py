@@ -228,7 +228,7 @@ class TestGlobUtils(bg_test_utils.TestCaseWithFakeAccessor):
 
     def test_graphite_glob(self):
         for name in self._metric_names:
-            metric = bg_test_utils.make_metric(name)
+            metric = bg_test_utils.make_metric_with_defaults(name)
             self.accessor.create_metric(metric)
 
         scenarii = [

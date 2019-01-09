@@ -511,7 +511,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if metric is None:
             raise InvalidArgumentError("Unknown metric '%s'" % name)
 
-        updated_metric = bg_metric.make_metric(
+        updated_metric = bg_metric.make_metric_with_defaults(
             name,
             updated_metadata,
             created_on=metric.created_on,
@@ -700,7 +700,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         metadata = bg_metric.MetricMetadata.from_string_dict(document.config.to_dict())
         # TODO: Have a look at dsl doc to avoid parsing strings to dates
         # https://github.com/elastic/elasticsearch-dsl-py/blob/master/docs/persistence.rst
-        return bg_metric.make_metric(
+        return bg_metric.make_metric_with_defaults(
             document.name,
             metadata,
             created_on=ttls.str_to_datetime(document.created_on),

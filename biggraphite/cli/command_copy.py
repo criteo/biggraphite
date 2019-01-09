@@ -144,7 +144,7 @@ class CommandCopy(command.BaseCommand):
                 )
                 dst_metadata = bg_metric.MetricMetadata.create(
                         src_metadata.aggregator, dst_retention, src_metadata.carbon_xfilesfactor)
-                dst_metric = bg_metric.make_metric(dst_metric_name, dst_metadata)
+                dst_metric = bg_metric.make_metric_with_defaults(dst_metric_name, dst_metadata)
                 if not dry_run:
                     accessor.create_metric(dst_metric)
             elif dst_retention and dst_metric.metadata.retention != dst_retention:
