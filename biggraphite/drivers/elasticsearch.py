@@ -550,7 +550,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         globstars = components.count(bg_glob.Globstar())
         if globstars:
             name_regexp = "\\.".join([_parse_regexp_component(c) for c in components])
-            return True, search.filter("regexp", **{"name": name_regexp})
+            return True, search.filter("regexp", name=name_regexp)
 
         # TODO (t.chataigner) Handle fully defined prefix (like a.b.c.*.*.*)
         # with a wildcard on name.
@@ -559,7 +559,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if self.__glob_parser.is_fully_defined(components):
             return (
                 False,
-                search.filter("term", **{"name": bg_metric.sanitize_metric_name(glob)}),
+                search.filter("term", name=".".join([c[0] for c in components])),
             )
 
         # Handle all other use cases.

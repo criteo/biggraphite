@@ -523,14 +523,18 @@ class TestAccessorWithElasticsearch(
         metric_name = "test_glob_metrics_should_return_metrics_matching_glob.a.b.c"
         metric = self._create_updated_metric(metric_name)
 
-        glob = "test_glob_metrics_should_return_metrics_matching_glob.*.*.*"
-        results = self.accessor.glob_metrics(glob)
+        globs = [
+            "test_glob_metrics_should_return_metrics_matching_glob.*.*.*",
+            "test_glob_metrics_should_return_metrics_matching_glob.{a}.b.c"
+        ]
+        for glob in globs:
+            results = self.accessor.glob_metrics(glob)
 
-        self.assertTrue(len(results) > 0, "Expected metric was not found")
-        found_metric = results[0]
-        self.assertEqual(metric_name, found_metric.name)
-        self.assertEqual(metric.metadata, found_metric.metadata)
-        self.assertEqual(metric.created_on, found_metric.created_on)
+            self.assertTrue(len(results) > 0, "Expected metric was not found")
+            found_metric = results[0]
+            self.assertEqual(metric_name, found_metric.name)
+            self.assertEqual(metric.metadata, found_metric.metadata)
+            self.assertEqual(metric.created_on, found_metric.created_on)
 
     def test_glob_metric_names_should_return_empty_results_when_out_of_bounds(self):
         self._metric_out_of_search_bounds_should_not_be_found(self.accessor.glob_metric_names)
