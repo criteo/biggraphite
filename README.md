@@ -26,7 +26,7 @@ Backends
 
 There is only one supported backend that provides all features: Cassandra, whose design is [described in CASSANDRA_DESIGN.md](CASSANDRA_DESIGN.md).
 
-Another backend supports metadata only, stored in Elasticsearch, [see ELASTICSEARCH_DESIGN.md](ELASTICSEARCH_DESIGN).
+Another backend supports metadata only, stored in Elasticsearch, [see ELASTICSEARCH_DESIGN.md](ELASTICSEARCH_DESIGN.md).
 Using it, it is possible to use Cassandra to store data points and Elasticsearch to store metrics metadata.
 
 
