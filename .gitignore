@@ -117,6 +117,9 @@ ENV/
 # Rope project settings
 .ropeproject
 
+# Docker volume directories
+docker/volumes_*
+
 # Misc
 apache-cassandra-*
 cassandra-lucene-index-plugin*
