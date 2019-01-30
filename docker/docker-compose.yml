@@ -1,0 +1,36 @@
+version: '2'
+services:
+  elasticsearch:
+    image: "bg-elasticsearch"
+# Uncomment port-forwarding configuration if needed
+#    ports:
+#      - "9200:9200"
+#
+# Uncomment lines below if you want/need a kibana instance
+# to check what is going on within elasticsearch
+#  kibana:
+#    image: "bg-kibana"
+#    ports:
+#      - "5601:5601"
+#
+  cassandra:
+    image: "bg-cassandra"
+  helper:
+    image: "bg-helper"
+    volumes:
+      - "./volumes_bg-helper/conf:/conf"
+    command: "/bin/bash /conf/bg-cassandra.sh"
+#
+  graphite-aggregator-cache:
+    image: "graphite-aggregator-cache"
+    volumes:
+      - "./volumes_graphite-aggregator-cache/conf:/conf"
+    ports:
+      - "2003:2003"
+#
+  graphite-web:
+    image: "graphite-web"
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./volumes_graphite-web/conf:/conf"

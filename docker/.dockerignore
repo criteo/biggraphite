@@ -1,0 +1,3 @@
+# ignore all change in current dir and below
+*
+**/*
