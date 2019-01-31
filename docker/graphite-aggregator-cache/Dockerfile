@@ -1,4 +1,5 @@
 FROM python:3.6
+RUN  pip install cassandra-driver
 COPY . /bg/
 WORKDIR /bg
 ENV GRAPHITE_NO_PREFIX=true
