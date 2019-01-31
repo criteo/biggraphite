@@ -192,7 +192,7 @@ class Reader(BaseReader):
             if cached_datapoints:
                 points = self._merge_cached_points(
                     stage,
-                    start_step,
+                    start_time,
                     step,
                     aggregation_method,
                     points,
