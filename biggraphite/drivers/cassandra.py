@@ -756,9 +756,9 @@ class _LazyPreparedStatements(object):
         session,
         keyspace,
         shard,
-        bulkimport=False,
-        data_write_consistency=DEFAULT_DATA_WRITE_CONSISTENCY,
-        data_read_consistency=DEFAULT_DATA_READ_CONSISTENCY,
+        bulkimport,
+        data_write_consistency,
+        data_read_consistency,
     ):
         self._keyspace = keyspace
         self._session = session
@@ -767,8 +767,8 @@ class _LazyPreparedStatements(object):
         self.__stage_to_select = {}
         self.__data_files = {}
         self._shard = shard
-        self._data_write_consistency = consistency_name_to_value[data_write_consistency]
-        self._data_read_consistency = consistency_name_to_value[data_read_consistency]
+        self._data_write_consistency = data_write_consistency
+        self._data_read_consistency = data_read_consistency
 
         release_version = list(session.get_pools())[0].host.release_version
         if version.LooseVersion(release_version) >= version.LooseVersion("3.9"):
@@ -1289,7 +1289,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.port,
         )
         self.__lazy_statements = _LazyPreparedStatements(
-            self.__session_data, self.keyspace, self.__shard, self.__bulkimport
+            self.__session_data,
+            self.keyspace,
+            self.__shard,
+            self.__bulkimport,
+            self._meta_write_consistency,
+            self._data_read_consistency,
         )
         if self.__enable_metrics:
             self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, "data")
