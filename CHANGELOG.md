@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-## [0.14.8] - 2018-01-04
+## [0.14.9] - 2019-02-14
+
+### Improved
+
+- Pass correct time argument to carbonlink merge function
+- Adding docker-compose setup to test biggraphite
+
+### Fixed
+
+- Fixed accessor cache on python 3.x
+- Fixed bug in ES metrics_matching_glob
+- Fixed data read/write consistency level in cassandra driver
+
+## [0.14.8] - 2019-01-04
 
 ### Fixed
 
@@ -466,7 +479,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.8...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.9...HEAD
+[0.14.9]: https://github.com/criteo/biggraphite/compare/v0.14.8...v0.14.9
 [0.14.8]: https://github.com/criteo/biggraphite/compare/v0.14.7...v0.14.8
 [0.14.7]: https://github.com/criteo/biggraphite/compare/v0.14.6...v0.14.7
 [0.14.6]: https://github.com/criteo/biggraphite/compare/v0.14.5...v0.14.6
