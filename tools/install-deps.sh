@@ -17,7 +17,7 @@ function install_cassandra()
         cd .deps
         FILENAME="apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
         if [ ! -f "${FILENAME}" ]; then
-            wget "http://www.us.apache.org/dist/cassandra/${CASSANDRA_VERSION}/${FILENAME}"
+            wget "http://archive.apache.org/dist/cassandra/${CASSANDRA_VERSION}/${FILENAME}"
             tar -xzf "${FILENAME}"
         fi
         cd -

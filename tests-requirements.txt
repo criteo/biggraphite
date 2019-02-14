@@ -22,7 +22,6 @@ dpkt
 
 # Graphite and dependencies.
 graphite-web
-django-tagging
 pytz
 carbon
 twisted
