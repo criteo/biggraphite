@@ -25,7 +25,7 @@ from graphite import readers
 from graphite.logger import log
 from graphite.render import hashing
 
-from biggraphite import accessor as bg_accessor
+from biggraphite import accessor as bg_accessor, tracing
 from biggraphite import accessor_cache as bg_accessor_cache
 from biggraphite import glob_utils
 from biggraphite import graphite_utils
@@ -46,7 +46,7 @@ try:
 except ImportError:
     BaseFinder = object
 try:
-    FetchInProgress = readers.FetchInProgress
+    FetchInProgress = tracing.trace(readers.FetchInProgress)
 except AttributeError:
     FetchInProgress = None
 
@@ -138,6 +138,7 @@ class Reader(BaseReader):
             raw_step=raw_step,
         )
 
+    @tracing.trace
     def fetch_async(self, start_time, end_time, now=None, requestContext=None):
         """Fetch point for a given interval as per the Graphite API.
 
@@ -151,6 +152,7 @@ class Reader(BaseReader):
           rounded end time, stage precision), points
           Points is a list for which missing points are set to None.
         """
+        tracing.add_attr_to_trace('metric.name', self._metric_name)
         fetch_start = time.time()
         log.rendering(
             "fetch(%s, %d, %d) - start" % (self._metric_name, start_time, end_time)
@@ -181,6 +183,8 @@ class Reader(BaseReader):
             read_start = time.time()
 
             cached_datapoints = self.__get_cached_datapoints(stage)
+            tracing.add_attr_to_trace('metric.name', self._metric_name)
+            tracing.add_attr_to_trace('points.num', points_num)
 
             # TODO: Consider wrapping an array (using NaN for None) for
             # speed&memory efficiency
@@ -218,8 +222,9 @@ class Reader(BaseReader):
             "fetch(%s, %d, %d) - started" % (self._metric_name, start_time, end_time)
         )
 
-        return read_points
+        return tracing.trace_simple(read_points)
 
+    @tracing.trace
     def fetch(self, start_time, end_time, now=None, requestContext=None):
         """Fetch point for a given interval as per the Graphite API.
 
@@ -240,6 +245,7 @@ class Reader(BaseReader):
             # to avoid that.
             return results()
 
+    @tracing.trace
     def get_intervals(self, now=None):
         """Fetch information on the retention policy, as per the Graphite API.
 
@@ -281,6 +287,7 @@ class Finder(BaseFinder):
         self._cache_timeout = None
         self._lock = threading.RLock()
 
+    @tracing.trace
     def accessor(self):
         """Return an accessor."""
         with self._lock:
@@ -305,6 +312,7 @@ class Finder(BaseFinder):
                 self._accessor = accessor
         return self._accessor
 
+    @tracing.trace
     def carbonlink(self):
         """Return a carbonlink."""
         with self._lock:
@@ -321,6 +329,7 @@ class Finder(BaseFinder):
             return None
         return self._carbonlink
 
+    @tracing.trace
     def cache(self):
         """Return a metadata cache."""
         with self._lock:
@@ -335,6 +344,7 @@ class Finder(BaseFinder):
                 self._cache = cache
         return self._cache
 
+    @tracing.trace
     def django_cache(self):
         """Return the django cache."""
         with self._lock:
@@ -351,6 +361,7 @@ class Finder(BaseFinder):
         # build a unique key.
         return hashing.compactHash(str(sorted(vars(obj).items())))
 
+    @tracing.trace
     def find_nodes(self, query):
         """Find nodes matching a query."""
         leaves_only = hasattr(query, "leaves_only") and query.leaves_only
@@ -418,6 +429,7 @@ class Finder(BaseFinder):
                 end_time=end_time,
             )
 
+    @tracing.trace
     def fetch(self, patterns, start_time, end_time, now=None, requestContext=None):
         """Fetch multiple patterns at once.
 
