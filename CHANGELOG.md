@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Improved
+
+- Add new configuration keys to Elasticsearch driver
+
 ## [0.14.10] - 2019-02-19
 
 ### Improved
