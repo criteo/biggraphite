@@ -740,7 +740,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         super(_ElasticSearchAccessor, self).touch_metric(metric)
 
         if not metric.updated_on:
-            delta = self.__updated_on_ttl_sec + 1
+            # updated_on is not set, it means the metric has
+            # not been read yet from cassandra and we do nothing
+            return
         else:
             updated_on_timestamp = time.mktime(metric.updated_on.timetuple())
             delta = int(time.time()) - int(updated_on_timestamp)
