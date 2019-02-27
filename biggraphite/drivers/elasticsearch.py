@@ -132,6 +132,7 @@ OPTIONS = {
     "hosts": _utils.list_from_str,
     "port": int,
     "timeout": float,
+    "schema_path": str,
 }
 
 
