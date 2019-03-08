@@ -5,7 +5,9 @@ Settings are either set in Graphite/Carbon configuration (when embedded), via co
 ## Generic
 
 - ```BG_STORAGE_DIR```: Storage directory to use, currently mostly use to store the cache
-- ```BG_DRIVER```: One of ```cassandra``` (for production) or ```memory``` (for debug)
+- ```BG_DRIVER```: One of ```cassandra``` (for production) or ```memory``` (for debug), data and metadata managed by the same driver
+- ```BG_DRIVER_DATA```: One of ```cassandra``` (for production) or ```memory``` (for debug), set the data driver
+- ```BG_DRIVER_METADATA```: One of ```cassandra``` (for production) or ```elasticsearch``` or ```memory``` (for debug), set the metadata driver
 
 ## Cassandra Backend
 
@@ -27,6 +29,22 @@ This is the main backend for BigGraphite and the one that should be used in prod
 You can also fine-tune the schema of your tables directly as needed. If you
 want to active read repairs, you'll also want to set:
 `'unsafe_aggressive_sstable_expiration': 'true'`.
+
+## Elasticsearch Backend
+
+This backend can be used to store the metadata.
+
+- ```BG_ELASTICSEARCH_USERNAME```: Elasticsearch username (mandatory) can be set in environment variable ```BG_ELASTICSEARCH_USERNAME```)
+- ```BG_ELASTICSEARCH_PASSWORD```: Elasticsearch password (mandatory) can be set in environment variable ```BG_ELASTICSEARCH_PASSWORD```)
+- ```BG_ELASTICSEARCH_INDEX```: Prefix of the index name (default: ```biggraphite_metrics```)
+- ```BG_ELASTICSEARCH_INDEX_SUFFIX```: Suffix of the index name (default: ```_%Y-%m-%d```)
+- ```BG_ELASTICSEARCH_HOSTS```: Elasticsearch contact points (default: ```127.0.0.1```)
+- ```BG_ELASTICSEARCH_PORT```: Port to use to contact Elasticsearch (default: ```9200```)
+- ```BG_ELASTICSEARCH_TIMEOUT```: Default timeout for operations (default: ```10``` seconds)
+- ```BG_ELASTISEARCH_SCHEMA_PATH```: Path to the Elasticsearch index schema (default: ```biggraphite/drivers/elasticsearch_schema.json```)
+- ```BG_ELASTICSEARCH_UPDATED_ON_TTL_SEC```: Update periodicity for metadata field ```updated_on```  (default: ```259200``` seconds)
+- ```BG_ELASTICSEARCH_READ_ON_TTL_SEC```: Update periodicity for metadata field ```read_on``` (default: ```259200``` seconds)
+- ```BG_ELASTICSEARCH_READ_ON_SAMPLING_RATE```: Sampling rate to update metadata field ```read_on``` (default: ```0.05```)
 
 ## Memory Backend
 

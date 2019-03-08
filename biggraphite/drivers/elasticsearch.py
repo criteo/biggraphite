@@ -133,6 +133,9 @@ OPTIONS = {
     "port": int,
     "timeout": float,
     "schema_path": str,
+    "updated_on_ttl_sec": int,
+    "read_on_ttl_sec": int,
+    "read_on_sampling_rate": float,
 }
 
 

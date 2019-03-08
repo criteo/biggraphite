@@ -43,6 +43,18 @@ def trace(func):
     return tracer
 
 
+def trace_simple(func):
+    """Decorator for tracing of functions."""
+    if not execution_context:
+        return func
+
+    def tracer(*args, **kwargs):
+        tracer = execution_context.get_opencensus_tracer()
+        with tracer.span(name="%s" % (func.__name__)):
+            return func(*args, **kwargs)
+    return tracer
+
+
 def stop_trace():
     """Stop the current trace."""
     if not execution_context:
