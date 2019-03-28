@@ -212,6 +212,9 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
                     cls.cassandra_helper.get_accessor_settings()
                 )
 
+        # force read_on to be updated everytime during the tests
+        cls.ACCESSOR_SETTINGS['read_on_sampling_rate'] = 1.0
+
         cls.accessor = bg_accessor_factory.accessor_from_settings(cls.ACCESSOR_SETTINGS)
         cls.accessor.syncdb()
         cls.accessor.connect()
