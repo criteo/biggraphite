@@ -1254,7 +1254,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             UPDATE_READ_ON_METADATA,
             __prepare(
                 'UPDATE "%s".metrics_metadata SET read_on=now()'
-                " WHERE name=?;" % self.keyspace_metadata
+                " WHERE name=? IF EXISTS;" % self.keyspace_metadata
             )
         )
         self.__delete_metric = _CassandraExecutionRequest(

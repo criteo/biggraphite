@@ -404,3 +404,16 @@ class BaseTestAccessorMetadata(object):
     def test_get_metric_unknown(self):
         unknown_metric_name = 'this.metric.is.unknown'
         self.assertEqual(self.accessor.get_metric(unknown_metric_name), None)
+
+    def test_metric_should_not_be_created_when_updating_read_on(self):
+        metadata = bg_metric.MetricMetadata.create()
+        metric = bg_test_utils.make_metric_with_defaults(
+            'this.metric.should.not.be.created',
+            metadata
+        )
+
+        # fetch_points will update the read_on for the given metric
+        self.accessor.fetch_points(metric, 1, 2, metric.retention.stage0)
+
+        metric_from_db = self.accessor.get_metric(metric.name)
+        self.assertEqual(metric_from_db, None)
