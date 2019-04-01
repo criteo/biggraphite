@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.12] - 2019-04-01
+
+### Improved
+
+ - Add tracing on the graphite plugin interface
+ - Align the way to update metadata in Elasticsearch with Cassandra
+ - Setting BG_CASSANDRA_READ_ON_SAMPLING_RATE to 0 skips updating the read_on
+
+### Fixed
+
+ - Do not update read_on if the metric is not present
+
 ## [0.14.11] - 2019-02-27
 
 ### Improved
@@ -492,6 +504,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - We are going to do releases from now on
 
 [Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.11...HEAD
+[0.14.12]: https://github.com/criteo/biggraphite/compare/v0.14.11...v0.14.12
 [0.14.11]: https://github.com/criteo/biggraphite/compare/v0.14.10...v0.14.11
 [0.14.10]: https://github.com/criteo/biggraphite/compare/v0.14.9...v0.14.10
 [0.14.9]: https://github.com/criteo/biggraphite/compare/v0.14.8...v0.14.9
