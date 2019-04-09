@@ -35,5 +35,5 @@ Django>=1.8,<1.11.99
 opencensus
 
 # Optional dependency for bgutil web
-gourde
+gourde==0.2.1
 flask-restplus

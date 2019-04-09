@@ -6,7 +6,7 @@ scandir
 tabulate
 
 # Command line web
-gourde
+gourde==0.2.1
 
 # Memory driver
 sortedcontainers
