@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.13] - 2019-04-12
+
+### Fixed
+
+ - Version binding of dependencies to stay python 2.x compatible
+ - Freeze gourde version to 0.2.1
+
 ## [0.14.12] - 2019-04-01
 
 ### Improved
@@ -503,7 +510,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - We are going to do releases from now on
 
-[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.11...HEAD
+[Unreleased]: https://github.com/criteo/biggraphite/compare/v0.14.13...HEAD
+[0.14.13]: https://github.com/criteo/biggraphite/compare/v0.14.12...v0.14.13
 [0.14.12]: https://github.com/criteo/biggraphite/compare/v0.14.11...v0.14.12
 [0.14.11]: https://github.com/criteo/biggraphite/compare/v0.14.10...v0.14.11
 [0.14.10]: https://github.com/criteo/biggraphite/compare/v0.14.9...v0.14.10
