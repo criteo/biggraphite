@@ -1437,6 +1437,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 if kwargs.get("raise_on_first_error") is True:
                     raise e
                 result = e
+                result.request = execution_request
                 success = False
             query_results.append((success, result))
         return query_results
@@ -1868,7 +1869,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
             execution_requests,
             concurrency=self.max_concurrent_queries_per_pattern,
             results_generator=True,
-            raise_on_first_error=True,
         )
 
         def _extract_results(query_results):
@@ -1887,8 +1887,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                         raise too_many_metrics
                     yield name
 
-            try:
-                for success, results in query_results:
+            for success, results in query_results:
+                if success:
                     key = self.__query_key(results.response_future.query, None)
                     # Make sure we also cache empty results.
                     fetched_results[key] = []
@@ -1899,8 +1899,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
                         if n_metrics > self.max_metrics_per_pattern:
                             raise too_many_metrics
                         yield name
-            except cassandra.DriverException as e:
-                raise CassandraError("Failed to glob: %s on %s" % (table, glob), e)
+                else:
+                    # We want to cache also requests that timeouts in order to avoid re-requesting
+                    # them to cassandra. If a request timeout it means the request is too expensive
+                    # to retrieve or a node is overloaded.
+                    # In anycase caching an empty result will avoid hammering down cassandra
+                    if type(results) is cassandra.ReadTimeout:
+                        log.info("Failed to glob: %s on %s, %s" % (table, glob, results))
+                        key = self.__query_key(results.request.statement, results.request.params)
+                        fetched_results[key] = []
+                    else:
+                        raise CassandraError("Failed to glob: %s on %s" % (table, glob), results)
 
             if self.cache and fetched_results:
                 self.cache.set_many(fetched_results, timeout=self.cache_metadata_ttl)
