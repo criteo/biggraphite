@@ -32,7 +32,7 @@ whisper
 Django>=1.8,<1.11.99
 
 # Tracing
-opencensus
+opencensus==0.5.0
 
 # Optional dependency for bgutil web
 gourde==0.2.1
