@@ -86,6 +86,12 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
     # See class pydoc for the rational.
     _SYNC_EVERY_N_WRITES = 10
 
+    # Limit by default to 300 creations per seconds. This is mostly
+    # to give priority to other threads. A typical carbon instance
+    # can handle up to 200k metrics per second so it will take
+    # ~10 minutes to check all metrics.
+    _CREATION_RATE_LIMIT = 300
+
     def __init__(self, settings):
         """Create a BigGraphiteDatabase."""
         try:
@@ -102,6 +108,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._sync_countdown = 0
         self._sync_every_n_writes = settings.get(
             "BG_SYNC_EVERY_N_WRITES", self._SYNC_EVERY_N_WRITES
+        )
+        self._creation_rate_limit = settings.get(
+            "BG_CREATION_RATE_LIMIT", self._CREATION_RATE_LIMIT
         )
 
         utils.start_admin(bg_settings.settings_from_confattr(settings))
@@ -295,11 +304,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         while self.reactor.running:
             try:
                 self._createOneMetric()
-                # Hard limit to 300 creations per seconds. This is mostly
-                # to give priority to other threads. A typical carbon instance
-                # can handle up to 200k metrics per second so it will take
-                # ~10 minutes to check all metrics.
-                time.sleep(0.003)
+                time.sleep(1 / float(self._creation_rate_limit))
             except Exception:
                 log.err()
                 # Give the system time to recover, errors might be related
