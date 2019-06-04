@@ -58,6 +58,7 @@ OPTIONS = {
     "loglevel": str,
     "storage_dir": str,
     "admin_port": strtoint,
+    "creation_rate_limit": strtoint,
 }
 
 

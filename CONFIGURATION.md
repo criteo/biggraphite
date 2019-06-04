@@ -26,6 +26,7 @@ This is the main backend for BigGraphite and the one that should be used in prod
 - ```BG_CASSANDRA_META_WRITE_CONSISTENCY```: Data write consistency (default: ```ONE```)
 - ```BG_CASSANDRA_REPLICA_ID```: Identifier of this replica (default: ```0```)
 - ```BG_CASSANDRA_READ_ON_SAMPLING_RATE```: Sampling rate to update metadata field ```read_on```. Setting to ```0``` disables updating ````read-on```` (default: ```0.1```)
+- ```BG_CREATION_RATE_LIMIT```: Maximun number of new metadata to create per second (default: ```300```)
 
 
 You can also fine-tune the schema of your tables directly as needed. If you
