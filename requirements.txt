@@ -12,12 +12,12 @@ gourde==0.2.1
 sortedcontainers
 
 # Cassandra driver
-cassandra-driver
+cassandra-driver==3.17.1
 scales
 
 # ElasticSearch
 elasticsearch<7.0.0,>=6.0.0
-elasticsearch-dsl
+elasticsearch-dsl<7.0.0,>=6.0.0
 # To support https
 certifi
 
