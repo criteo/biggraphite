@@ -16,11 +16,13 @@
 
 import logging
 import os
+import threading
 
 import prometheus_client
 
 DEFAULT_LOG_LEVEL = "WARNING"
 DEFAULT_ADMIN_PORT = None
+DEFAULT_GRAPHITE_ROOT = '/opt/graphite'
 
 
 log = logging.getLogger(__name__)
@@ -36,6 +38,53 @@ class ConfigError(Error):
     """Configuration problems."""
 
     pass
+
+
+class FileWatcher:
+    """Watcher that checks if a file exists."""
+
+    def __init__(self, filename):
+        """The constructor takes the filename to be watched."""
+        self._filename = filename
+
+    def watch(self):
+        """Returns True if the file exists."""
+        return os.path.exists(self._filename)
+
+
+class FeatureSwitch:
+    """FeatureSwitch checks if a feature is enabled or not."""
+
+    def __init__(self, watcher, default_value):
+        """Constructor for FeatureSwitch.
+
+        Args:
+          watcher: the watcher object used to determine if the feature is enabled or not
+          default_value: bool, value when the watcher object returns False
+        """
+        self._watcher = watcher
+        self._default_value = default_value
+
+        # flag holding watcher's state
+        # Using an Event because this class is meant to be shared by several threads
+        self._flag = threading.Event()
+
+        # initializate the internal state
+        self.watch()
+
+    def enabled(self):
+        """Check if the feature is enabled or not."""
+        if self._default_value:
+            return not self._flag.is_set()
+        else:
+            return self._flag.is_set()
+
+    def watch(self):
+        """Refresh the internal state with the value returned by the watcher object."""
+        if self._watcher.watch():
+            self._flag.set()
+        else:
+            self._flag.clear()
 
 
 def start_admin(settings):
@@ -86,7 +135,7 @@ def setup_graphite_root_path(carbon_util_file):
     """
     if os.path.dirname(carbon_util_file) == "/opt/graphite/lib/carbon":
         if "GRAPHITE_ROOT" not in os.environ:
-            os.environ["GRAPHITE_ROOT"] = "/opt/graphite"
+            os.environ["GRAPHITE_ROOT"] = DEFAULT_GRAPHITE_ROOT
 
 
 def round_down(rounded, divider):

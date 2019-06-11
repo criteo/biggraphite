@@ -16,6 +16,7 @@ from __future__ import absolute_import  # Otherwise carbon is this module.
 
 import time
 import datetime
+import os
 
 import prometheus_client
 from six.moves import queue
@@ -85,6 +86,8 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
     # See class pydoc for the rational.
     _SYNC_EVERY_N_WRITES = 10
+    _DISABLE_METADATA_FILENAME = \
+        os.getenv('GRAPHITE_ROOT', utils.DEFAULT_GRAPHITE_ROOT) + '/disable_metadata'
 
     # Limit by default to 300 creations per seconds. This is mostly
     # to give priority to other threads. A typical carbon instance
@@ -112,6 +115,10 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         self._creation_rate_limit = settings.get(
             "BG_CREATION_RATE_LIMIT", self._CREATION_RATE_LIMIT
         )
+
+        # We want the metadata to be enabled when the file doesn't exists
+        watcher = utils.FileWatcher(self._DISABLE_METADATA_FILENAME)
+        self.metadata_switch = utils.FeatureSwitch(watcher, True)
 
         utils.start_admin(bg_settings.settings_from_confattr(settings))
         self.reactor.addSystemEventTrigger("before", "shutdown", self._flush)
@@ -285,6 +292,12 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         if self._accessor:
             self.reactor.callInThread(self.accessor.background)
 
+        # check if metadata are enabled
+        metadata_enabled = self.metadata_switch.enabled()
+        self.metadata_switch.watch()
+        if metadata_enabled != self.metadata_switch.enabled():
+            log.cache("Metadata enabled: %s" % self.metadata_switch.enabled())
+
     def _createAsync(self, metric, metric_name):
         """Add metric to the queue of metrics to create.
 
@@ -292,8 +305,9 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
           metric: a Metric object
           metric_name: the original, un-encoded metric name
         """
-        self._metricsToCreate.put((metric, metric_name))
-        CREATES_ENQUEUED.inc()
+        if self.metadata_switch.enabled():
+            self._metricsToCreate.put((metric, metric_name))
+            CREATES_ENQUEUED.inc()
 
     def _createMetrics(self):
         # We create metrics in a separate thread because this is potentially
