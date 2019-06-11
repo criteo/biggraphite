@@ -255,5 +255,51 @@ class TestCaseWithAccessor(TestCaseWithTempDir):
         self.accessor.drop_all_metrics()
 
 
+class TestFeatureSwitch(unittest.TestCase):
+
+    class WatcherMock:
+        """WatcherMock used to mock a watcher in FeatureSwitch object."""
+
+        def __init__(self):
+            """Constructor set the internal state."""
+            self._state = False
+
+        def set(self):
+            """Set the internal state to True."""
+            self._state = True
+
+        def clear(self):
+            """Set the internal state to False."""
+            self._state = False
+
+        def watch(self):
+            """Return the internal state value."""
+            return self._state
+
+    def test_feature_switch_should_return_watcher_state_when_default_value_is_false(self):
+        watcher = self.WatcherMock()
+        feature_switch = bg_utils.FeatureSwitch(watcher, False)
+
+        # default watcher state is False
+        self.assertFalse(feature_switch.enabled())
+
+        # set watcher state to True
+        watcher.set()
+        feature_switch.watch()
+        self.assertTrue(feature_switch.enabled())
+
+    def test_feature_switch_should_return_opposite_watcher_state_when_default_value_is_true(self):
+        watcher = self.WatcherMock()
+        feature_switch = bg_utils.FeatureSwitch(watcher, True)
+
+        # default watcher state is False
+        self.assertTrue(feature_switch.enabled())
+
+        # set watcher state to True
+        watcher.set()
+        feature_switch.watch()
+        self.assertFalse(feature_switch.enabled())
+
+
 if __name__ == "__main__":
     unittest.main()

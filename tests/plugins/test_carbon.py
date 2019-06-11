@@ -18,6 +18,7 @@ from tests import test_utils as bg_test_utils  # noqa
 
 bg_test_utils.prepare_graphite_imports()  # noqa
 
+import mock
 import unittest
 
 from carbon import database
@@ -116,6 +117,21 @@ class TestCarbonDatabase(bg_test_utils.TestCaseWithFakeAccessor):
         self._plugin._createOneMetric()
         retention = self._plugin.getMetadata(metric_name, "retention")
         self.assertEqual(retention, metric.metadata.retention)
+
+    @mock.patch('biggraphite.utils.FeatureSwitch.enabled')
+    def test_create_async_should_not_create_metric_when_metadata_are_disabled(
+                                                                            self,
+                                                                            feature_switch_mock):
+        feature_switch_mock.return_value = False
+
+        metric_name = "a.metric.that.shoud.not.be.created"
+        metric = bg_test_utils.make_metric_with_defaults(metric_name)
+
+        self._plugin._createAsyncOrig(metric, metric_name)
+        self.assertFalse(self._plugin.exists(metric_name))
+
+        self._plugin._createOneMetric()
+        self.assertFalse(self._plugin.exists(metric_name))
 
     def test_nosuchmetric(self):
         other_metric = _TEST_METRIC + "-nosuchmetric"
