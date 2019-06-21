@@ -1,0 +1,48 @@
+attrs==19.1.0
+Automat==0.7.0
+blinker==1.4
+cachetools==3.1.1
+cairocffi==0.9.0
+cassandra-driver==3.17.1
+certifi==2019.6.16
+cffi==1.12.3
+ciso8601==2.1.1
+Click==7.0
+constantly==15.1.0
+contextlib2==0.5.5; python_version < '3'
+elasticsearch==6.4.0
+elasticsearch-dsl==6.4.0
+enum34==1.1.6; python_version < '3.4'
+Flask==1.0.3
+Flask-Twisted==0.1.2
+future==0.17.1
+futures==3.2.0; python_version < '3'
+gourde==0.2.1
+humanize==0.5.1
+hyperlink==19.0.0
+idna==2.8
+incremental==17.5.0
+ipaddress==1.0.22; python_version < '3'
+itsdangerous==1.1.0
+Jinja2==2.10.1
+lmdb==0.95
+MarkupSafe==1.1.1
+observable==1.0.3
+parsedatetime==2.4
+progressbar2==3.42.0
+prometheus-client==0.5.0
+prometheus-flask-exporter==0.8.1
+pycparser==2.19
+PyHamcrest==1.9.0
+python-dateutil==2.8.0
+python-utils==2.3.0
+raven==6.10.0
+scales==1.0.9
+scandir==1.10.0
+six==1.12.0
+sortedcontainers==2.1.0
+tabulate==0.8.3
+Twisted==19.2.1
+urllib3==1.25.3
+Werkzeug==0.15.4
+zope.interface==4.6.0

@@ -19,9 +19,6 @@ import setuptools
 import sys
 
 
-PY3 = sys.version_info.major == 3
-
-
 def _read(relpath):
     fullpath = os.path.join(os.path.dirname(__file__), relpath)
     with open(fullpath) as f:
@@ -35,17 +32,11 @@ def _read_reqs(relpath):
                 if (s.strip() and not s.startswith("#"))]
 
 
-_REQUIREMENTS_TXT = _read_reqs("requirements.txt")
+_REQUIREMENTS_TXT = _read_reqs("freeze-requirements.txt")
 _DEPENDENCY_LINKS = [l for l in _REQUIREMENTS_TXT if "://" in l]
 _INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
 
-
-if not PY3:
-    _INSTALL_REQUIRES += ('futures', 'enum34')
-
-
 packages = setuptools.find_packages()
-
 
 setuptools.setup(
     name="biggraphite",

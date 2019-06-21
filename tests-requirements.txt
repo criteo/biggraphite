@@ -24,8 +24,6 @@ dpkt
 graphite-web
 pytz
 carbon
-twisted
-zope.interface
 whisper
 
 # We could use Django<2.0 but we match what graphite requires instead.
