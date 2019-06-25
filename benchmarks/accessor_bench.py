@@ -52,23 +52,23 @@ def _random_name(n):
         [random.choice(string.digits+string.ascii_letters) for i in range(n)])
 
 
-def _gen_metric(accessor):
+def _gen_metric():
     retention = bg_metric.Retention.from_string("86400*1s:10080*60s")
     metadata = bg_metric.MetricMetadata(retention=retention)
-    return bg_metric.make_metric(_random_name(10), metadata)
+    return bg_metric.make_metric_with_defaults(_random_name(10), metadata)
 
 
-def make_metric(benchmark):
+def create_metric(benchmark):
     with Bencher() as tc:
         ac = tc.get_accessor()
-        name = _random_name(10)
+        metric = _gen_metric()
         benchmark.pedantic(
-            ac.make_metric, args=(name, {'retention': ""}),
+            ac.create_metric, args=(metric, ),
             iterations=ITERATIONS, rounds=ROUNDS)
 
 @pytest.mark.benchmark(group="metadata")
-def test_make_metrics(benchmark):
-    make_metric(benchmark)
+def test_create_metric(benchmark):
+    create_metric(benchmark)
 
 
 def has_metric(benchmark):
@@ -119,7 +119,7 @@ def insert_points_async(benchmark):
         ac = tc.get_accessor()
         now = int(time.time())
 
-        metrics = [_gen_metric(ac) for x in range(0,100)]
+        metrics = [_gen_metric() for x in range(0,100)]
         for m in metrics:
             ac.create_metric(m)
 
@@ -143,7 +143,7 @@ def insert_points_sync(benchmark):
         ac = tc.get_accessor()
         now = int(time.time())
 
-        metrics = [_gen_metric(ac) for x in range(0,100)]
+        metrics = [_gen_metric() for x in range(0,100)]
         for m in metrics:
             ac.create_metric(m)
 
@@ -167,7 +167,7 @@ def get_points(benchmark):
         ac = tc.get_accessor()
         now = int(time.time())
 
-        metrics = [_gen_metric(ac) for x in range(0, 2)]
+        metrics = [_gen_metric() for x in range(0, 2)]
         end = int(now / 60) * 60
         start = end - 3600
 
