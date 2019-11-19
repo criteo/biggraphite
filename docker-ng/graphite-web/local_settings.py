@@ -1,0 +1,15 @@
+DEBUG = True
+LOG_DIR = '/tmp'
+STORAGE_DIR = '/tmp'
+STORAGE_FINDERS = ['biggraphite.plugins.graphite.Finder']
+TAGDB = 'biggraphite.plugins.tags.BigGraphiteTagDB'
+# Cassandra configuration
+BG_CASSANDRA_KEYSPACE = 'biggraphite'
+BG_CASSANDRA_CONTACT_POINTS = 'cassandra'
+BG_DATA_DRIVER = 'cassandra'
+BG_CACHE = 'memory'
+WEBAPP_DIR = '/usr/local/webapp/'
+## Elasticsearch configuration
+BG_METADATA_DRIVER = 'elasticsearch'
+BG_ELASTICSEARCH_HOSTS = 'elasticsearch'
+BG_ELASTICSEARCH_PORT = '9200'
