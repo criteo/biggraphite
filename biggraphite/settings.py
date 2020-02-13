@@ -14,6 +14,7 @@
 # limitations under the License.
 """Module to handle settings."""
 import distutils
+import distutils.util
 
 from biggraphite import accessor_factory as bg_accessor_factory
 from biggraphite import cache_factory as bg_cache_factory
