@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.15] - 2020-02-14
+
+### Fixed
+
+ - Add import of distutils.util to settings.py fixing missing module error
+
 ## [0.14.14] - 2019-06-12
 
 ### Fixed
