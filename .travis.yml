@@ -1,5 +1,6 @@
 language: python
-
+### Trusty uses java8 default jdk11 in xenial seems to interfere with cassandra booting
+dist: trusty
 matrix:
   include:
     - python: '2.7'
