@@ -160,7 +160,6 @@ def add_argparse_arguments(parser):
 
     parser.add_argument(
         "--elasticsearch_use_directory_index",
-        metavar="NAME",
         help="use secondary index for directories",
         action="store_true",
         default=False,
@@ -690,7 +689,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         results = [h.name for h in self.glob_metrics(glob, start_time, end_time)]
         return iter(results)
 
-
     @GLOB_DIRECTORY_NAMES_LATENCY.time()
     @tracing.trace
     def glob_directory_names(self, glob, start_time=None, end_time=None):
@@ -1048,7 +1046,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if end_time is not None:
             search = search.filter("range", created_on={"lte": end_time.isoformat()})
         return search
-
 
 def build(*args, **kwargs):
     """Return a bg_accessor.Accessor using ElasticSearch."""
