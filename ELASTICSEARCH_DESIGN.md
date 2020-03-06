@@ -257,3 +257,85 @@ driver will use the latest version of the metric metadata.
 ## Data
 
 _Unsupported for now._
+
+## Directory index
+
+Another way to handle directory search is by adding another index for directories with this mapping: 
+```json
+{
+"_doc": {
+"properties": {
+            "depth": { 
+                "type": "long"
+            },
+
+            "name": {
+                "type": "keyword",
+                "ignore_above": 1024
+            },
+            "uuid": {
+                "type": "keyword"
+            },
+            "parent": {
+                "type": "keyword"
+            }
+        },
+			"dynamic_templates": [
+            {
+                "strings_as_keywords": {
+                    "match": "p*",
+                    "match_mapping_type": "string",
+                    "mapping": {
+                        "type": "keyword",
+                        "ignore_above": 256,
+                        "ignore_malformed": true
+                    }
+                }
+            }
+        ]
+	}
+}
+```
+The current version of biggraphite only support reading from such an index. 
+
+When using it, the search for directory would look like this: 
+
+```json
+# root.*.prod.*
+GET biggraphite_metrics*/_search
+{
+  "size": "0",
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "term": {
+            "p0": "root"
+          }
+        },
+        {
+          "term": {
+            "p2": "prod"
+          }
+        },
+        {
+          "term": {
+            "depth": "3"
+          }
+        },
+      ]
+    }
+  },
+  "aggs": {
+    "distinct_dirs": {
+      "terms": {
+        "field": "p1",
+        "size": 10000,
+        "min_doc_count": 1
+      }
+    }
+  }
+}
+```
+This narrows the search, especially if the directory is close from the root. We still perform aggregation to prevent duplicate accross different indices that would include the directory
+If the directory parent is not glob, we can optimise by searching on parent field ([https://www.elastic.co/guide/en/elasticsearch/reference/6.8/tune-for-search-speed.html#_search_as_few_fields_as_possible](url))

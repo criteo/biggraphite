@@ -35,6 +35,7 @@ from biggraphite import glob_utils as bg_glob
 from biggraphite import metric as bg_metric
 from biggraphite.drivers import _utils
 from biggraphite.drivers import ttls
+from biggraphite.drivers.cassandra_common import DIRECTORY_SEPARATOR
 
 READ_ON = prometheus_client.Counter(
     "bg_elasticsearch_read_on",
@@ -109,7 +110,8 @@ log = logging.getLogger(__name__)
 
 INDEX_DOC_TYPE = "_doc"
 
-DEFAULT_INDEX = "biggraphite_metrics"
+DEFAULT_METRIC_INDEX = "biggraphite_metrics"
+DEFAULT_DIRECTORY_INDEX = "biggraphite_directories"
 DEFAULT_INDEX_SUFFIX = "_%Y-%m-%d"
 DEFAULT_HOSTS = ["127.0.0.1"]
 DEFAULT_PORT = 9200
@@ -128,6 +130,7 @@ OPTIONS = {
     "username": str,
     "password": str,
     "index": str,
+    "directory_index": str,
     "index_suffix": str,
     "hosts": _utils.list_from_str,
     "port": int,
@@ -136,6 +139,7 @@ OPTIONS = {
     "updated_on_ttl_sec": int,
     "read_on_ttl_sec": int,
     "read_on_sampling_rate": float,
+    "use_directory_index": bool
 }
 
 
@@ -145,8 +149,23 @@ def add_argparse_arguments(parser):
         "--elasticsearch_index",
         metavar="NAME",
         help="elasticsearch index.",
-        default=DEFAULT_INDEX,
+        default=DEFAULT_METRIC_INDEX,
     )
+    parser.add_argument(
+        "--elasticsearch_directory_index",
+        metavar="NAME",
+        help="elasticsearch directory index prefix. Needs --using-directory-index",
+        default=DEFAULT_DIRECTORY_INDEX,
+    )
+
+    parser.add_argument(
+        "--elasticsearch_use_directory_index",
+        metavar="NAME",
+        help="use secondary index for directories",
+        action="store_true",
+        default=False,
+    )
+
     parser.add_argument(
         "--elasticsearch_index_suffix",
         metavar="NAME",
@@ -330,8 +349,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         self,
         hosts=DEFAULT_HOSTS,
         port=DEFAULT_PORT,
-        index=DEFAULT_INDEX,
+        index=DEFAULT_METRIC_INDEX,
         index_suffix=DEFAULT_INDEX_SUFFIX,
+        directory_index=DEFAULT_DIRECTORY_INDEX,
         username=None,
         password=None,
         timeout=DEFAULT_TIMEOUT,
@@ -339,12 +359,15 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
         read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
         schema_path=DEFAULT_ES_SCHEMA_PATH,
+        use_directory_index=False
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
         self._hosts = list(hosts)
         self._port = port
         self._index_prefix = index
+        self._use_directory_index = use_directory_index
+        self._directory_index = directory_index
         self._index_suffix = index_suffix
         self._username = username or DEFAULT_USERNAME
         self._password = password or DEFAULT_PASSWORD
@@ -577,6 +600,42 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
                 search = search.filter(filter_type, **{"p%d" % i: value})
         return False, search
 
+    def _search_directory_from_components(self, glob, components, search=None):
+        """
+        assembles a query to search directory names 
+        Raises:
+          InvalidArgumentError: If the components include a globstar
+        """
+        glob_depth = _get_depth_from_components(components)
+        search = self._create_search_query() if search is None else search
+        if components.count(bg_glob.Globstar()):
+            raise InvalidArgumentError("Directory glob does not handle globstar")
+
+        if self._use_directory_index and self.__glob_parser.is_fully_defined(components):
+            search = search.filter("term", name=".".join([c[0] for c in components]))
+            
+        elif self._use_directory_index and self.__glob_parser.is_fully_defined(components[:-1]):
+            # fully defined parent, only usable with directory index
+            search = search.filter("term", parent=DIRECTORY_SEPARATOR.join([c[0] for c in components[:-1]]))
+
+        else:
+            _, search = self._search_metrics_from_components(glob, components, search)
+            if self._use_directory_index:
+                # When using a second index for directories we don't need range
+                # aggregation prevent having duplicates across indices
+                search = search.filter("term", depth= glob_depth)
+            else:
+                # Use (glob_depth + 1) to filter only directories and
+                # exclude metrics whose depth is glob_depth.
+                search = search.filter("range", depth={"gte": glob_depth + 1})
+
+        search = search.extra(from_=0, size=0)  # Do not return metrics nor directories
+        search.aggs.bucket(
+            "distinct_dirs", "terms", field="p%d" % glob_depth, size=MAX_QUERY_SIZE
+        )
+        return search
+
+
     @GLOB_METRICS_LATENCY.time()
     @tracing.trace
     def glob_metrics(self, glob, start_time=None, end_time=None):
@@ -631,6 +690,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         results = [h.name for h in self.glob_metrics(glob, start_time, end_time)]
         return iter(results)
 
+
     @GLOB_DIRECTORY_NAMES_LATENCY.time()
     @tracing.trace
     def glob_directory_names(self, glob, start_time=None, end_time=None):
@@ -644,26 +704,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             return []
 
         components = self.__glob_parser.parse(glob)
-        search = self._create_search_query(start_time, end_time)
-        # There are no "directory" documents, only "metric" documents. Hence appending the
-        # AnySequence after the provided glob: we search for metrics under that path.
-        has_globstar, search = self._search_metrics_from_components(
-            glob, components + [[bg_glob.AnySequence()]], search
-        )
-        if has_globstar:
-            # TODO (t.chataigner) Add a log or raise exception.
-            return []
+        search = self._create_directory_search_query(start_time, end_time)
 
-        glob_depth = _get_depth_from_components(components)
-        # Use (glob_depth + 1) to filter only directories and
-        # exclude metrics whose depth is glob_depth.
-        search = search.filter("range", depth={"gte": glob_depth + 1})
-        search = search.extra(from_=0, size=0)  # Do not return metrics.
-
-        search.aggs.bucket(
-            "distinct_dirs", "terms", field="p%d" % glob_depth, size=MAX_QUERY_SIZE
-        )
-
+        try: 
+            search = self._search_directory_from_components(glob, components, search)
+        except InvalidArgumentError:
+            return []  
         log.debug(json.dumps(search.to_dict(), default=str))
         response = search.execute()
 
@@ -673,8 +719,9 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if "distinct_dirs" not in response.aggregations:
             # This happend when there is no index to search for the query.
             return []
+
         buckets = response.aggregations.distinct_dirs.buckets
-        if glob_depth == 0:
+        if len(components) == 1:
             results = [b.key for b in buckets]
         else:
             glob_base = glob.rsplit(".", 1)[0]
@@ -958,6 +1005,12 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             ignore=[404, 409],
         )
 
+    def _create_directory_search_query(self, start_time=None, end_time=None, index=None):
+        if self._use_directory_index and not index:
+            index = "%s*" % self._directory_index
+            end_time = start_time = None # Not implemented in directory index 
+        return self._create_search_query(start_time, end_time, index)
+       
     def _create_search_query(self, start_time=None, end_time=None, index=None):
         if not index:
             index = "%s*" % self._index_prefix
