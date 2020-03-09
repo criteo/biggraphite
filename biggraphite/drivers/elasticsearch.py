@@ -38,61 +38,50 @@ from biggraphite.drivers import ttls
 from biggraphite.drivers.cassandra_common import DIRECTORY_SEPARATOR
 
 READ_ON = prometheus_client.Counter(
-    "bg_elasticsearch_read_on",
-    "Number of updates on the metric field read_on"
+    "bg_elasticsearch_read_on", "Number of updates on the metric field read_on"
 )
 UPDATED_ON = prometheus_client.Counter(
-    "bg_elasticsearch_updated_on",
-    "Number of updates on the metric field updated_on"
+    "bg_elasticsearch_updated_on", "Number of updates on the metric field updated_on"
 )
 
 CLEAN_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_clean_latency_seconds",
-    "clean latency in seconds"
+    "bg_elasticsearch_clean_latency_seconds", "clean latency in seconds"
 )
 CREATE_METRIC_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_create_metric_latency_seconds",
-    "create metric latency in seconds"
+    "bg_elasticsearch_create_metric_latency_seconds", "create metric latency in seconds"
 )
 DELETE_DIRECTORY_LATENCY = prometheus_client.Summary(
     "bg_elasticsearch_delete_directory_latency_seconds",
-    "delete directory latency in seconds"
+    "delete directory latency in seconds",
 )
 DELETE_METRIC_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_delete_metric_latency_seconds",
-    "delete metric latency in seconds"
+    "bg_elasticsearch_delete_metric_latency_seconds", "delete metric latency in seconds"
 )
 DROP_ALL_METRICS_LATENCY = prometheus_client.Summary(
     "bg_elasticsearch_drop_all_metrics_latency_seconds",
     "drop all metrics latency in seconds",
 )
 FLUSH_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_flush_latency_seconds",
-    "flush latency in seconds"
+    "bg_elasticsearch_flush_latency_seconds", "flush latency in seconds"
 )
 GET_INDEX_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_get_index_latency_seconds",
-    "get index latency in seconds"
+    "bg_elasticsearch_get_index_latency_seconds", "get index latency in seconds"
 )
 GLOB_DIRECTORY_NAMES_LATENCY = prometheus_client.Summary(
     "bg_elasticsearch_glob_directory_names_latency_seconds",
-    "glob directory names latency in seconds"
+    "glob directory names latency in seconds",
 )
 GLOB_METRICS_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_glob_metrics_latency_seconds",
-    "glob metrics latency in seconds"
+    "bg_elasticsearch_glob_metrics_latency_seconds", "glob metrics latency in seconds"
 )
 METRIC_STATS_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_metric_stats_latency_seconds",
-    "metric stats latency in seconds"
+    "bg_elasticsearch_metric_stats_latency_seconds", "metric stats latency in seconds"
 )
 READ_METRIC_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_read_metric_latency_seconds",
-    "read metric latency in seconds"
+    "bg_elasticsearch_read_metric_latency_seconds", "read metric latency in seconds"
 )
 UPDATE_METRIC_LATENCY = prometheus_client.Summary(
-    "bg_elasticsearch_update_metric_latency_seconds",
-    "update metric latency in seconds"
+    "bg_elasticsearch_update_metric_latency_seconds", "update metric latency in seconds"
 )
 
 log = logging.getLogger(__name__)
@@ -139,7 +128,7 @@ OPTIONS = {
     "updated_on_ttl_sec": int,
     "read_on_ttl_sec": int,
     "read_on_sampling_rate": float,
-    "use_directory_index": bool
+    "use_directory_index": bool,
 }
 
 
@@ -172,14 +161,10 @@ def add_argparse_arguments(parser):
         default=DEFAULT_INDEX_SUFFIX,
     )
     parser.add_argument(
-        "--elasticsearch_username",
-        help="elasticsearch username.",
-        default=''
+        "--elasticsearch_username", help="elasticsearch username.", default=""
     )
     parser.add_argument(
-        "--elasticsearch_password",
-        help="elasticsearch password.",
-        default=''
+        "--elasticsearch_password", help="elasticsearch password.", default=""
     )
     parser.add_argument(
         "--elasticsearch_hosts",
@@ -358,7 +343,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
         read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
         schema_path=DEFAULT_ES_SCHEMA_PATH,
-        use_directory_index=False
+        use_directory_index=False,
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
@@ -600,8 +585,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         return False, search
 
     def _search_directory_from_components(self, glob, components, search=None):
-        """
-        assembles a query to search directory names 
+        """Assembles a query to search directory names.
+
         Raises:
           InvalidArgumentError: If the components include a globstar
         """
@@ -611,23 +596,29 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if components.count(bg_glob.Globstar()):
             raise InvalidArgumentError("Directory glob does not handle globstar")
 
-        if self._use_directory_index and self.__glob_parser.is_fully_defined(components):
+        if self._use_directory_index and self.__glob_parser.is_fully_defined(
+            components
+        ):
             search = search.filter("term", name=".".join([c[0] for c in components]))
-            
-        elif self._use_directory_index and self.__glob_parser.is_fully_defined(components[:-1]):
+
+        elif self._use_directory_index and self.__glob_parser.is_fully_defined(
+            components[:-1]
+        ):
             # fully defined parent, only usable with directory index
-            search = search.filter("term", parent=DIRECTORY_SEPARATOR.join([c[0] for c in components[:-1]]))
+            search = search.filter(
+                "term", parent=DIRECTORY_SEPARATOR.join([c[0] for c in components[:-1]])
+            )
 
         else:
             if self._use_directory_index:
                 # When using a second index for directories we don't need range
                 # aggregation prevent having duplicates across indices
-                search = search.filter("term", depth = glob_depth)
+                search = search.filter("term", depth=glob_depth)
             else:
                 # Use (glob_depth + 1) to filter only directories and
                 # exclude metrics whose depth is glob_depth.
                 search = search.filter("range", depth={"gte": glob_depth + 1})
-                components  =  components  + [[bg_glob.AnySequence()]]
+                components = components + [[bg_glob.AnySequence()]]
             _, search = self._search_metrics_from_components(glob, components, search)
 
         search = search.extra(from_=0, size=0)  # Do not return metrics nor directories
@@ -635,7 +626,6 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             "distinct_dirs", "terms", field="p%d" % glob_depth, size=MAX_QUERY_SIZE
         )
         return search
-
 
     @GLOB_METRICS_LATENCY.time()
     @tracing.trace
@@ -665,8 +655,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         log.debug(json.dumps(search.to_dict(), default=str))
 
         documents = search.execute()
-        results = [self._document_to_metric(document)
-                   for document in self._deduplicate_documents(documents)]
+        results = [
+            self._document_to_metric(document)
+            for document in self._deduplicate_documents(documents)
+        ]
         results.sort(key=lambda metric: metric.name)
 
         return results
@@ -706,10 +698,10 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         components = self.__glob_parser.parse(glob)
         search = self._create_directory_search_query(start_time, end_time)
 
-        try: 
+        try:
             search = self._search_directory_from_components(glob, components, search)
         except InvalidArgumentError:
-            return []  
+            return []
         log.debug(json.dumps(search.to_dict(), default=str))
         response = search.execute()
 
@@ -1005,20 +997,18 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             ignore=[404, 409],
         )
 
-    def _create_directory_search_query(self, start_time=None, end_time=None, index=None):
+    def _create_directory_search_query(
+        self, start_time=None, end_time=None, index=None
+    ):
         if self._use_directory_index and not index:
             index = "%s*" % self._directory_index
-            end_time = start_time = None # Not implemented in directory index 
+            end_time = start_time = None  # Not implemented in directory index
         return self._create_search_query(start_time, end_time, index)
-       
+
     def _create_search_query(self, start_time=None, end_time=None, index=None):
         if not index:
             index = "%s*" % self._index_prefix
-        search = (
-            elasticsearch_dsl.Search()
-            .using(self.client)
-            .index(index)
-        )
+        search = elasticsearch_dsl.Search().using(self.client).index(index)
 
         if start_time is not None:
             # `updated_on` field has a delay before it is updated, so a metric can still be active
@@ -1048,6 +1038,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         if end_time is not None:
             search = search.filter("range", created_on={"lte": end_time.isoformat()})
         return search
+
 
 def build(*args, **kwargs):
     """Return a bg_accessor.Accessor using ElasticSearch."""
