@@ -605,6 +605,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         Raises:
           InvalidArgumentError: If the components include a globstar
         """
+        # TODO (r.bizos) add unittest with directory index
         glob_depth = _get_depth_from_components(components)
         search = self._create_search_query() if search is None else search
         if components.count(bg_glob.Globstar()):
@@ -618,15 +619,16 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             search = search.filter("term", parent=DIRECTORY_SEPARATOR.join([c[0] for c in components[:-1]]))
 
         else:
-            _, search = self._search_metrics_from_components(glob, components, search)
             if self._use_directory_index:
                 # When using a second index for directories we don't need range
                 # aggregation prevent having duplicates across indices
-                search = search.filter("term", depth= glob_depth)
+                search = search.filter("term", depth = glob_depth)
             else:
                 # Use (glob_depth + 1) to filter only directories and
                 # exclude metrics whose depth is glob_depth.
                 search = search.filter("range", depth={"gte": glob_depth + 1})
+                components  =  components  + [[bg_glob.AnySequence()]]
+            _, search = self._search_metrics_from_components(glob, components, search)
 
         search = search.extra(from_=0, size=0)  # Do not return metrics nor directories
         search.aggs.bucket(
