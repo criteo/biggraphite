@@ -128,7 +128,7 @@ OPTIONS = {
     "updated_on_ttl_sec": int,
     "read_on_ttl_sec": int,
     "read_on_sampling_rate": float,
-    "use_directory_index": bool,
+    "directory_index_enabled": bool,
 }
 
 
@@ -148,7 +148,7 @@ def add_argparse_arguments(parser):
     )
 
     parser.add_argument(
-        "--elasticsearch_use_directory_index",
+        "--elasticsearch_directory_index_enabled",
         help="use secondary index for directories",
         action="store_true",
         default=False,
@@ -343,14 +343,14 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         read_on_ttl_sec=ttls.DEFAULT_READ_ON_TTL_SEC,
         read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
         schema_path=DEFAULT_ES_SCHEMA_PATH,
-        use_directory_index=False,
+        directory_index_enabled=False,
     ):
         """Create a new ElasticSearchAccessor."""
         super(_ElasticSearchAccessor, self).__init__("ElasticSearch")
         self._hosts = list(hosts)
         self._port = port
         self._index_prefix = index
-        self._use_directory_index = use_directory_index
+        self._directory_index_enabled = directory_index_enabled
         self._directory_index = directory_index
         self._index_suffix = index_suffix
         self._username = username or DEFAULT_USERNAME
@@ -592,16 +592,17 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         """
         # TODO (r.bizos) add unittest with directory index
         glob_depth = _get_depth_from_components(components)
-        search = self._create_search_query() if search is None else search
+        if search is None:
+            search = self._create_search_query()
         if components.count(bg_glob.Globstar()):
             raise InvalidArgumentError("Directory glob does not handle globstar")
 
-        if self._use_directory_index and self.__glob_parser.is_fully_defined(
+        if self._directory_index_enabled and self.__glob_parser.is_fully_defined(
             components
         ):
             search = search.filter("term", name=".".join([c[0] for c in components]))
 
-        elif self._use_directory_index and self.__glob_parser.is_fully_defined(
+        elif self._directory_index_enabled and self.__glob_parser.is_fully_defined(
             components[:-1]
         ):
             # fully defined parent, only usable with directory index
@@ -610,7 +611,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
             )
 
         else:
-            if self._use_directory_index:
+            if self._directory_index_enabled:
                 # When using a second index for directories we don't need range
                 # aggregation prevent having duplicates across indices
                 search = search.filter("term", depth=glob_depth)
@@ -1000,7 +1001,8 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
     def _create_directory_search_query(
         self, start_time=None, end_time=None, index=None
     ):
-        if self._use_directory_index and not index:
+        if self._directory_index_enabled and not index:
+            # index is set to change from metric_index to directory_index
             index = "%s*" % self._directory_index
             end_time = start_time = None  # Not implemented in directory index
         return self._create_search_query(start_time, end_time, index)
