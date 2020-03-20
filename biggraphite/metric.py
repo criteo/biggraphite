@@ -325,6 +325,11 @@ class Aggregator(enum.Enum):
         try:
             return cls[name]
         except KeyError:
+            # handle regular graphite aggregations i.e:
+            # sum / min / max ...
+            for agg in cls:
+                if agg.value is name:
+                    return agg
             raise InvalidArgumentError("Unknown BG aggregator: %s" % name)
 
     @staticmethod

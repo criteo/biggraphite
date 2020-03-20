@@ -40,6 +40,7 @@ class TestAggregator(unittest.TestCase):
             ("minimum", 0),
             ("maximum", 3),
             ("total", 6),
+            ("sum", 6),
         )
         for name, value_expected in expectations:
             aggregator = bg_metric.Aggregator.from_config_name(name)
@@ -77,6 +78,7 @@ class TestAggregator(unittest.TestCase):
             ("minimum", (10, 2)),
             ("maximum", (20, 2)),
             ("total", (30, 2)),
+            ("sum", (30, 2)),
         )
         for name, value_expected in expectations:
             aggregator = bg_metric.Aggregator.from_config_name(name)
