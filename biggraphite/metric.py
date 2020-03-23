@@ -321,7 +321,7 @@ class Aggregator(enum.Enum):
 
     @classmethod
     def from_config_name(cls, name):
-        """Make an Aggregator instance from a BigGraphite name (total, minimum ...)"""
+        """Make an Aggregator instance from a BigGraphite name (total, minimum ...)."""
         if not name:
             return None
         try:
@@ -335,7 +335,7 @@ class Aggregator(enum.Enum):
         try:
             return cls.from_config_name(name)
         except InvalidArgumentError:
-            return cls.from_carbon_name(name) 
+            return cls.from_carbon_name(name)
 
     @staticmethod
     def __sum_and_count(values, counts):

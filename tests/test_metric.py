@@ -68,58 +68,62 @@ class TestMetricMetadata(unittest.TestCase):
 
     def test_metadata_object_should_be_the_same_when_created_with_same_parameters(self):
         """MetricMetadata.create() should always return the same MetricMetadata instance."""
-        metadata1 = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                    self.DEFAULT_RETENTION,
-                                                    self.DEFAULT_XFACTOR)
-        metadata2 = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                    self.DEFAULT_RETENTION,
-                                                    self.DEFAULT_XFACTOR)
+        metadata1 = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.DEFAULT_RETENTION, self.DEFAULT_XFACTOR
+        )
+        metadata2 = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.DEFAULT_RETENTION, self.DEFAULT_XFACTOR
+        )
         self.assertIs(metadata1, metadata2)
 
         # the returned instance should't depend on the order of the parameters
-        metadata3 = bg_metric.MetricMetadata.create(carbon_xfilesfactor=self.DEFAULT_XFACTOR,
-                                                    aggregator=self.DEFAULT_AGGREGATOR,
-                                                    retention=self.DEFAULT_RETENTION)
+        metadata3 = bg_metric.MetricMetadata.create(
+            carbon_xfilesfactor=self.DEFAULT_XFACTOR,
+            aggregator=self.DEFAULT_AGGREGATOR,
+            retention=self.DEFAULT_RETENTION,
+        )
         self.assertIs(metadata1, metadata3)
 
     def test_xfilesfactor_should_have_no_impact_on_uniqueness(self):
         """Check that carbon_xfilesfactor has no influence on uniqueness."""
-        metadata1 = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                    self.DEFAULT_RETENTION,
-                                                    self.DEFAULT_XFACTOR)
-        metadata2 = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                    self.DEFAULT_RETENTION,
-                                                    self.DEFAULT_XFACTOR - 0.1)
+        metadata1 = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.DEFAULT_RETENTION, self.DEFAULT_XFACTOR
+        )
+        metadata2 = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.DEFAULT_RETENTION, self.DEFAULT_XFACTOR - 0.1
+        )
 
         self.assertIsNot(metadata1, metadata2)
 
     def test_aggregator_should_have_no_impact_on_uniqueness(self):
         """Check that aggregator has no influence on uniqueness."""
-        metadata1 = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                    self.DEFAULT_RETENTION,
-                                                    self.DEFAULT_XFACTOR)
-        metadata2 = bg_metric.MetricMetadata.create(bg_metric.Aggregator.total,
-                                                    self.DEFAULT_RETENTION,
-                                                    self.DEFAULT_XFACTOR)
+        metadata1 = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.DEFAULT_RETENTION, self.DEFAULT_XFACTOR
+        )
+        metadata2 = bg_metric.MetricMetadata.create(
+            bg_metric.Aggregator.total, self.DEFAULT_RETENTION, self.DEFAULT_XFACTOR
+        )
 
         self.assertIsNot(metadata1, metadata2)
 
     def test_retention_should_have_no_impact_on_uniqueness(self):
         """Check that retention has no influence on uniqueness."""
-        metadata1 = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                    self.DEFAULT_RETENTION,
-                                                    self.DEFAULT_XFACTOR)
-        metadata2 = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                    self.TEST_RETENTION,
-                                                    self.DEFAULT_XFACTOR)
+        metadata1 = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.DEFAULT_RETENTION, self.DEFAULT_XFACTOR
+        )
+        metadata2 = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.TEST_RETENTION, self.DEFAULT_XFACTOR
+        )
 
         self.assertIsNot(metadata1, metadata2)
 
-    def test_metadata_object_should_be_deleted_when_there_is_no_more_references_on_it(self):
+    def test_metadata_object_should_be_deleted_when_there_is_no_more_references_on_it(
+        self,
+    ):
         """Check that a metadata are properly cleaned-up when no one holds a reference on it."""
-        metadata = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                   self.TEST_RETENTION,
-                                                   self.DEFAULT_XFACTOR)
+        metadata = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.TEST_RETENTION, self.DEFAULT_XFACTOR
+        )
 
         metadata_weak = weakref.ref(metadata)
         self.assertIsNotNone(metadata_weak())
@@ -132,16 +136,18 @@ class TestMetricMetadata(unittest.TestCase):
     def test_total_metadata_object_count_should_be_reported_by_prometheus_client(self):
         """Test the gauge reporting the number of metadata hold in the internal dictionnary."""
         def get_metadata_instances_count():
-            return prometheus_client.REGISTRY.get_sample_value('bg_metadata_instances_count')
+            return prometheus_client.REGISTRY.get_sample_value(
+                "bg_metadata_instances_count"
+            )
 
         # make sure previously allocated metadata are cleaned up before starting the test
         gc.collect()
 
         # allocate a new metadata object
         metadata_count_before = get_metadata_instances_count()
-        metadata = bg_metric.MetricMetadata.create(self.DEFAULT_AGGREGATOR,
-                                                   self.TEST_RETENTION,
-                                                   self.DEFAULT_XFACTOR)
+        metadata = bg_metric.MetricMetadata.create(
+            self.DEFAULT_AGGREGATOR, self.TEST_RETENTION, self.DEFAULT_XFACTOR
+        )
         self.assertEqual(get_metadata_instances_count() - metadata_count_before, 1)
 
         # delete the reference on the metadata object
@@ -151,8 +157,22 @@ class TestMetricMetadata(unittest.TestCase):
 
     def test_from_dict_string(self):
         parameters = (
-            ({"aggregator": "sum", "retention": "86400*1s:10080*60s","carbon_xfilesfactor": 0.5}, bg_metric.Aggregator.total),
-            ({"aggregator": "total", "retention": "86400*1s:10080*60s","carbon_xfilesfactor": 0.5}, bg_metric.Aggregator.total)
+            (
+                {
+                    "aggregator": "sum",
+                    "retention": "86400*1s:10080*60s",
+                    "carbon_xfilesfactor": 0.5,
+                },
+                bg_metric.Aggregator.total,
+            ),
+            (
+                {
+                    "aggregator": "total",
+                    "retention": "86400*1s:10080*60s",
+                    "carbon_xfilesfactor": 0.5,
+                },
+                bg_metric.Aggregator.total,
+            ),
         )
         for parameter in parameters:
             metadata = bg_metric.MetricMetadata.from_string_dict(parameter[0])
