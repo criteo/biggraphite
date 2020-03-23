@@ -148,3 +148,12 @@ class TestMetricMetadata(unittest.TestCase):
         del metadata
         gc.collect()
         self.assertEqual(get_metadata_instances_count(), metadata_count_before)
+
+    def test_from_dict_string(self):
+        parameters = (
+            ({"aggregator": "sum", "retention": "86400*1s:10080*60s","carbon_xfilesfactor": 0.5}, bg_metric.Aggregator.total),
+            ({"aggregator": "total", "retention": "86400*1s:10080*60s","carbon_xfilesfactor": 0.5}, bg_metric.Aggregator.total)
+        )
+        for parameter in parameters:
+            metadata = bg_metric.MetricMetadata.from_string_dict(parameter[0])
+            self.assertEqual(metadata.aggregator, parameter[1])
