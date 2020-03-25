@@ -167,6 +167,14 @@ class TestMetricMetadata(unittest.TestCase):
             ),
             (
                 {
+                    "aggregator": u"sum",
+                    "retention": "86400*1s:10080*60s",
+                    "carbon_xfilesfactor": 0.5,
+                },
+                bg_metric.Aggregator.total,
+            ),
+            (
+                {
                     "aggregator": "total",
                     "retention": "86400*1s:10080*60s",
                     "carbon_xfilesfactor": 0.5,
