@@ -305,13 +305,15 @@ class Aggregator(enum.Enum):
 
     @classmethod
     def from_carbon_name(cls, name):
-        """Make an instance from a carbon-like name."""
+        """Make an Aggregator instance from a carbon-like name (sum, min, max ...)."""
         if not name:
             return None
-        try:
-            return cls(name)
-        except ValueError:
-            raise InvalidArgumentError("Unknown carbon aggregation: %s" % name)
+
+        for agg in cls:
+            if agg.value is name:
+                return agg
+
+        raise InvalidArgumentError("Unknown carbon aggregation: %s" % name)
 
     def carbon_name(self):
         """Returns the carbon name of this aggregator."""
@@ -319,13 +321,21 @@ class Aggregator(enum.Enum):
 
     @classmethod
     def from_config_name(cls, name):
-        """Make an instance from a BigGraphite name."""
+        """Make an Aggregator instance from a BigGraphite name (total, minimum ...)."""
         if not name:
             return None
         try:
             return cls[name]
         except KeyError:
             raise InvalidArgumentError("Unknown BG aggregator: %s" % name)
+
+    @classmethod
+    def from_name(cls, name):
+        """Make an Aggregator instance from either BigGraphite name or graphite name."""
+        try:
+            return cls.from_config_name(name)
+        except InvalidArgumentError:
+            return cls.from_carbon_name(name)
 
     @staticmethod
     def __sum_and_count(values, counts):
@@ -710,7 +720,7 @@ class MetricMetadata(object):
             return cls.create()
 
         return cls.create(
-            aggregator=Aggregator.from_config_name(d.get("aggregator")),
+            aggregator=Aggregator.from_name(d.get("aggregator")),
             retention=Retention.from_string(d.get("retention")),
             carbon_xfilesfactor=float(d.get("carbon_xfilesfactor")),
         )
