@@ -310,7 +310,7 @@ class Aggregator(enum.Enum):
             return None
 
         for agg in cls:
-            if agg.value is name:
+            if agg.value == name:
                 return agg
 
         raise InvalidArgumentError("Unknown carbon aggregation: %s" % name)
