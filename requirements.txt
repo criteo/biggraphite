@@ -12,7 +12,7 @@ gourde==0.2.1
 sortedcontainers
 
 # Cassandra driver
-cassandra-driver==3.17.1
+cassandra-driver==3.24.0
 scales
 
 # ElasticSearch
@@ -42,3 +42,7 @@ enum34; python_version < '3.4'
 
 # Optional, for bgutil shell:
 # ipython
+# future
+# flask_restplus
+# setuptools=45 ; only for older zope.interface versions.
+# Werkzeug-0.15.5 ; required by python 3.8

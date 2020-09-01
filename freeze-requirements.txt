@@ -3,7 +3,7 @@ Automat==0.7.0
 blinker==1.4
 cachetools==3.1.1
 cairocffi==0.9.0
-cassandra-driver==3.17.1
+cassandra-driver==3.24.0
 certifi==2019.6.16
 cffi==1.12.3
 ciso8601==2.1.1
@@ -17,6 +17,7 @@ Flask==1.0.3
 Flask-Twisted==0.1.2
 future==0.17.1
 futures==3.2.0; python_version < '3'
+geomet==0.2.1.post1
 gourde==0.2.1
 humanize==0.5.1
 hyperlink==19.0.0
@@ -44,5 +45,5 @@ sortedcontainers==2.1.0
 tabulate==0.8.3
 Twisted==19.2.1
 urllib3==1.25.3
-Werkzeug==0.15.4
-zope.interface==4.6.0
+Werkzeug==0.15.5
+zope.interface==5.1.0
