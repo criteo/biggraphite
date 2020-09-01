@@ -223,6 +223,22 @@ UPDATE_METRIC = prometheus_client.Summary(
     "update_metric latency in seconds"
 )
 
+CLEAN_START_TS_METRIC = prometheus_client.Gauge(
+    "bg_util_clean_ts_start",
+    "clean last start timestamp"
+)
+CLEAN_STOP_TS_METRIC = prometheus_client.Gauge(
+    "bg_util_clean_ts_stop",
+    "clean last end timestamp"
+)
+CLEAN_CURRENT_STEP = prometheus_client.Gauge(
+    "bg_util_clean_current_step",
+    "clean current step (0: none, 1: expired directories, 2: expired metrics)"
+)
+CLEAN_CURRENT_OFFSET = prometheus_client.Gauge(
+    "bg_util_clean_current_offset",
+    "clean current offset"
+)
 
 log = logging.getLogger(__name__)
 
@@ -2386,6 +2402,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         log.info("Starting cleanup of empty dir")
         token = start_token
         while token < stop_token:
+            CLEAN_CURRENT_OFFSET.set(token)
             result = self._execute_metadata(
                 CLEAN_EMPTY_DIR,
                 _CassandraExecutionRequest(
@@ -2434,6 +2451,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
 
+        CLEAN_START_TS_METRIC.set(time.time())
+        CLEAN_STOP_TS_METRIC.set(0)
+        CLEAN_CURRENT_STEP.set(1)
+
         first_exception = None
         try:
             self._clean_empty_dir(
@@ -2443,6 +2464,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
             first_exception = e
             log.exception("Failed to clean directories.")
 
+        CLEAN_CURRENT_STEP.set(2)
+
         try:
             self._clean_expired_metrics(
                 max_age, start_key, end_key, shard, nshards, callback_on_progress
@@ -2450,6 +2473,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
         except Exception as e:
             first_exception = e
             log.exception("Failed to clean metrics.")
+
+        CLEAN_CURRENT_STEP.set(0)
+        CLEAN_CURRENT_OFFSET.set(0)
+        CLEAN_START_TS_METRIC.set(0)
+        CLEAN_STOP_TS_METRIC.set(time.time())
 
         if first_exception is not None:
             raise_with_traceback(first_exception)
@@ -2530,6 +2558,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         ignored_errors = 0
         token = start_token
         while token < stop_token:
+            CLEAN_CURRENT_OFFSET.set(token)
             try:
                 rows = self._execute_metadata(
                     CLEAN_EXPIRED_METRICS,

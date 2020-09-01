@@ -159,9 +159,18 @@ class BgUtilAsyncResource(rp.Resource):
         """Run asynchronously a BgUtil command."""
         # TODO: monitor background tasks and feed /workers with it
         try:
+            skip = False
             cmd, opts = parse_command(command_name, api.payload)
-            label = self._make_label(command_name)
-            context.task_runner.submit(label, cmd, opts)
+
+            # Only queue command if not existing & runnable yet
+            for task in context.task_runner.tasks:
+                if not task.is_finished() and task.label.startswith("clean"):
+                    skip = True
+                    break
+
+            if skip == False:
+                label = self._make_label(command_name)
+                context.task_runner.submit(label, cmd, opts)
         except UnknownCommandException as e:
             rp.abort(message=str(e))
         except Exception as e:
@@ -169,6 +178,9 @@ class BgUtilAsyncResource(rp.Resource):
             rp.abort(message=str(e))
 
         context.accessor.flush()
+
+        if skip:
+            return "Already submitted or running", 201
 
         return "Running in background.", 201
 
