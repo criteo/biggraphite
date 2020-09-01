@@ -43,7 +43,7 @@ scandir==1.10.0
 six==1.12.0
 sortedcontainers==2.1.0
 tabulate==0.8.3
-Twisted==19.2.1
+Twisted==20.3.0
 urllib3==1.25.3
 Werkzeug==0.15.5
 zope.interface==5.1.0
