@@ -7,10 +7,6 @@ matrix:
       env: TOXENV=py27-coverage
     - python: '3.6'
       env: TOXENV=py36-coverage
-    - python: 'pypy'
-      env: TOXENV=pypy-coverage
-    - python: 'pypy'
-      env: TOXENV=pylama
     - language: java
       jdk: openjdk8
       env: JAVA=true
