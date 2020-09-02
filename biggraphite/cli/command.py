@@ -103,3 +103,11 @@ def add_sharding_arguments(parser):
     parser.add_argument("--end-key", help="End key.")
     parser.add_argument("--shard", help="Shard number.", type=int, default=0)
     parser.add_argument("--nshards", help="Number of shards.", type=int, default=1)
+
+def add_clean_arguments(parser):
+    """Add cleaning arguments to a parser.
+
+    clear() will use this arguments
+    """
+    parser.add_argument("--disable-clean-directories", help="Disable cleaning directories", action="store_true", default=False)
+    parser.add_argument("--disable-clean-metrics", help="Disable cleaning outdated metrics", action="store_true", default=False) 
