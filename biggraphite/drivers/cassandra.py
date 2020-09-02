@@ -2443,6 +2443,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
         shard=1,
         nshards=0,
         callback_on_progress=None,
+        disable_clean_directories=False,
+        disable_clean_metrics=False,
     ):
         """See bg_accessor.Accessor.
 
@@ -2456,23 +2458,32 @@ class _CassandraAccessor(bg_accessor.Accessor):
         CLEAN_CURRENT_STEP.set(1)
 
         first_exception = None
-        try:
-            self._clean_empty_dir(
-                start_key, end_key, shard, nshards, callback_on_progress
-            )
-        except Exception as e:
-            first_exception = e
-            log.exception("Failed to clean directories.")
+
+        # First, clean metrics...
+        if not disable_clean_metrics:
+            try:
+                self._clean_expired_metrics(
+                    max_age, start_key, end_key, shard, nshards, callback_on_progress
+                )
+            except Exception as e:
+                first_exception = e
+                log.exception("Failed to clean metrics.")
+        else:
+            log.info("Cleaning metrics was disabled")
 
         CLEAN_CURRENT_STEP.set(2)
 
-        try:
-            self._clean_expired_metrics(
-                max_age, start_key, end_key, shard, nshards, callback_on_progress
-            )
-        except Exception as e:
-            first_exception = e
-            log.exception("Failed to clean metrics.")
+        # Then, clean directories...
+        if not disable_clean_directories:
+            try:
+                self._clean_empty_dir(
+                    start_key, end_key, shard, nshards, callback_on_progress
+                )
+            except Exception as e:
+                first_exception = e
+                log.exception("Failed to clean directories.")
+        else:
+            log.info("Cleaning directories was disabled")
 
         CLEAN_CURRENT_STEP.set(0)
         CLEAN_CURRENT_OFFSET.set(0)

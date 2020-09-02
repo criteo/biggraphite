@@ -63,6 +63,7 @@ class CommandClean(command.BaseCommand):
             action="store",
         )
         command.add_sharding_arguments(parser)
+        command.add_clean_arguments(parser)
 
     def run(self, accessor, opts, on_progress=None):
         """Run some cleanups.
@@ -106,6 +107,8 @@ class CommandClean(command.BaseCommand):
                 start_key=opts.start_key,
                 end_key=opts.end_key,
                 callback_on_progress=on_progress,
+                disable_clean_directories=opts.disable_clean_directories,
+                disable_clean_metrics=opts.disable_clean_metrics,
             )
 
         if opts.clean_corrupted:
