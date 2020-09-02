@@ -110,4 +110,4 @@ def add_clean_arguments(parser):
     clear() will use this arguments
     """
     parser.add_argument("--disable-clean-directories", help="Disable cleaning directories", action="store_true", default=False)
-    parser.add_argument("--disable-clean-metrics", help="Disable cleaning outdated metrics", action="store_true", default=False) 
+    parser.add_argument("--disable-clean-metrics", help="Disable cleaning outdated metrics", action="store_true", default=False)
