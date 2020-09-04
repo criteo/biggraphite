@@ -247,6 +247,7 @@ class MemoryCache(MetadataCache):
         self.__size = settings.get("size", 1 * 1000 * 1000)
         self.__ttl = int(settings.get("ttl", 24 * 60 * 60))
         self._max_size.set(self.__size)
+        self.__cache = None
 
     def open(self):
         """Allocate ressources used by the cache."""

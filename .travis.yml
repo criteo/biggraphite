@@ -1,12 +1,16 @@
 language: python
 ### Trusty uses java8 default jdk11 in xenial seems to interfere with cassandra booting
-dist: trusty
+dist: xenial
 matrix:
   include:
     - python: '2.7'
       env: TOXENV=py27-coverage
     - python: '3.6'
       env: TOXENV=py36-coverage
+    - python: 'pypy'
+      env: TOXENV=pypy-coverage
+    - python: 'pypy'
+      env: TOXENV=pylama
     - language: java
       jdk: openjdk8
       env: JAVA=true
@@ -39,4 +43,7 @@ after_success:
 sudo: required
 
 before_install:
+   - wget https://raw.githubusercontent.com/michaelklishin/jdk_switcher/7e512921ba5a6e93ce304683f099e3c0525330b1/jdk_switcher.sh
+   - source ./jdk_switcher.sh
+   - jdk_switcher use openjdk8
    - ./tools/install-deps.sh

@@ -168,7 +168,7 @@ class BgUtilAsyncResource(rp.Resource):
                     skip = True
                     break
 
-            if skip == False:
+            if not skip:
                 label = self._make_label(command_name)
                 context.task_runner.submit(label, cmd, opts)
         except UnknownCommandException as e:
