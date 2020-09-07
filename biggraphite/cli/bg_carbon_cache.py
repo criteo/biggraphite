@@ -35,6 +35,9 @@ def main(_executable=sys.argv[0], _sys_path=sys.path):
     # Importing the plugin registers it.
     from biggraphite.plugins import carbon as unused_carbon  # noqa
 
+    if 'twisted.internet.reactor' in sys.modules:
+        del sys.modules['twisted.internet.reactor']
+
     try:
         # The carbon code tries to guess GRAPHITE_ROOT from the filename
         # given to run_twistd_plugin() to set GRAPHITE_ROOT. This is then
