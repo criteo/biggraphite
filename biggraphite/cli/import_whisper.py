@@ -62,7 +62,7 @@ def metric_name_from_wsp(root_dir, prefix, wsp_path):
       The metric name.
     """
     relpath = os.path.relpath(wsp_path, root_dir)
-    assert ".." not in relpath, "%s not a child of %" % (root_dir, wsp_path)
+    assert ".." not in relpath, "%s not a child of %s" % (root_dir, wsp_path)
     relpath_noext = os.path.splitext(relpath)[0]
     return prefix + relpath_noext.replace(os.path.sep, ".")
 

@@ -582,12 +582,12 @@ class Retention(object):
         return self.stages[1:]
 
     @classmethod
-    def from_carbon(cls, l):
+    def from_carbon(cls, elem):
         """Make new instance from list of (precision, points).
 
         Note that precision is first, unlike in Stage.__init__
         """
-        stages = [Stage(points=points, precision=precision) for precision, points in l]
+        stages = [Stage(points=points, precision=precision) for precision, points in elem]
         return cls(stages)
 
     def find_stage_for_ts(self, searched, now):
