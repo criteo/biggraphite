@@ -48,7 +48,7 @@
 
         <!-- Dependency versions -->
         <cassandra.version>3.11.0</cassandra.version>
-        <junit.version>4.12</junit.version>
+        <junit.version>4.13.1</junit.version>
     </properties>
 
     <dependencyManagement>
