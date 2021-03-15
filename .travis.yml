@@ -4,13 +4,17 @@ dist: xenial
 matrix:
   include:
     - python: '2.7'
-      env: TOXENV=py27-coverage
+      env:
+      - TOXENV=py27-coverage
     - python: '3.6'
-      env: TOXENV=py36-coverage
+      env:
+      - TOXENV=py36-coverage
     - python: 'pypy'
-      env: TOXENV=pypy-coverage
+      env:
+      - TOXENV=pypy-coverage
     - python: 'pypy'
-      env: TOXENV=pylama
+      env:
+      - TOXENV=pylama
     - language: java
       jdk: openjdk8
       env: JAVA=true
@@ -29,6 +33,7 @@ install:
   ### Java: We download now some dependencies to limit the number of messages later
   - if $JAVA; then mvn dependency:resolve-plugins dependency:resolve -B -V ; fi
   ### Python build dependencies
+  - pip install -r freeze-requirements.txt
   - if [ -n "$TOXENV" ]; then pip install tox coveralls; fi
 script:
   ### Java
