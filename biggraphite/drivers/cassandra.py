@@ -1794,12 +1794,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _bind_metric(self, row):
         uid = row[0]
         config = row[1]
-        updated_on = datetime.datetime.fromtimestamp(row[2] / 1000)
+        updated_on_raw = row[2]
         metric_name = row[3]
 
         # Return None if any of the important column is missing.
-        if not uid or not config:
+        if not uid or not config or not updated_on_raw:
             return None
+
+        updated_on = datetime.datetime.fromtimestamp(updated_on_raw / 1000)
 
         parent_dir = metric_name.rpartition(".")[0]
         if parent_dir and not self.has_directory(parent_dir):
