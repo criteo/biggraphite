@@ -2196,7 +2196,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
                 callback(metric, done + 1, total)
                 if callback_on_progress:
-                    callback_on_progress(done + 1, total)
+                    callback_on_progress(done + 1, total, token)
 
             # Then, read new data.
             try:
@@ -2342,7 +2342,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     log.warning(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token, stop_token - start_token)
+                callback_on_progress(token - start_token, stop_token - start_token, token)
 
     def _clean_empty_dir(
         self,
@@ -2433,7 +2433,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     log.warning(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token, stop_token - start_token)
+                callback_on_progress(token - start_token, stop_token - start_token, token)
 
     def clean(
         self,
@@ -2605,7 +2605,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if callback_on_progress:
                 done = token - start_token
                 total = stop_token - start_token
-                callback_on_progress(done, total)
+                callback_on_progress(done, total, token)
 
     def metadata_enabled(self):
         """See bg_accessor.Accessor."""
