@@ -1794,12 +1794,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
     def _bind_metric(self, row):
         uid = row[0]
         config = row[1]
-        updated_on = datetime.datetime.fromtimestamp(row[2] / 1000)
+        updated_on_raw = row[2]
         metric_name = row[3]
 
         # Return None if any of the important column is missing.
-        if not uid or not config:
+        if not uid or not config or not updated_on_raw:
             return None
+
+        updated_on = datetime.datetime.fromtimestamp(updated_on_raw / 1000)
 
         parent_dir = metric_name.rpartition(".")[0]
         if parent_dir and not self.has_directory(parent_dir):
@@ -2196,7 +2198,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
                 callback(metric, done + 1, total)
                 if callback_on_progress:
-                    callback_on_progress(done + 1, total)
+                    callback_on_progress(done + 1, total, token)
 
             # Then, read new data.
             try:
@@ -2205,9 +2207,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 # Empty results means that we've reached the end.
                 if len(rows.current_rows) == 0:
                     break
-            except BATCH_IGNORED_EXCEPTIONS:
-                # Ignore timeouts and process as much as we can.
-                log.exception("Skipping query (token=%s)." % token)
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
                 token += DEFAULT_MAX_BATCH_UTIL
@@ -2342,7 +2343,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     log.warning(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token, stop_token - start_token)
+                callback_on_progress(token - start_token, stop_token - start_token, token)
 
     def _clean_empty_dir(
         self,
@@ -2433,7 +2434,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     log.warning(str(ret.result_or_exc))
 
             if callback_on_progress:
-                callback_on_progress(token - start_token, stop_token - start_token)
+                callback_on_progress(token - start_token, stop_token - start_token, token)
 
     def clean(
         self,
@@ -2577,12 +2578,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     timeout=DEFAULT_TIMEOUT_QUERY_UTIL
                 )
 
+                # Reset the error count.
+                ignored_errors = 0
+
                 # Empty results means that we've reached the end.
                 if len(rows.current_rows) == 0:
                     break
-            except BATCH_IGNORED_EXCEPTIONS:
-                # Ignore timeouts and process as much as we can.
-                log.exception("Skipping query (token=%s)." % token)
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
                 token += DEFAULT_MAX_BATCH_UTIL
@@ -2605,7 +2608,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if callback_on_progress:
                 done = token - start_token
                 total = stop_token - start_token
-                callback_on_progress(done, total)
+                callback_on_progress(done, total, token)
 
     def metadata_enabled(self):
         """See bg_accessor.Accessor."""

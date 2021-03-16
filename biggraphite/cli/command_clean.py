@@ -25,6 +25,8 @@ import progressbar
 from biggraphite import metadata_cache
 from biggraphite.cli import command
 
+from prometheus_client import write_to_textfile, REGISTRY
+
 _DEV_NULL = open(os.devnull, "w")
 
 
@@ -37,6 +39,7 @@ class CommandClean(command.BaseCommand):
     def __init__(self):
         """Constructor."""
         self.pbar = None
+        self.metrics_file_path = ""
 
     def add_arguments(self, parser):
         """Add custom arguments."""
@@ -62,6 +65,13 @@ class CommandClean(command.BaseCommand):
             default=3 * 24 * 60 * 60,
             action="store",
         )
+        parser.add_argument(
+            "--metrics-file-path",
+            help="Dump metrics in file",
+            type=str,
+            default="",
+            action="store"
+        )
         command.add_sharding_arguments(parser)
         command.add_clean_arguments(parser)
 
@@ -74,15 +84,49 @@ class CommandClean(command.BaseCommand):
         if opts.quiet:
             out_fd = _DEV_NULL
 
+        self.metrics_file_path = opts.metrics_file_path
+
         if self.pbar is None:
-            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=False)
+            start_key = -1 * 2**63
+            end_key = 2**63 - 1
+
+            if opts.start_key is not None:
+                start_key = int(opts.start_key)
+            if opts.end_key is not None:
+                end_key = int(opts.end_key)
+
+            widgets = [
+                progressbar.Variable('token', format='(current: {formatted_value})'),
+                ' ',
+                progressbar.Percentage(),
+                ' ',
+                progressbar.SimpleProgress(
+                    format='(%s)' % progressbar.SimpleProgress.DEFAULT_FORMAT
+                ),
+                ' ',
+                progressbar.Bar(),
+                ' ',
+                progressbar.Timer(),
+                ' ',
+                progressbar.AdaptiveETA(),
+            ]
+
+            # max_value = end_key - start_key
+            self.pbar = progressbar.ProgressBar(
+                widgets=widgets,
+                fd=out_fd,
+                redirect_stderr=False,
+                min_value=0,
+                max_value=end_key - start_key)
+
         self.pbar.start()
 
         if on_progress is None:
+            def _on_progress(total, done, token):
+                self.pbar.update(total, token=token)
 
-            def _on_progress(done, total):
-                self.pbar.max_value = max(total, done)
-                self.pbar.update(done)
+                if self.metrics_file_path != "":
+                    write_to_textfile(self.metrics_file_path, REGISTRY)
 
             on_progress = _on_progress
 

@@ -134,6 +134,10 @@ class MetadataCache(object):
             self._misses.inc()
         return hit
 
+    def cache_drop(self, metric_name):
+        """Drop metric from cache."""
+        self._cache_drop(metric_name)
+
     def cache_set(self, metric_name, metric):
         """Insert a metric in the cache."""
         return self._cache_set(metric_name, metric)
@@ -289,6 +293,11 @@ class MemoryCache(MetadataCache):
         """Put metric in the cache."""
         with self._lock:
             self.__cache[metric_name] = metric
+
+    def _cache_drop(self, metric_name):
+        """Drop metric entry from the cache."""
+        with self._lock:
+            del self.__cache[metric_name]
 
     def clean(self):
         """Automatically cleaned by cachetools."""
