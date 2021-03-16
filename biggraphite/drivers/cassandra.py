@@ -2207,9 +2207,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 # Empty results means that we've reached the end.
                 if len(rows.current_rows) == 0:
                     break
-            except BATCH_IGNORED_EXCEPTIONS:
-                # Ignore timeouts and process as much as we can.
-                log.exception("Skipping query (token=%s)." % token)
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
                 token += DEFAULT_MAX_BATCH_UTIL
@@ -2579,12 +2578,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     timeout=DEFAULT_TIMEOUT_QUERY_UTIL
                 )
 
+                # Reset the error count.
+                ignored_errors = 0
+
                 # Empty results means that we've reached the end.
                 if len(rows.current_rows) == 0:
                     break
-            except BATCH_IGNORED_EXCEPTIONS:
-                # Ignore timeouts and process as much as we can.
-                log.exception("Skipping query (token=%s)." % token)
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
                 token += DEFAULT_MAX_BATCH_UTIL
