@@ -2421,22 +2421,45 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     dir_name
                 )
 
+        # Reset the error count.
+        ignored_errors = 0
+
         log.info("Starting cleanup of empty dir")
         token = start_token
         while token < stop_token:
             CLEAN_CURRENT_OFFSET.set(token)
-            result = self._execute_metadata(
-                CLEAN_EMPTY_DIR,
-                _CassandraExecutionRequest(
-                    CLEAN,
-                    dir_query,
-                    int(token)
-                ),
-                timeout=DEFAULT_TIMEOUT_QUERY_UTIL
-            )
+            try:
+                result = self._execute_metadata(
+                    CLEAN_EMPTY_DIR,
+                    _CassandraExecutionRequest(
+                        CLEAN,
+                        dir_query,
+                        int(token)
+                    ),
+                    timeout=DEFAULT_TIMEOUT_QUERY_UTIL
+                )
 
-            if len(result.current_rows) == 0:
-                break
+                # Reset the error count.
+                ignored_errors = 0
+
+                # End was reached
+                if len(result.current_rows) == 0:
+                    break
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                ignored_errors += 1
+
+                # After a few retries on the same query, lets move on.
+                if ignored_errors % 3 == 0:
+                    token += num_token_ignore_on_error
+                    CLEAN_SKIPPED_OFFSET.inc(num_token_ignore_on_error)
+
+                # If we failed too much, let's just stop the process.
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+                continue
 
             # Update token range for the next iteration
             token = result[-1][1]
