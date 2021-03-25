@@ -196,3 +196,7 @@ class CommandClean(command.BaseCommand):
             )
 
         self.pbar.finish()
+
+        # Final metric dump
+        if self.metrics_file_path != "":
+            write_to_textfile(self.metrics_file_path, REGISTRY)

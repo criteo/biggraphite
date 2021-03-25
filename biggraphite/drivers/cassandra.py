@@ -231,6 +231,12 @@ CLEAN_STOP_TS_METRIC = prometheus_client.Gauge(
     "bg_util_clean_ts_stop",
     "clean last end timestamp"
 )
+CLEAN_STEP_TS = prometheus_client.Gauge(
+    "bg_util_clean_step_duration",
+    "Duration of any step of the cleaning",
+    ['step']
+)
+
 CLEAN_CURRENT_STEP = prometheus_client.Gauge(
     "bg_util_clean_current_step",
     "clean current step (0: none, 1: expired directories, 2: expired metrics)"
@@ -238,6 +244,15 @@ CLEAN_CURRENT_STEP = prometheus_client.Gauge(
 CLEAN_CURRENT_OFFSET = prometheus_client.Gauge(
     "bg_util_clean_current_offset",
     "clean current offset"
+)
+CLEAN_SKIPPED_OFFSET = prometheus_client.Counter(
+    "bg_util_clean_skipped_offset",
+    "skipped offset while cleaning"
+)
+
+ERROR_BIND_METRIC = prometheus_client.Counter(
+    "bg_error_bind_metric",
+    "Number of incomplete or invalid record read from backend"
 )
 
 log = logging.getLogger(__name__)
@@ -1799,6 +1814,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         # Return None if any of the important column is missing.
         if not uid or not config or not updated_on_raw:
+            ERROR_BIND_METRIC.inc()
+            log.warning(
+                "Failed to bind metric; Missing column data: name:%s uid:%s config:%s updated_on:%s"
+                % (metric_name, uid, config, updated_on_raw)
+            )
             return None
 
         updated_on = datetime.datetime.fromtimestamp(updated_on_raw / 1000)
@@ -2458,12 +2478,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         CLEAN_START_TS_METRIC.set(time.time())
         CLEAN_STOP_TS_METRIC.set(0)
-        CLEAN_CURRENT_STEP.set(1)
+        CLEAN_CURRENT_STEP.set(0)
 
         first_exception = None
 
         # First, clean metrics...
         if not disable_clean_metrics:
+            CLEAN_CURRENT_STEP.set(1)
+            ts_start = time.time()
             try:
                 self._clean_expired_metrics(
                     max_age,
@@ -2477,13 +2499,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
             except Exception as e:
                 first_exception = e
                 log.exception("Failed to clean metrics.")
+            CLEAN_CURRENT_STEP.set(2)
+            CLEAN_STEP_TS.labels('expired_metrics').set(time.time() - ts_start)
         else:
             log.info("Cleaning metrics was disabled")
 
-        CLEAN_CURRENT_STEP.set(2)
-
         # Then, clean directories...
         if not disable_clean_directories:
+            CLEAN_CURRENT_STEP.set(3)
+            ts_start = time.time()
             try:
                 self._clean_empty_dir(
                     start_key,
@@ -2496,12 +2520,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
             except Exception as e:
                 first_exception = e
                 log.exception("Failed to clean directories.")
+            CLEAN_CURRENT_STEP.set(4)
+            CLEAN_STEP_TS.labels('empty_directories').set(time.time() - ts_start)
         else:
             log.info("Cleaning directories was disabled")
 
-        CLEAN_CURRENT_STEP.set(0)
-        CLEAN_CURRENT_OFFSET.set(0)
-        CLEAN_START_TS_METRIC.set(0)
         CLEAN_STOP_TS_METRIC.set(time.time())
 
         if first_exception is not None:
