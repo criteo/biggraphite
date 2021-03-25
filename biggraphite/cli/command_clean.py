@@ -72,6 +72,14 @@ class CommandClean(command.BaseCommand):
             default="",
             action="store"
         )
+        parser.add_argument(
+            "--num-token-ignore-on-error",
+            help="Specify the number to token to pass to continue cleaning"
+                 "(default value is 0.005%%)",
+            type=int,
+            default=10**15,  # 2**64 is ~ 10**19, so that's 0.01%
+            action="store"
+        )
         command.add_sharding_arguments(parser)
         command.add_clean_arguments(parser)
 
@@ -153,6 +161,7 @@ class CommandClean(command.BaseCommand):
                 callback_on_progress=on_progress,
                 disable_clean_directories=opts.disable_clean_directories,
                 disable_clean_metrics=opts.disable_clean_metrics,
+                num_token_ignore_on_error=opts.num_token_ignore_on_error,
             )
 
         if opts.clean_corrupted:

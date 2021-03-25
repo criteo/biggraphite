@@ -2352,6 +2352,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         shard=0,
         nshards=1,
         callback_on_progress=None,
+        num_token_ignore_on_error=DEFAULT_MAX_BATCH_UTIL,
     ):
         """Remove directory that does not contains any metrics."""
         start_token, stop_token = self._get_search_range(
@@ -2446,6 +2447,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         callback_on_progress=None,
         disable_clean_directories=False,
         disable_clean_metrics=False,
+        num_token_ignore_on_error=DEFAULT_MAX_BATCH_UTIL,
     ):
         """See bg_accessor.Accessor.
 
@@ -2464,7 +2466,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not disable_clean_metrics:
             try:
                 self._clean_expired_metrics(
-                    max_age, start_key, end_key, shard, nshards, callback_on_progress
+                    max_age,
+                    start_key,
+                    end_key,
+                    shard,
+                    nshards,
+                    callback_on_progress,
+                    num_token_ignore_on_error,
                 )
             except Exception as e:
                 first_exception = e
@@ -2478,7 +2486,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if not disable_clean_directories:
             try:
                 self._clean_empty_dir(
-                    start_key, end_key, shard, nshards, callback_on_progress
+                    start_key,
+                    end_key,
+                    shard,
+                    nshards,
+                    callback_on_progress,
+                    num_token_ignore_on_error,
                 )
             except Exception as e:
                 first_exception = e
@@ -2522,6 +2535,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         shard=1,
         nshards=0,
         callback_on_progress=None,
+        num_token_ignore_on_error=DEFAULT_MAX_BATCH_UTIL,
     ):
         """Delete metrics that has an expired ttl."""
         if not max_age:
@@ -2588,8 +2602,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 log.exception("Got exception: %s at token %s" % (e, token))
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
-                token += DEFAULT_MAX_BATCH_UTIL
                 ignored_errors += 1
+
+                # After a few retries on the same query, lets move on.
+                if ignored_errors % 3 == 0:
+                    token += num_token_ignore_on_error
+                    CLEAN_SKIPPED_OFFSET.inc(num_token_ignore_on_error)
+
+                # If we failed too much, let's just stop the process.
                 if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
                     break
                 continue

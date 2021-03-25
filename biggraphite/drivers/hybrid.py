@@ -166,6 +166,7 @@ class HybridAccessor(bg_accessor.Accessor):
         callback_on_progress=None,
         disable_clean_directories=False,
         disable_clean_metrics=False,
+        num_token_ignore_on_error=None,
     ):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).clean(
