@@ -197,3 +197,47 @@ django-admin migrate
 django-admin migrate --run-syncdb
 run-graphite-devel-server.py ${BG_VENV}
 ```
+
+
+#### Enabling Prometheus metrics
+
+Add the following in the carbon configuration file:
+
+```text
+SCRAPE_PORT = 9999
+```
+
+Create the `${BG_VENV}/lib/python2.7/site-packages/graphite/urls_prometheus_wrapper.py` as following:
+
+```python
+from django.conf.urls import include, url
+
+
+urlpatterns = []
+
+urlpatterns.append(url('^prometheus/', include('django_prometheus.urls')))
+urlpatterns.append(url('', include('graphite.urls')))
+
+```
+
+For graphite, install the missing dependancy & add the following in settings.py:
+
+```sh
+pip install django-prometheus==1.0.15 prometheus-client==0.5.0
+```
+
+```
+from graphite.app_settings import *
+from prometheus_client import values
+from biggraphite.plugins import graphite
+
+MIDDLEWARE = (
+        ('django_prometheus.middleware.PrometheusBeforeMiddleware',) +
+       MIDDLEWARE +
+        ('django_prometheus.middleware.PrometheusAfterMiddleware',)
+    )
+
+INSTALLED_APPS = INSTALLED_APPS + ('django_prometheus',)
+```
+
+And metrics should be reachable at `http://0.0.0.0:8080/prometheus/metrics`
