@@ -2491,7 +2491,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         callback_on_progress=None,
         disable_clean_directories=False,
         disable_clean_metrics=False,
-        num_token_ignore_on_error=DEFAULT_MAX_BATCH_UTIL,
     ):
         """See bg_accessor.Accessor.
 
@@ -2505,6 +2504,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
         CLEAN_CURRENT_STEP.set(0)
 
         first_exception = None
+
+        # 0.006% of database
+        num_token_ignore_on_error = 2 ** 50
+
+        env_num_token = environ.get('CLEAN_IGNORE_BATCH_SIZE_ON_ERROR')
+        if env_num_token is not None and env_num_token.isdigit():
+            exponent = int(env_num_token)
+            if exponent < 16 or exponent > 62:
+                log.exception("Invalid CLEAN_IGNORE_BATCH_SIZE_ON_ERROR given: ignored")
+            else:
+                num_token_ignore_on_error = 2 ** exponent
 
         # First, clean metrics...
         if not disable_clean_metrics:
