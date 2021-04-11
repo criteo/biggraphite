@@ -2564,23 +2564,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if first_exception is not None:
             raise_with_traceback(first_exception)
 
-    def _prepare_background_request(self, query_str):
+    def _prepare_background_request(
+        self,
+        query_str,
+        timeout=DEFAULT_TIMEOUT_QUERY_UTIL,
+        consistency=None,
+    ):
         select = self.__session_metadata.prepare(query_str)
-        select.consistency_level = self._meta_background_consistency
+        if consistency is not None:
+            select.consistency_level = consistency
+        else:
+            select.consistency_level = self._meta_background_consistency
+
         # Always retry background requests a few times, we don't really care
         # about latency.
         select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
-        select.request_timeout = DEFAULT_TIMEOUT_QUERY_UTIL
-
-        return select
-
-    def _prepare_background_request_on_index(self, query_str):
-        select = self.__session_metadata.prepare(query_str)
-        select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
-        # We query an index, it's not a good idea to ask for more than ONE
-        # because it queries multiple nodes anyway.
-        select.consistency_level = cassandra.ConsistencyLevel.ONE
-        select.request_timeout = None
+        select.request_timeout = timeout
 
         return select
 
@@ -2627,23 +2626,27 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # statements
         for batch_size in batch_sizes:
             if method in ['traditional', 'adaptative']:
+                # Enforcing consistency one on this one, as it will eventually fail if not.
                 select = _CassandraExecutionRequest(
                     CLEAN_EXPIRED_METRICS_SELECT,
-                    self._prepare_background_request_on_index(
+                    self._prepare_background_request(
                         'SELECT name, token(name), toUnixTimestamp(updated_on) '
                         'FROM "%s".metrics_metadata '
                         'WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d;'
-                        % (self.keyspace_metadata, cutoff, batch_size)
+                        % (self.keyspace_metadata, cutoff, batch_size),
+                        consistency=cassandra.ConsistencyLevel.ONE,
+                        timeout=None,
                     )
                 )
             else:
                 select = _CassandraExecutionRequest(
                     CLEAN_EXPIRED_METRICS_SELECT,
-                    self._prepare_background_request_on_index(
+                    self._prepare_background_request(
                         'SELECT name, token(name), toUnixTimestamp(updated_on) '
                         'FROM "%s".metrics_metadata '
                         'WHERE token(name) > ? LIMIT %d;'
-                        % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL)
+                        % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL),
+                        timeout=None,
                     )
                 )
 
