@@ -2612,16 +2612,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
         method = 'traditional'
 
         # use env var to select method.
-        env_value = environ.get('CLEAN_OUTDATED_METHOD')
-        if env_value is not None and env_value in available_methods:
-            method = env_value
+        env_method = environ.get('CLEAN_OUTDATED_METHOD')
+        if env_method is not None and env_method in available_methods:
+            method = env_method
 
-        batches = [1000, 500, 250, 125, 75, 35]
+        env_batch_size = environ.get('CLEAN_BATCH_SIZE')
+        if env_batch_size is not None and env_batch_size.isdigit():
+            batch_sizes = [int(env_batch_size)]
+        else:
+            batch_sizes = [1000, 500, 250, 125, 75, 35]
         select_queries = []
         current_select_index = 0
 
         # statements
-        for batch_size in batches:
+        for batch_size in batch_sizes:
             if method in ['traditional', 'adaptative']:
                 select = _CassandraExecutionRequest(
                     CLEAN_EXPIRED_METRICS_SELECT,
