@@ -26,6 +26,7 @@ import random
 import time
 from distutils import version
 from os import path as os_path
+from os import environ
 
 import cassandra
 import prometheus_client
@@ -2701,7 +2702,6 @@ class _CassandraAccessor(bg_accessor.Accessor):
         callback_on_progress=None,
         disable_clean_directories=False,
         disable_clean_metrics=False,
-        num_token_ignore_on_error=DEFAULT_MAX_BATCH_UTIL,
     ):
         """See bg_accessor.Accessor.
 
@@ -2715,6 +2715,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
         CLEAN_CURRENT_STEP.set(0)
 
         first_exception = None
+
+        # 0.006% of database
+        num_token_ignore_on_error = 2 ** 50
+
+        env_num_token = environ.get('CLEAN_IGNORE_BATCH_SIZE_ON_ERROR')
+        if env_num_token is not None and env_num_token.isdigit():
+            exponent = int(env_num_token)
+            if exponent < 16 or exponent > 62:
+                log.exception("Invalid CLEAN_IGNORE_BATCH_SIZE_ON_ERROR given: ignored")
+            else:
+                num_token_ignore_on_error = 2 ** exponent
 
         # First, clean metrics...
         if not disable_clean_metrics:
@@ -2764,23 +2775,22 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if first_exception is not None:
             raise_with_traceback(first_exception)
 
-    def _prepare_background_request(self, query_str):
+    def _prepare_background_request(
+        self,
+        query_str,
+        timeout=DEFAULT_TIMEOUT_QUERY_UTIL,
+        consistency=None,
+    ):
         select = self.__session_metadata.prepare(query_str)
-        select.consistency_level = self._meta_background_consistency
+        if consistency is not None:
+            select.consistency_level = consistency
+        else:
+            select.consistency_level = self._meta_background_consistency
+
         # Always retry background requests a few times, we don't really care
         # about latency.
         select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
-        select.request_timeout = DEFAULT_TIMEOUT_QUERY_UTIL
-
-        return select
-
-    def _prepare_background_request_on_index(self, query_str):
-        select = self.__session_metadata.prepare(query_str)
-        select.retry_policy = bg_cassandra_policies.AlwaysRetryPolicy()
-        # We query an index, it's not a good idea to ask for more than ONE
-        # because it queries multiple nodes anyway.
-        select.consistency_level = cassandra.ConsistencyLevel.ONE
-        select.request_timeout = None
+        select.request_timeout = timeout
 
         return select
 
@@ -2807,15 +2817,51 @@ class _CassandraAccessor(bg_accessor.Accessor):
         cutoff = (int(time.time()) - max_age) * 1000
         log.info("Cleaning with cutoff time %d", cutoff)
 
+        # select method: traditional, unfiltered, adaptative
+        available_methods = ['traditional', 'unfiltered', 'adaptative']
+        method = 'traditional'
+
+        # use env var to select method.
+        env_method = environ.get('CLEAN_OUTDATED_METHOD')
+        if env_method is not None and env_method in available_methods:
+            method = env_method
+
+        env_batch_size = environ.get('CLEAN_BATCH_SIZE')
+        if env_batch_size is not None and env_batch_size.isdigit():
+            batch_sizes = [int(env_batch_size)]
+        else:
+            batch_sizes = [1000, 500, 250, 125, 75, 35]
+        select_queries = []
+        current_select_index = 0
+
         # statements
-        select = _CassandraExecutionRequest(
-            CLEAN_EXPIRED_METRICS_SELECT,
-            self._prepare_background_request_on_index(
-                'SELECT name, token(name) FROM "%s".metrics_metadata'
-                " WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d ;"
-                % (self.keyspace_metadata, cutoff, DEFAULT_MAX_BATCH_UTIL)
-            )
-        )
+        for batch_size in batch_sizes:
+            if method in ['traditional', 'adaptative']:
+                # Enforcing consistency one on this one, as it will eventually fail if not.
+                select = _CassandraExecutionRequest(
+                    CLEAN_EXPIRED_METRICS_SELECT,
+                    self._prepare_background_request(
+                        'SELECT name, token(name), toUnixTimestamp(updated_on) '
+                        'FROM "%s".metrics_metadata '
+                        'WHERE updated_on <= maxTimeuuid(%d) and token(name) > ? LIMIT %d;'
+                        % (self.keyspace_metadata, cutoff, batch_size),
+                        consistency=cassandra.ConsistencyLevel.ONE,
+                        timeout=None,
+                    )
+                )
+            else:
+                select = _CassandraExecutionRequest(
+                    CLEAN_EXPIRED_METRICS_SELECT,
+                    self._prepare_background_request(
+                        'SELECT name, token(name), toUnixTimestamp(updated_on) '
+                        'FROM "%s".metrics_metadata '
+                        'WHERE token(name) > ? LIMIT %d;'
+                        % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL),
+                        timeout=None,
+                    )
+                )
+
+            select_queries.append(select)
 
         delete = _CassandraExecutionRequest(
             CLEAN_EXPIRED_METRICS_DELETE,
@@ -2831,21 +2877,27 @@ class _CassandraAccessor(bg_accessor.Accessor):
             )
         )
 
-        def run(rows):
-            for name, _ in rows:
+        def run(method, cutoff, rows):
+            for name, _, updated_on in rows:
+                if method == 'unfiltered':
+                    if updated_on > cutoff:
+                        log.info("Skipping delete for non-obsolete metric %s", name)
+                        continue
+
                 log.info("Scheduling delete for obsolete metric %s", name)
                 PM_EXPIRED_METRICS.inc()
                 yield (delete.with_params(name))
                 yield (delete_metadata.with_params(name))
 
         ignored_errors = 0
+        successful_queries = 0
         token = start_token
         while token < stop_token:
             CLEAN_CURRENT_OFFSET.set(token)
             try:
                 rows = self._execute_metadata(
                     CLEAN_EXPIRED_METRICS,
-                    select.with_params(int(token)),
+                    select_queries[current_select_index].with_params(int(token)),
                     timeout=DEFAULT_TIMEOUT_QUERY_UTIL
                 )
 
@@ -2860,20 +2912,32 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 # Put sleep a little bit to not stress Cassandra too mutch.
                 time.sleep(1)
                 ignored_errors += 1
+                successful_queries = 0
 
                 # After a few retries on the same query, lets move on.
                 if ignored_errors % 3 == 0:
-                    token += num_token_ignore_on_error
-                    CLEAN_SKIPPED_OFFSET.inc(num_token_ignore_on_error)
+                    if method == 'adaptative' and current_select_index != len(select_queries) - 1:
+                        # Too much errors with this batch size: limiting number of results.
+                        current_select_index += 1
+                    else:
+                        token += num_token_ignore_on_error
+                        CLEAN_SKIPPED_OFFSET.inc(num_token_ignore_on_error)
 
                 # If we failed too much, let's just stop the process.
                 if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
                     break
                 continue
 
+            successful_queries += 1
+
+            if successful_queries > 10 and current_select_index != 0:
+                # Multiple queries worked successfully & we are not at the maximum batch size
+                current_select_index -= 1
+                successful_queries = 0
+
             token = rows[-1][1]
             rets = self._execute_concurrent_metadata(
-                run(rows),
+                run(method, cutoff, rows),
                 concurrency=self.max_concurrent_connections,
                 raise_on_first_error=False,
             )
