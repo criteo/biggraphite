@@ -2444,6 +2444,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     continue
 
                 dir_name = response.result_or_exc.response_future.query.values[0]
+                dir_name = str(dir_name.decode('ascii'))
                 dir_name = str(dir_name).rpartition(".")[0]
 
                 callback(dir_name, list(response.result_or_exc))
@@ -2624,6 +2625,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 if results:
                     continue
                 dir_name = response.result_or_exc.response_future.query.values[0]
+                dir_name = str(dir_name.decode('ascii'))
                 dir_name = str(dir_name).rpartition(".")[0]
                 log.info("Scheduling delete for empty dir '%s'" % dir_name)
                 PM_DELETED_DIRECTORIES.inc()
