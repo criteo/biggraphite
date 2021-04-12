@@ -40,7 +40,7 @@ packages = setuptools.find_packages()
 
 setuptools.setup(
     name="biggraphite",
-    version="0.14.23",
+    version="0.14.24",
     maintainer="Criteo Graphite Team",
     maintainer_email="github@criteo.com",
     description="Simple Scalable Time Series Database.",
