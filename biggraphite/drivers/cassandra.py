@@ -2239,6 +2239,217 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             token = rows[-1][1]
 
+    def sync_map(
+        self,
+        callback,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        errback=None,
+        callback_on_progress=None,
+    ):
+        """See bg_accessor.Accessor.
+
+        Slight change for start_key and end_key, they are interpreted as
+        tokens directly.
+
+        This functions is only used for experimental statistical analysis.
+        """
+        start_token, stop_token = self._get_search_range(
+            start_key, end_key, shard, nshards
+        )
+
+        select = self._prepare_background_request(
+            "SELECT name, token(name), id, config, "
+            "dateOf(created_on), dateOf(updated_on), dateOf(read_on) "
+            'FROM "%s".metrics_metadata '
+            "WHERE token(name) > ? LIMIT %d ;"
+            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL)
+        )
+        select.request_timeout = None
+        select.fetch_size = DEFAULT_MAX_BATCH_UTIL
+
+        ignored_errors = 0
+        token = start_token
+        rows = []
+        done = 0
+        total = stop_token - start_token
+
+        while token < stop_token:
+            # Schedule read first.
+            future = self._execute_async_metadata(
+                _CassandraExecutionRequest(
+                    MAP_ITERATION,
+                    select,
+                    int(token)
+                ),
+                timeout=DEFAULT_TIMEOUT_QUERY_UTIL
+            )
+
+            # Then, read new data.
+            try:
+                rows = future.result()
+
+                # Empty results means that we've reached the end.
+                if len(rows.current_rows) == 0:
+                    break
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                token += DEFAULT_MAX_BATCH_UTIL
+                ignored_errors += 1
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+                continue
+
+            returned_rows = len(rows.current_rows)
+
+            # Then execute callback for the *previous* result while C* is
+            # doing its work.
+            for i, result in enumerate(rows):
+                metric_name = result[0]
+                token = result[1]
+                uid = result[2]
+                config = result[3]
+                done = token - start_token
+                created_on, updated_on, read_on = result[4:]
+
+                # Stop if token > stop_token
+                if token >= stop_token:
+                    break
+
+                if not uid and not config:
+                    log.debug("Skipping partial metric: %s" % metric_name)
+                    if errback:
+                        errback(metric_name)
+                    continue
+
+                try:
+                    metadata = bg_metric.MetricMetadata.from_string_dict(config)
+                    metric = bg_metric.Metric(
+                        metric_name, uid, metadata, created_on, updated_on, read_on
+                    )
+                # Avoid failing if either name, id, or metadata is missing.
+                except Exception as e:
+                    log.debug(
+                        "Skipping corrupted metric: %s raising %s" % (result, str(e))
+                    )
+                    if errback:
+                        errback(metric_name)
+                    continue
+
+                callback(metric, done + 1, total)
+                if callback_on_progress:
+                    callback_on_progress(done + 1, total, token)
+
+            if returned_rows == 0:
+                break
+
+    def map_empty_directories_sync(
+        self,
+        callback,
+        start_key=None,
+        end_key=None,
+        shard=1,
+        nshards=0,
+        errback=None,
+        callback_on_progress=None,
+        num_token_ignore_on_error=DEFAULT_MAX_BATCH_UTIL,
+    ):
+        """Scan for directory that does not contains any metrics.
+
+        This functions is only used for experimental statistical analysis.
+        It should be merged with the cleaning method to remove deduplicated code.
+        """
+        start_token, stop_token = self._get_search_range(
+            start_key, end_key, shard, nshards
+        )
+
+        dir_query = self._prepare_background_request(
+            "SELECT name, token(name)"
+            ' FROM "%s".directories'
+            " WHERE token(name) > ? LIMIT %d;"
+            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL)
+        )
+        has_metric_query = self._prepare_background_request(
+            'SELECT name FROM "%s".metrics'
+            " WHERE parent LIKE ? LIMIT 1;" % (self.keyspace_metadata,)
+        )
+
+        def directories_to_check(result):
+            for row in result:
+                name, next_token = row
+                if name:
+                    yield _CassandraExecutionRequest(
+                        CLEAN_DIRECTORIES_TO_CHECK,
+                        has_metric_query,
+                        name + DIRECTORY_SEPARATOR + "%"
+                    )
+
+        # Reset the error count.
+        ignored_errors = 0
+
+        log.info("Starting cleanup of empty dir")
+        token = start_token
+        while token < stop_token:
+            CLEAN_CURRENT_OFFSET.set(token)
+            try:
+                result = self._execute_metadata(
+                    CLEAN_EMPTY_DIR,
+                    _CassandraExecutionRequest(
+                        CLEAN,
+                        dir_query,
+                        int(token)
+                    ),
+                    timeout=DEFAULT_TIMEOUT_QUERY_UTIL
+                )
+
+                # Reset the error count.
+                ignored_errors = 0
+
+                # End was reached
+                if len(result.current_rows) == 0:
+                    break
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                ignored_errors += 1
+
+                # After a few retries on the same query, lets move on.
+                if ignored_errors % 3 == 0:
+                    token += num_token_ignore_on_error
+                    CLEAN_SKIPPED_OFFSET.inc(num_token_ignore_on_error)
+
+                # If we failed too much, let's just stop the process.
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+                continue
+
+            # Update token range for the next iteration
+            token = result[-1][1]
+
+            parent_dirs = self._execute_concurrent_metadata(
+                directories_to_check(result),
+                concurrency=self.max_concurrent_connections,
+                raise_on_first_error=False,
+            )
+
+            for response in parent_dirs:
+                if not response.success:
+                    print("failed to query for metrics in directory")
+                    continue
+
+                dir_name = response.result_or_exc.response_future.query.values[0]
+                dir_name = str(dir_name).rpartition(".")[0]
+
+                callback(dir_name, list(response.result_or_exc))
+
+            if callback_on_progress:
+                callback_on_progress(token - start_token, stop_token - start_token, token)
+
     def repair(
         self,
         start_key=None,
