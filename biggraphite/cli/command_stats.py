@@ -167,11 +167,12 @@ class CommandStats(command.BaseCommand):
 
     def statistical_analysis_stats(self, metric, done, total):
         """Aggregate stats for given metrics."""
-        if metric.updated_on < self.cutoff:
-            self._n_count_expired += 1
-
+        if metric.updated_on is not None:
             if self.oldest > metric.updated_on:
                 self.oldest = metric.updated_on
+
+            if metric.updated_on < self.cutoff:
+                self._n_count_expired += 1
 
         self._n_count += 1
 

@@ -2880,6 +2880,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
         def run(method, cutoff, rows):
             for name, _, updated_on in rows:
                 if method == 'unfiltered':
+                    if updated_on is None:
+                        log.info("Skipping metric %s as no updated_on date was present.", name)
+                        continue
+
                     if updated_on > cutoff:
                         log.info("Skipping delete for non-obsolete metric %s", name)
                         continue
