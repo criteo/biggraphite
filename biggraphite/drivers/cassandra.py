@@ -2379,10 +2379,10 @@ class _CassandraAccessor(bg_accessor.Accessor):
             " WHERE parent LIKE ? LIMIT 1;" % (self.keyspace_metadata,)
         )
 
-        def directories_to_check(result):
+        def directories_to_check(result, stop_token):
             for row in result:
                 name, next_token = row
-                if name:
+                if name and next_token < stop_token:
                     yield _CassandraExecutionRequest(
                         CLEAN_DIRECTORIES_TO_CHECK,
                         has_metric_query,
@@ -2433,7 +2433,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             token = result[-1][1]
 
             parent_dirs = self._execute_concurrent_metadata(
-                directories_to_check(result),
+                directories_to_check(result, stop_token),
                 concurrency=self.max_concurrent_connections,
                 raise_on_first_error=False,
             )
