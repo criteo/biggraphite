@@ -115,6 +115,7 @@ class CommandStats(command.BaseCommand):
         self.delta = datetime.timedelta(days=expiration_days)
         self.cutoff = datetime.datetime.utcnow() - self.delta
         self.oldest = datetime.datetime.utcnow()
+        self.current_oldest = datetime.datetime.utcnow()
 
         self._n_count = 0
         self._n_range_size = 0
@@ -170,6 +171,9 @@ class CommandStats(command.BaseCommand):
         if metric.updated_on is not None:
             if self.oldest > metric.updated_on:
                 self.oldest = metric.updated_on
+
+            if self.current_oldest > metric.updated_on:
+                self.current_oldest = metric.updated_on
 
             if metric.updated_on < self.cutoff:
                 self._n_count_expired += 1
@@ -260,8 +264,29 @@ class CommandStats(command.BaseCommand):
         if env_ranges is not None and env_ranges.isdigit():
             scanned_ranges = int(env_ranges)
 
+        stats_debug = False
+        stats_debug_env = environ.get('STATS_DEBUG')
+        if stats_debug_env is not None:
+            stats_debug = True
+
+        current_offset = 0
+
         for i in range(0, scanned_ranges):
-            start_offset = random.getrandbits(64) - 2**63
+            start_offset = random.randrange(
+                current_offset,
+                current_offset + (2**64)/scanned_ranges - range_size
+            ) - 2**63
+
+            current_offset += (2**64)/scanned_ranges
+
+            o_metric = self._n_count
+            o_metric_expired = self._n_count_expired
+
+            o_directory = self._n_dir_count
+            o_directory_empty = self._n_dir_empty
+
+            self.current_oldest = datetime.datetime.utcnow()
+
             self._n_range_size += range_size
 
             # Scan metrics
@@ -277,6 +302,18 @@ class CommandStats(command.BaseCommand):
                 start_key=start_offset,
                 end_key=start_offset + range_size,
             )
+
+            if stats_debug:
+                print("range:%d from:%d to:%d metrics:%d "
+                      "expired:%d dirs:%d empty:%d oldest:%s" % (
+                        i,
+                        start_offset,
+                        start_offset + range_size,
+                        self._n_count - o_metric,
+                        self._n_count_expired - o_metric_expired,
+                        self._n_dir_count - o_directory,
+                        self._n_dir_empty - o_directory_empty,
+                        self.current_oldest))
 
         print("Range: %d (%f%%)" % (self._n_range_size, self._n_range_size / 2**64))
         print("Metrics extrated: %d; Outdated: %d (%.2f%%)" % (
