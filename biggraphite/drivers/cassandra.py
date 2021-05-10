@@ -54,6 +54,8 @@ from biggraphite.drivers import cassandra_stratio_lucene as lucene
 from biggraphite.drivers.ttls import DAY, HOUR, MINUTE
 from biggraphite.drivers.ttls import DEFAULT_UPDATED_ON_TTL_SEC
 
+from ssl import SSLContext, PROTOCOL_TLS, CERT_REQUIRED, CERT_NONE
+
 DELETE_METRIC_METADATA = prometheus_client.Counter(
     "bg_cassandra_delete_metric_metadata",
     "Number of metrics metadata that have been deleted",
@@ -282,6 +284,7 @@ DEFAULT_MAX_BATCH_UTIL = 1000
 DEFAULT_TIMEOUT_QUERY_UTIL = 120
 DEFAULT_READ_ON_SAMPLING_RATE = 0.1
 DEFAULT_USE_LUCENE = False
+DEFAULT_SSL_VERIFY_MODE = 'required'
 
 # Exceptions that are not considered fatal during batch jobs.
 # The affected range will simply be ignored.
@@ -304,6 +307,14 @@ OPTIONS = {
     "username": str,
     "password": str,
     "keyspace": str,
+    "ssl_enable": bool,
+    "ssl_verify_locations": str,
+    "ssl_verify_mode": str,
+    "ssl_check_hostname": str,
+    "ssl_enable_metadata": bool,
+    "ssl_verify_locations_metadata": str,
+    "ssl_verify_mode_metadata": str,
+    "ssl_check_hostname_metadata": str,
     "contact_points": _utils.list_from_str,
     "contact_points_metadata": _utils.list_from_str,
     "port": int,
@@ -348,6 +359,54 @@ def add_argparse_arguments(parser):
         "--cassandra_password",
         help="Cassandra password.",
         default=None
+    )
+    parser.add_argument(
+        "--cassandra_ssl_enable",
+        help="Cassandra enable SSL",
+        default=False,
+        action='store_true'
+    )
+    parser.add_argument(
+        "--cassandra_ssl_verify_locations",
+        help="Cassandra SSL verify locations (certificate path)",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
+        "--cassandra_ssl_verify_mode",
+        help="Cassandra SSL verify mode (none, required)",
+        type=str,
+        default=DEFAULT_SSL_VERIFY_MODE,
+    )
+    parser.add_argument(
+        "--cassandra_ssl_check_hostname",
+        help="Cassandra SSL hostname to check",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
+        "--cassandra_ssl_enable_metadata",
+        help="Cassandra enable SSL (metadata)",
+        default=False,
+        action='store_true',
+    )
+    parser.add_argument(
+        "--cassandra_ssl_verify_locations_metadata",
+        help="Cassandra SSL verify locations (certificate path)",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
+        "--cassandra_ssl_verify_mode_metadata",
+        help="Cassandra SSL verify mode (none, required)",
+        type=str,
+        default=DEFAULT_SSL_VERIFY_MODE,
+    )
+    parser.add_argument(
+        "--cassandra_ssl_check_hostname_metadata",
+        help="Cassandra SSL hostname to check",
+        type=str,
+        default=None,
     )
     parser.add_argument(
         "--cassandra_contact_points",
@@ -1063,6 +1122,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         keyspace=DEFAULT_KEYSPACE,
         username=None,
         password=None,
+        ssl_enable=False,
+        ssl_verify_locations=None,
+        ssl_verify_mode=DEFAULT_SSL_VERIFY_MODE,
+        ssl_check_hostname=None,
+        ssl_enable_metadata=False,
+        ssl_verify_locations_metadata=None,
+        ssl_verify_mode_metadata=DEFAULT_SSL_VERIFY_MODE,
+        ssl_check_hostname_metadata=None,
         contact_points=DEFAULT_CONTACT_POINTS,
         port=DEFAULT_PORT,
         contact_points_metadata=None,
@@ -1098,6 +1165,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
           contact_points_metadata: list of strings, the hostnames or IP to use
             to discover Cassandra.
           port_metadata: The port to connect to, as an int.
+          ssl_enable: bool, Enable SSL to cassandra.
+          ssl_verify_locations: string, Path to ssl certificate.
+          ssl_verify_mode: string, Verify mode (none or required).
+          ssl_check_hostname: string, SSL target hostname to check.
+          ssl_enable_metadata: bool, Enable SSL to cassandra (metadata).
+          ssl_verify_locations_metadata: string, Path to ssl certificate (metadata).
+          ssl_verify_mode_metadata: string, Verify mode (none or required) (metadata).
+          ssl_check_hostname_metadata: string, SSL target hostname to check (metadata).
           timeout: Default timeout for operations in seconds.
           compression: One of False, True, "lz4", "snappy"
           max_metrics_per_pattern: int, Maximum number of metrics per pattern.
@@ -1127,6 +1202,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.auth_provider = auth.PlainTextAuthProvider(username, password)
         else:
             self.auth_provider = None
+
+        self.__ssl_enable = ssl_enable
+        self.__ssl_enable_metadata = ssl_enable_metadata
+
+        self.__ssl_verify_locations = ssl_verify_locations
+        self.__ssl_verify_mode = ssl_verify_mode
+        self.__ssl_check_hostname = ssl_check_hostname
+
+        self.__ssl_verify_locations_metadata = ssl_verify_locations_metadata
+        self.__ssl_verify_mode_metadata = ssl_verify_mode_metadata
+        self.__ssl_check_hostname_metadata = ssl_check_hostname_metadata
+
         self.contact_points_data = contact_points
         self.contact_points_metadata = contact_points_metadata
         self.port = port
@@ -1312,13 +1399,54 @@ class _CassandraAccessor(bg_accessor.Accessor):
             )
         )
 
+    def _get_ssl_context(self):
+        if self.__ssl_enable is False:
+            return None, None
+
+        ssl_context = SSLContext(PROTOCOL_TLS)
+
+        if self.__ssl_verify_mode == 'required':
+            ssl_context.verify_mode = CERT_REQUIRED
+        else:
+            ssl_context.verify_mode = CERT_NONE
+
+        ssl_options = None
+
+        if self.__ssl_check_hostname is not None:
+            ssl_context.check_hostname = True
+            ssl_options = {'server_hostname': self.__ssl_check_hostname}
+
+        return ssl_context, ssl_options
+
+    def _get_ssl_context_metadata(self):
+        if self.__ssl_enable_metadata is False:
+            return None, None
+
+        ssl_context = SSLContext(PROTOCOL_TLS)
+
+        if self.__ssl_verify_mode_metadata == 'required':
+            ssl_context.verify_mode = CERT_REQUIRED
+        else:
+            ssl_context.verify_mode = CERT_NONE
+
+        ssl_options = None
+
+        if self.__ssl_check_hostname_metadata is not None:
+            ssl_context.check_hostname = True
+            ssl_options = {'server_hostname': self.__ssl_check_hostname_metadata}
+
+        return ssl_context, ssl_options
+
     def _connect_clusters(self):
         # data cluster
+        ssl_context, ssl_options = self._get_ssl_context()
         self.__cluster_data, self.__session_data = self._connect(
             self.__cluster_data,
             self.__session_data,
             self.contact_points_data,
             self.port,
+            ssl_context,
+            ssl_options,
         )
         self.__lazy_statements = _LazyPreparedStatements(
             self.__session_data,
@@ -1334,11 +1462,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         # metadata cluster
         if self.metadata_enabled:
             if self.contact_points_data != self.contact_points_metadata:
+                ssl_context_metadata, ssl_options_metadata = self._get_ssl_context_metadata()
                 self.__cluster_metadata, self.__session_metadata = self._connect(
                     self.__cluster_metadata,
                     self.__session_metadata,
                     self.contact_points_metadata,
                     self.port_metadata,
+                    ssl_context_metadata,
+                    ssl_options_metadata,
                 )
             else:
                 self.__session_metadata = self.__session_data
@@ -1349,7 +1480,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
                     self.__cluster_metadata.metrics, "metadata"
                 )
 
-    def _connect(self, cluster, session, contact_points, port):
+    def _connect(self, cluster, session, contact_points, port, ssl_context=None, ssl_options=None):
         lb_policy = c_policies.TokenAwarePolicy(c_policies.DCAwareRoundRobinPolicy())
         # See https://datastax-oss.atlassian.net/browse/PYTHON-643
         lb_policy.shuffle_replicas = True
@@ -1363,6 +1494,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 # Metrics are disabled because too expensive to compute.
                 metrics_enabled=False,
                 load_balancing_policy=lb_policy,
+                ssl_context=ssl_context,
+                ssl_options=ssl_options,
             )
 
             # Limits in flight requests
