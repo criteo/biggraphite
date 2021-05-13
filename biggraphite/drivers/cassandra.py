@@ -1921,7 +1921,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             else:
                 return str(statement) + str(params)
 
-    def _get_metrics(self, metric_names):
+    def _get_metrics(self, metric_names, strict_checks=False):
         metric_names = [".".join(self._components_from_name(metric_name)[:-1])
                         for metric_name in metric_names]
         metric_names = [bg_metric.encode_metric_name(metric_name) for metric_name in metric_names]
@@ -1936,7 +1936,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             if not success:
                 raise CassandraError("Failed to concurrently get metrics", result)
             for row in result:
-                metric = self._bind_metric(row)
+                metric = self._bind_metric(row, strict_checks=strict_checks)
                 if metric is not None:
                     metrics.append(metric)
         return metrics
@@ -1949,13 +1949,13 @@ class _CassandraAccessor(bg_accessor.Accessor):
         return self._execute_concurrent_metadata(execution_requests)
 
     @tracing.trace
-    def get_metric(self, metric_name):
+    def get_metric(self, metric_name, strict_checks=False):
         """See bg_accessor.Accessor."""
         super(_CassandraAccessor, self).get_metric(metric_name)
         tracing.add_attr_to_trace("metric.name", bg_metric.encode_metric_name(metric_name))
-        return next(iter(self._get_metrics([metric_name])), None)
+        return next(iter(self._get_metrics([metric_name], strict_checks=strict_checks)), None)
 
-    def _bind_metric(self, row):
+    def _bind_metric(self, row, strict_checks=False):
         uid = row[0]
         config = row[1]
         updated_on_raw = row[2]
@@ -1972,9 +1972,12 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         updated_on = datetime.datetime.fromtimestamp(updated_on_raw / 1000)
 
-        parent_dir = metric_name.rpartition(".")[0]
-        if parent_dir and not self.has_directory(parent_dir):
-            return None
+        # Used only when checking if metric exists; Do not try to get directories
+        # when retrieving metrics for reading purpose.
+        if strict_checks:
+            parent_dir = metric_name.rpartition(".")[0]
+            if parent_dir and not self.has_directory(parent_dir):
+                return None
 
         try:
             metadata = bg_metric.MetricMetadata.from_string_dict(config)

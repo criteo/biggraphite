@@ -338,7 +338,7 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
 
         CREATES_DEQUEUED.inc()
 
-        existing_metric = self.accessor.get_metric(metric.name)
+        existing_metric = self.accessor.get_metric(metric.name, strict_checks=True)
 
         if metric == existing_metric:
             # Update current cache value with the one coming from DB.
