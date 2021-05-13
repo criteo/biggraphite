@@ -78,7 +78,7 @@ class HybridAccessor(bg_accessor.Accessor):
         super(HybridAccessor, self).has_metric(metric_name)
         return self._metadata_accessor.has_metric(metric_name)
 
-    def get_metric(self, metric_name):
+    def get_metric(self, metric_name, strict_checks=False):
         """See the real Accessor for a description."""
         super(HybridAccessor, self).get_metric(metric_name)
         return self._metadata_accessor.get_metric(metric_name)

@@ -729,7 +729,7 @@ class _ElasticSearchAccessor(bg_accessor.Accessor):
         return self.get_metric(metric_name) is not None
 
     @tracing.trace
-    def get_metric(self, metric_name):
+    def get_metric(self, metric_name, strict_checks=False):
         """See the real Accessor for a description."""
         super(_ElasticSearchAccessor, self).get_metric(metric_name)
         metric_name = bg_metric.sanitize_metric_name(metric_name)
