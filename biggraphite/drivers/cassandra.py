@@ -255,7 +255,8 @@ CLEAN_SKIPPED_OFFSET = prometheus_client.Counter(
 
 ERROR_BIND_METRIC = prometheus_client.Counter(
     "bg_error_bind_metric",
-    "Number of incomplete or invalid record read from backend"
+    "Number of incomplete or invalid record read from backend",
+    ["type"]
 )
 
 log = logging.getLogger(__name__)
@@ -1962,7 +1963,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         # Return None if any of the important column is missing.
         if not uid or not config or not updated_on_raw:
-            ERROR_BIND_METRIC.inc()
+            ERROR_BIND_METRIC.labels("column_missing").inc()
             log.warning(
                 "Failed to bind metric; Missing column data: name:%s uid:%s config:%s updated_on:%s"
                 % (metric_name, uid, config, updated_on_raw)
@@ -1975,7 +1976,16 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if parent_dir and not self.has_directory(parent_dir):
             return None
 
-        metadata = bg_metric.MetricMetadata.from_string_dict(config)
+        try:
+            metadata = bg_metric.MetricMetadata.from_string_dict(config)
+        except Exception as e:
+            ERROR_BIND_METRIC.labels("invalid_config").inc()
+            log.warning(
+                "Failed to bind metric; Invalid configuration: name:%s config:%s error:%s"
+                % (metric_name, config, str(e))
+            )
+            return None
+
         return bg_metric.Metric(metric_name, uid, metadata, updated_on=updated_on)
 
     @tracing.trace
