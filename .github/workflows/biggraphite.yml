@@ -1,0 +1,67 @@
+name: Testing Biggraphite
+
+on: [push, pull_request]
+
+jobs:
+  build:
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: [ '2.x', '3.x', 'pypy-2.7', 'pypy-3.6' ]
+
+    env:
+      JAVA: false # Default
+      CASS_DRIVER_NO_CYTHON: 1 # Speed-up builds.
+      CASSANDRA_VERSION: 3.11.3
+      ES_VERSION: 6.3.1
+      GRAPHITE_NO_PREFIX: true
+      BG_COMPONENTS_MAX_LEN: 12
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up openjdk8 for cassandra & ES
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'adopt'
+          java-version: '8'
+
+      - name: Set up environment
+        run: |
+          echo "CASSANDRA_HOME=$GITHUB_WORKSPACE/.deps/apache-cassandra-$CASSANDRA_VERSION/" >> $GITHUB_ENV
+          echo "CASSANDRA_STRATIO_LUCENE_VERSION=$CASSANDRA_VERSION.0" >> $GITHUB_ENV
+          echo "ES_HOME=$GITHUB_WORKSPACE/.deps/elasticsearch-$ES_VERSION/" >> $GITHUB_ENV
+
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      - name: Install cassandra, elasticsearch
+        run: |
+          ./tools/install-deps.sh
+
+      - name: Install python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox coverage
+          pip install -r freeze-requirements.txt -r tests-requirements.txt
+
+      - name: Execute tests
+        run: |
+          coverage erase
+          python -v
+          coverage run \
+             -m unittest discover --catch --catch --failfast --verbose
+          coverage report
+
+      - name: Lint
+        run: |
+          pylama biggraphite tests *.py

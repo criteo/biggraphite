@@ -1187,6 +1187,20 @@ class _CassandraAccessor(bg_accessor.Accessor):
           replica: shord, Id of the replica. Values will be grouped by replicas
             during read to allow multiple simultanous writers.
           enable_metadata: bool, whether if the driver should handle the metadata or not
+          enable_metrics: bool, enable metrics
+          data_read_consistency: string, Default consistency to use for data reads
+          data_write_consistency: string, Default consistency to use for data writes
+          max_concurrent_connections: int, Maximum number of Cassandra connections
+          meta_background_consistency: string, Default consistency for metadata reads & writes
+            in background
+          meta_read_consistency: string, Default consistency for metadata reads
+          meta_serial_consistency: string, Default consistency for serial operations
+          meta_write_consistency: string, Default consistency for metadata writes
+          username: string, Cassandra connection username to use
+          password: string, Cassandra connection password to use
+          read_on_sampling_rate: int, Read_on update frequency (per call)
+          updated_on_ttl_sec: int, Updated_on update frequency (per seconds)
+          use_lucene: bool, Use the Stratio Lucene Index
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -2842,6 +2856,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
         Args:
             cutoff: UNIX time in seconds. Rows older than it should be deleted.
+            max_age: int, Max metric age for expiration
+            start_key: int, Start token to do cleaning (int64)
+            end_key: int, End token to do cleaning (int64)
+            shard: int, Shard to clean
+            nshards: int, Total number of shards
+            disable_clean_directories: bool, Disable directories cleaning
+            disable_clean_metrics: bool, Disable metrics cleaning
+            callback_on_progress: function to track operations progress
         """
         super(_CassandraAccessor, self).clean(max_age, callback_on_progress)
 

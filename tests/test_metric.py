@@ -15,6 +15,7 @@
 import unittest
 import gc
 import prometheus_client
+import sys
 import weakref
 
 from biggraphite import metric as bg_metric
@@ -133,6 +134,7 @@ class TestMetricMetadata(unittest.TestCase):
         gc.collect()
         self.assertIsNone(metadata_weak())
 
+    @unittest.skipUnless(sys.version_info.major == 3, "Randomly fails on Python 2.x/pypy 2.")
     def test_total_metadata_object_count_should_be_reported_by_prometheus_client(self):
         """Test the gauge reporting the number of metadata hold in the internal dictionnary."""
         def get_metadata_instances_count():

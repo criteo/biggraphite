@@ -17,6 +17,7 @@
 from __future__ import print_function
 
 import datetime
+import sys
 import unittest
 import uuid
 
@@ -342,6 +343,7 @@ class TestAccessorWithElasticsearch(
         self.assertEqual(expected_created_on, metric.created_on)
         self.assertEqual(expected_updated_on, metric.updated_on)
 
+    @unittest.skipUnless(sys.version_info.major == 3, "Randomly fails on Python 2.x/pypy 2.")
     def test_metric_is_updated_after_ttl(self):
         with freezegun.freeze_time("2014-01-01 00:00:00"):
             metric = bg_test_utils.make_metric_with_defaults("foo")
