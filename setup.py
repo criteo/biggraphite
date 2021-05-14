@@ -16,7 +16,6 @@
 """setuptools integration for BigGraphite."""
 import os
 import setuptools
-import sys
 
 
 def _read(relpath):
@@ -33,8 +32,8 @@ def _read_reqs(relpath):
 
 
 _REQUIREMENTS_TXT = _read_reqs("freeze-requirements.txt")
-_DEPENDENCY_LINKS = [l for l in _REQUIREMENTS_TXT if "://" in l]
-_INSTALL_REQUIRES = [l for l in _REQUIREMENTS_TXT if "://" not in l]
+_DEPENDENCY_LINKS = [link for link in _REQUIREMENTS_TXT if "://" in link]
+_INSTALL_REQUIRES = [link for link in _REQUIREMENTS_TXT if "://" not in link]
 
 packages = setuptools.find_packages()
 

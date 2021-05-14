@@ -207,6 +207,7 @@ class MetadataCache(object):
           end_key: string, stop at key < end_key.
           shard: int, shard to repair.
           nshards: int, number of shards.
+          callback_on_progress: callback function to track progress.
         """
         pass
 

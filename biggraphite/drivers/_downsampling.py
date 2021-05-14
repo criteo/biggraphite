@@ -101,7 +101,7 @@ class MetricAggregates(object):
         Args:
           metric_metadata: MetricMetadata object.
           precision: precision of the stage0 buffer in seconds.
-          capacity: number of slots in the stage0 buffer.
+          stage0_capacity: number of slots in the stage0 buffer.
         """
         self._metric_metadata = metric_metadata
 

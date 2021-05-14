@@ -143,7 +143,7 @@ class Accessor(object):
         """Create the database schema.
 
         Args:
-          retentions, iterable or None, list of retentions to create.
+          retentions: iterable or None, list of retentions to create.
           dry_run: bool, if True nothing will be applied to the database.
         """
         pass
