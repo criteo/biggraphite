@@ -315,11 +315,11 @@ class CommandStats(command.BaseCommand):
                         self._n_dir_empty - o_directory_empty,
                         self.current_oldest))
 
-        print("Range: %d (%f%%)" % (self._n_range_size, self._n_range_size / 2**64))
+        print("Range: %d (%f%%)" % (self._n_range_size, self._n_range_size / 2.**64))
         print("Metrics extrated: %d; Outdated: %d (%.2f%%)" % (
             self._n_count,
             self._n_count_expired,
-            100 * self._n_count_expired / self._n_count))
+            100. * self._n_count_expired / self._n_count))
         multiplier = 2**64 / self._n_range_size
         print("Extrapolation: %d; Estimated outdated: %d" % (
             self._n_count * multiplier,
@@ -327,6 +327,9 @@ class CommandStats(command.BaseCommand):
         print("Oldest metric found: %s" % self.oldest)
 
         print("Directories found: %d / Empty: %d" % (self._n_dir_count, self._n_dir_empty))
+        print("Extrapolation: %d; Estimated empty: %d" % (
+            self._n_dir_count * multiplier,
+            self._n_dir_empty * multiplier))
 
         if self.metrics_file_path != "":
             self.write_metrics()
