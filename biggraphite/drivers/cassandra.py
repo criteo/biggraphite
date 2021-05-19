@@ -309,13 +309,17 @@ OPTIONS = {
     "password": str,
     "keyspace": str,
     "ssl_enable": bool,
-    "ssl_verify_locations": str,
+    "ssl_verify_locations": lambda k: None if k is None else str(k),
+    "ssl_cert_file": lambda k: None if k is None else str(k),
+    "ssl_key_file": lambda k: None if k is None else str(k),
     "ssl_verify_mode": str,
-    "ssl_check_hostname": str,
+    "ssl_check_hostname": lambda k: None if k is None else str(k),
     "ssl_enable_metadata": bool,
-    "ssl_verify_locations_metadata": str,
+    "ssl_verify_locations_metadata": lambda k: None if k is None else str(k),
+    "ssl_cert_file_metadata": lambda k: None if k is None else str(k),
+    "ssl_key_file_metadata": lambda k: None if k is None else str(k),
     "ssl_verify_mode_metadata": str,
-    "ssl_check_hostname_metadata": str,
+    "ssl_check_hostname_metadata": lambda k: None if k is None else str(k),
     "contact_points": _utils.list_from_str,
     "contact_points_metadata": _utils.list_from_str,
     "port": int,
@@ -369,9 +373,18 @@ def add_argparse_arguments(parser):
     )
     parser.add_argument(
         "--cassandra_ssl_verify_locations",
-        help="Cassandra SSL verify locations (certificate path)",
-        type=str,
-        default=None,
+        help="Cassandra SSL verify locations (CA path)",
+        default=None
+    )
+    parser.add_argument(
+        "--cassandra_ssl_cert_file",
+        help="Cassandra SSL certificate file",
+        default=None
+    )
+    parser.add_argument(
+        "--cassandra_ssl_key_file",
+        help="Cassandra SSL certificate's key file",
+        default=None
     )
     parser.add_argument(
         "--cassandra_ssl_verify_mode",
@@ -382,8 +395,7 @@ def add_argparse_arguments(parser):
     parser.add_argument(
         "--cassandra_ssl_check_hostname",
         help="Cassandra SSL hostname to check",
-        type=str,
-        default=None,
+        default=None
     )
     parser.add_argument(
         "--cassandra_ssl_enable_metadata",
@@ -393,9 +405,18 @@ def add_argparse_arguments(parser):
     )
     parser.add_argument(
         "--cassandra_ssl_verify_locations_metadata",
-        help="Cassandra SSL verify locations (certificate path)",
-        type=str,
-        default=None,
+        help="Cassandra SSL verify locations (CA path, for metadata)",
+        default=None
+    )
+    parser.add_argument(
+        "--cassandra_ssl_cert_file_metadata",
+        help="Cassandra SSL certificate file (metadata)",
+        default=None
+    )
+    parser.add_argument(
+        "--cassandra_ssl_key_file_metadata",
+        help="Cassandra SSL certificate's key file (metadata)",
+        default=None
     )
     parser.add_argument(
         "--cassandra_ssl_verify_mode_metadata",
@@ -406,8 +427,7 @@ def add_argparse_arguments(parser):
     parser.add_argument(
         "--cassandra_ssl_check_hostname_metadata",
         help="Cassandra SSL hostname to check",
-        type=str,
-        default=None,
+        default=None
     )
     parser.add_argument(
         "--cassandra_contact_points",
@@ -1125,10 +1145,14 @@ class _CassandraAccessor(bg_accessor.Accessor):
         password=None,
         ssl_enable=False,
         ssl_verify_locations=None,
+        ssl_cert_file=None,
+        ssl_key_file=None,
         ssl_verify_mode=DEFAULT_SSL_VERIFY_MODE,
         ssl_check_hostname=None,
         ssl_enable_metadata=False,
         ssl_verify_locations_metadata=None,
+        ssl_cert_file_metadata=None,
+        ssl_key_file_metadata=None,
         ssl_verify_mode_metadata=DEFAULT_SSL_VERIFY_MODE,
         ssl_check_hostname_metadata=None,
         contact_points=DEFAULT_CONTACT_POINTS,
@@ -1167,11 +1191,15 @@ class _CassandraAccessor(bg_accessor.Accessor):
             to discover Cassandra.
           port_metadata: The port to connect to, as an int.
           ssl_enable: bool, Enable SSL to cassandra.
-          ssl_verify_locations: string, Path to ssl certificate.
+          ssl_verify_locations: string, Path to CA certificate.
+          ssl_cert_file: string, Path to SSL client certificate.
+          ssl_key_file: string, Path to SSL key certificate.
           ssl_verify_mode: string, Verify mode (none or required).
           ssl_check_hostname: string, SSL target hostname to check.
           ssl_enable_metadata: bool, Enable SSL to cassandra (metadata).
-          ssl_verify_locations_metadata: string, Path to ssl certificate (metadata).
+          ssl_verify_locations_metadata: string, Path to CA certificate (metadata).
+          ssl_cert_file_metadata: string, Path to SSL client certificate (metadata).
+          ssl_key_file_metadata: string, Path to SSL key certificate (metadata).
           ssl_verify_mode_metadata: string, Verify mode (none or required) (metadata).
           ssl_check_hostname_metadata: string, SSL target hostname to check (metadata).
           timeout: Default timeout for operations in seconds.
@@ -1222,10 +1250,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
         self.__ssl_enable_metadata = ssl_enable_metadata
 
         self.__ssl_verify_locations = ssl_verify_locations
+        self.__ssl_cert_file = ssl_cert_file
+        self.__ssl_key_file = ssl_key_file
+
         self.__ssl_verify_mode = ssl_verify_mode
         self.__ssl_check_hostname = ssl_check_hostname
+        self.__ssl_cert_file = ssl_cert_file
+        self.__ssl_key_file = ssl_key_file
 
         self.__ssl_verify_locations_metadata = ssl_verify_locations_metadata
+        self.__ssl_cert_file_metadata = ssl_cert_file_metadata
+        self.__ssl_key_file_metadata = ssl_key_file_metadata
         self.__ssl_verify_mode_metadata = ssl_verify_mode_metadata
         self.__ssl_check_hostname_metadata = ssl_check_hostname_metadata
 
@@ -1431,6 +1466,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
             ssl_context.check_hostname = True
             ssl_options = {'server_hostname': self.__ssl_check_hostname}
 
+        if self.__ssl_verify_locations is not None:
+            ssl_context.load_verify_locations(
+                self.__ssl_verify_locations
+            )
+
+        if self.__ssl_cert_file is not None and self.__ssl_key_file is not None:
+            ssl_context.load_cert_chain(
+                certfile=self.__ssl_cert_file,
+                keyfile=self.__ssl_key_file
+            )
+
         return ssl_context, ssl_options
 
     def _get_ssl_context_metadata(self):
@@ -1449,6 +1495,17 @@ class _CassandraAccessor(bg_accessor.Accessor):
         if self.__ssl_check_hostname_metadata is not None:
             ssl_context.check_hostname = True
             ssl_options = {'server_hostname': self.__ssl_check_hostname_metadata}
+
+        if self.__ssl_verify_locations_metadata is not None:
+            ssl_context.load_verify_locations(
+                self.__ssl_verify_locations_metadata
+            )
+
+        if self.__ssl_cert_file_metadata is not None and self.__ssl_key_file_metadata is not None:
+            ssl_context.load_cert_chain(
+                certfile=self.__ssl_cert_file_metadata,
+                keyfile=self.__ssl_key_file_metadata
+            )
 
         return ssl_context, ssl_options
 
