@@ -32,14 +32,18 @@ This is the main backend for BigGraphite and the one that should be used in prod
 
 - ```BG_CASSANDRA_SSL_ENABLE```: enable SSL between biggraphite & cassandra (default: ```False```)
 - ```BG_CASSANDRA_SSL_VERIFY_MODE```: the ssl mode to use - none or required (default: ```None```; or unset. Setting it to ```none``` will enable tls)
-- ```BG_CASSANDRA_SSL_VERIFY_LOCATIONS```: ssl certificate to use for connection (default: ```None```)
+- ```BG_CASSANDRA_SSL_CERT_FILE```: Path to SSL certificate to use for connection (default: ```None```)
+- ```BG_CASSANDRA_SSL_KEY_FILE```: Path to SSL key to use for connection (default: ```None```)
+- ```BG_CASSANDRA_SSL_VERIFY_LOCATIONS```: Path to CA to use for connection (default: ```None```)
 - ```BG_CASSANDRA_SSL_CHECK_HOSTNAME```: ssl server hostname to use for check (default: ```None```)
 
 Metadata counter-parts:
 
 - ```BG_CASSANDRA_SSL_ENABLE_METADATA```: enable SSL between biggraphite & cassandra (default: ```False```)
 - ```BG_CASSANDRA_SSL_VERIFY_MODE_METADATA```: the ssl mode to use - none or required (default: ```None```; or unset. Setting it to ```none``` will enable tls)
-- ```BG_CASSANDRA_SSL_VERIFY_LOCATIONS_METADATA```: ssl certificate to use for connection (default: ```None```)
+- ```BG_CASSANDRA_SSL_CERT_FILE```: Path to SSL certificate to use for connection (default: ```None```)
+- ```BG_CASSANDRA_SSL_KEY_FILE```: Path to SSL key to use for connection (default: ```None```)
+- ```BG_CASSANDRA_SSL_VERIFY_LOCATIONS_METADATA```: Path to CA to use for connection (default: ```None```)
 - ```BG_CASSANDRA_SSL_CHECK_HOSTNAME_METADATA```: ssl server hostname to use for check (default: ```None```)
 
 You can also fine-tune the schema of your tables directly as needed. If you
