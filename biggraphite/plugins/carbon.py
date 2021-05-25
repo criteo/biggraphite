@@ -183,10 +183,14 @@ class BigGraphiteDatabase(database.TimeSeriesDatabase):
         if not metric:
             # Metric was not found, but most likely it was cached; forcing dropping cache.
             self.cache.cache_drop(metric_name)
-            raise Exception(
+
+            # Because we have multiple layers of cache (one in carbon, one in biggraphite),
+            # it can take up to 2 step for the metric to be recreated before it get filled again.
+            log.err(
                 "Could not find %s; cleaning cache to recreate the metric in database."
                 % (metric_name)
             )
+            return
 
         # Round down timestamp because inner functions expect integers.
         datapoints = [(int(timestamp), value) for timestamp, value in datapoints]
