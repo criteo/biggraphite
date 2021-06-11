@@ -21,6 +21,8 @@ import sys
 
 import progressbar
 
+from prometheus_client import write_to_textfile, REGISTRY
+
 from biggraphite import metadata_cache
 from biggraphite.cli import command
 
@@ -36,6 +38,7 @@ class CommandRepair(command.BaseCommand):
     def __init__(self):
         """Constructor."""
         self.pbar = None
+        self.metrics_file_path = ""
 
     def add_arguments(self, parser):
         """Add custom arguments."""
@@ -46,6 +49,13 @@ class CommandRepair(command.BaseCommand):
             default=False,
             const=True,
             help="Show no output unless there are problems.",
+        )
+        parser.add_argument(
+            "--metrics-file-path",
+            help="Dump metrics in file",
+            type=str,
+            default="",
+            action="store"
         )
 
     def run(self, accessor, opts, on_progress=None):
@@ -58,6 +68,7 @@ class CommandRepair(command.BaseCommand):
         # TODO: use multiprocessing + progressbar here. Probably remove some
         # of the current arguments and generate them instead based on a number
         # of processes to do a full scan.
+        self.metrics_file_path = opts.metrics_file_path
 
         if opts.storage_dir:
             settings = {"path": opts.storage_dir}
@@ -76,14 +87,46 @@ class CommandRepair(command.BaseCommand):
             out_fd = _DEV_NULL
 
         if self.pbar is None:
-            self.pbar = progressbar.ProgressBar(fd=out_fd, redirect_stderr=False)
+            start_key = -1 * 2**63
+            end_key = 2**63 - 1
+
+            if opts.start_key is not None:
+                start_key = int(opts.start_key)
+            if opts.end_key is not None:
+                end_key = int(opts.end_key)
+
+            widgets = [
+                progressbar.Variable('token', format='(current: {formatted_value})'),
+                ' ',
+                progressbar.Percentage(),
+                ' ',
+                progressbar.SimpleProgress(
+                    format='(%s)' % progressbar.SimpleProgress.DEFAULT_FORMAT
+                ),
+                ' ',
+                progressbar.Bar(),
+                ' ',
+                progressbar.Timer(),
+                ' ',
+                progressbar.AdaptiveETA(),
+            ]
+
+            # max_value = end_key - start_key
+            self.pbar = progressbar.ProgressBar(
+                widgets=widgets,
+                fd=out_fd,
+                redirect_stderr=False,
+                min_value=0,
+                max_value=end_key - start_key)
+
         self.pbar.start()
 
         if on_progress is None:
+            def _on_progress(total, done, token):
+                self.pbar.update(total, token=token)
 
-            def _on_progress(done, total):
-                self.pbar.max_value = max(total, done)
-                self.pbar.update(done)
+                if self.metrics_file_path != "":
+                    write_to_textfile(self.metrics_file_path, REGISTRY)
 
             on_progress = _on_progress
 
@@ -96,3 +139,7 @@ class CommandRepair(command.BaseCommand):
         )
 
         self.pbar.finish()
+
+        # Final metric dump
+        if self.metrics_file_path != "":
+            write_to_textfile(self.metrics_file_path, REGISTRY)

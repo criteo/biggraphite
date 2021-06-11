@@ -163,9 +163,21 @@ CLEAN_DIRECTORIES_TO_REMOVE = prometheus_client.Counter(
     "bg_cassandra_clean_empty_dir_directories_to_remove",
     "Number of queries performed to remove directories during directory cleaning",
 )
+BROKEN_METRICS_TO_CHECK = prometheus_client.Counter(
+    "bg_cassandra_repair_broken_metrics_to_check",
+    "Number of queries performed to find broken metrics",
+)
+BROKEN_METRICS_TO_REMOVE = prometheus_client.Counter(
+    "bg_cassandra_repair_broken_metrics_to_remove",
+    "Number of queries performed to remove broken metrics",
+)
 REPAIR_MISSING_DIR_COUNT = prometheus_client.Counter(
     "bg_cassandra_repair_missing_dir",
     "Number of missing dir repair",
+)
+CLEAN_BROKEN_METRICS_COUNT = prometheus_client.Counter(
+    "bg_cassandra_repair_broken_metrics",
+    "Number of missing broken metrics queries",
 )
 MAP_ITERATION = prometheus_client.Counter(
     "bg_cassandra_map_iteration",
@@ -200,6 +212,10 @@ SYNCDB_METADATA = prometheus_client.Summary(
 CLEAN_EMPTY_DIR = prometheus_client.Summary(
     "bg_cassandra_clean_empty_dir_latency_seconds",
     "clean empty dir latency in seconds"
+)
+CLEAN_BROKEN_METRICS = prometheus_client.Summary(
+    "bg_cassandra_clean_broken_metrics_latency_seconds",
+    "clean broken metrics latency in seconds"
 )
 CLEAN_EXPIRED_METRICS = prometheus_client.Summary(
     "bg_cassandra_clean_expired_metrics_latency_seconds",
@@ -2683,9 +2699,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         tokens directly.
         """
         super(_CassandraAccessor, self).repair(start_key, end_key, shard, nshards)
-        self._repair_missing_dir(
-            start_key, end_key, shard, nshards, callback_on_progress
-        )
+
+        disable_repair = os.getenv('DISABLE_REPAIR_MISSING_DIR')
+        if disable_repair is None:
+            self._repair_missing_dir(
+                start_key, end_key, shard, nshards, callback_on_progress
+            )
+
+        disable_invalid_metrics = os.getenv('DISABLE_REPAIR_INVALID_METRICS')
+        if disable_invalid_metrics is None:
+            self._delete_invalid_metrics(
+                start_key, end_key, shard, nshards, callback_on_progress
+            )
 
     def _get_search_range(self, start_key, end_key, shard, nshards):
         partitioner = self.__cluster_data.metadata.partitioner
@@ -2702,6 +2727,116 @@ class _CassandraAccessor(bg_accessor.Accessor):
             stop_token = start_token + my_tokens
 
         return start_token, stop_token
+
+    def _delete_invalid_metrics(
+        self,
+        start_key=None,
+        end_key=None,
+        shard=0,
+        nshards=1,
+        callback_on_progress=None,
+    ):
+        """Iterate metrics records & delete those without metrics_metadata record."""
+        start_token, stop_token = self._get_search_range(
+            start_key, end_key, shard, nshards
+        )
+
+        metrics_query = self._prepare_background_request(
+            'SELECT name, token(name) FROM "%s".metrics '
+            "WHERE token(name) > ? LIMIT %d;"
+            % (self.keyspace_metadata, DEFAULT_MAX_BATCH_UTIL)
+        )
+
+        check_query = self._prepare_background_request(
+            'SELECT name, token(name) FROM "%s".metrics_metadata '
+            'WHERE name = ?;'
+            % (self.keyspace_metadata)
+        )
+
+        delete_query = self._prepare_background_request(
+            'DELETE FROM "%s".metrics WHERE name = ?;'
+            % (self.keyspace_metadata)
+        )
+
+        ignored_errors = 0
+        token = start_token
+        while token < stop_token:
+            try:
+                result = self._execute_metadata(
+                    CLEAN_BROKEN_METRICS,
+                    _CassandraExecutionRequest(
+                        CLEAN_BROKEN_METRICS_COUNT,
+                        metrics_query,
+                        int(token)
+                    ),
+                    timeout=DEFAULT_TIMEOUT_QUERY_UTIL
+                )
+
+                # Reset the error count.
+                ignored_errors = 0
+
+                # Empty results means that we've reached the end.
+                if len(result.current_rows) == 0:
+                    break
+            except Exception as e:
+                log.exception("Got exception: %s at token %s" % (e, token))
+                # Put sleep a little bit to not stress Cassandra too mutch.
+                time.sleep(1)
+                ignored_errors += 1
+
+                if ignored_errors > BATCH_MAX_IGNORED_ERRORS:
+                    break
+
+                continue
+
+            def metrics_to_check(rows):
+                for row in result:
+                    name, next_token = row
+                    yield _CassandraExecutionRequest(
+                        BROKEN_METRICS_TO_CHECK,
+                        check_query,
+                        name
+                    )
+
+            token = result[-1][1]
+            metrics_checked = self._execute_concurrent_metadata(
+                metrics_to_check(result),
+                concurrency=self.max_concurrent_connections,
+                raise_on_first_error=False,
+            )
+
+            def metrics_to_remove(result):
+                for response in result:
+                    if not response.success:
+                        continue
+
+                    results = list(response.result_or_exc)
+                    if results:
+                        continue
+
+                    name = response.result_or_exc.response_future.query.values[0]
+                    name = str(name.decode('ascii'))
+
+                    log.info("Scheduling delete for metric '%s'" % name)
+                    yield _CassandraExecutionRequest(
+                        BROKEN_METRICS_TO_REMOVE,
+                        delete_query,
+                        name
+                    )
+
+            rets = self._execute_concurrent_metadata(
+                metrics_to_remove(metrics_checked),
+                concurrency=self.max_concurrent_connections,
+                raise_on_first_error=False,
+            )
+
+            for ret in rets:
+                if not ret.success:
+                    print(str(ret.result_or_exc))
+                    log.warning(str(ret.result_or_exc))
+
+            if callback_on_progress:
+                callback_on_progress(token - start_token, stop_token - start_token, token)
 
     def _repair_missing_dir(
         self,
