@@ -1454,6 +1454,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return None, None
 
         ssl_context = SSLContext(PROTOCOL_TLS)
+        ssl_context.load_default_certs()
 
         if self.__ssl_verify_mode == 'required':
             ssl_context.verify_mode = CERT_REQUIRED
@@ -1484,6 +1485,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             return None, None
 
         ssl_context = SSLContext(PROTOCOL_TLS)
+        ssl_context.load_default_certs()
 
         if self.__ssl_verify_mode_metadata == 'required':
             ssl_context.verify_mode = CERT_REQUIRED
