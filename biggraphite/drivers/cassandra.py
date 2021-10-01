@@ -19,6 +19,7 @@ from __future__ import print_function
 import collections
 import datetime
 import json
+import gzip
 import logging
 import multiprocessing
 import os
@@ -3198,6 +3199,18 @@ class _CassandraAccessor(bg_accessor.Accessor):
         select_queries = []
         current_select_index = 0
 
+        # Metrics dump is only compatible with METHOD='unfiltered'
+        metrics_dump_file = environ.get('CLEAN_DUMP_METRICS', None)
+        metrics_dump_file_fd = None
+
+        if metrics_dump_file is not None:
+            if env_method != 'unfiltered':
+                log.warning('Can not dump all metrics when not using "unfiltered" method')
+            else:
+                log.info(f'Opening {metrics_dump_file} to dump all metrics.')
+                # Using gzip for small files.
+                metrics_dump_file_fd = gzip.open(metrics_dump_file, 'wt')
+
         # statements
         for batch_size in batch_sizes:
             if method in ['traditional', 'adaptative']:
@@ -3241,15 +3254,23 @@ class _CassandraAccessor(bg_accessor.Accessor):
             )
         )
 
-        def run(method, cutoff, rows):
+        def run(method, cutoff, rows, metrics_dump_file_fd=None):
             for name, _, updated_on in rows:
                 if method == 'unfiltered':
+                    to_delete = True
                     if updated_on is None:
                         log.info("Skipping metric %s as no updated_on date was present.", name)
-                        continue
+                        to_delete = False
 
-                    if updated_on > cutoff:
+                    if to_delete is True and updated_on > cutoff:
                         log.info("Skipping delete for non-obsolete metric %s", name)
+                        to_delete = False
+
+                    if to_delete is False:
+                        if metrics_dump_file_fd is not None:
+                            metrics_dump_file_fd.write(f"{name}\n")
+                            pass
+
                         continue
 
                 log.info("Scheduling delete for obsolete metric %s", name)
@@ -3305,7 +3326,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
 
             token = rows[-1][1]
             rets = self._execute_concurrent_metadata(
-                run(method, cutoff, rows),
+                run(method, cutoff, rows, metrics_dump_file_fd),
                 concurrency=self.max_concurrent_connections,
                 raise_on_first_error=False,
             )
@@ -3318,6 +3339,11 @@ class _CassandraAccessor(bg_accessor.Accessor):
                 done = token - start_token
                 total = stop_token - start_token
                 callback_on_progress(done, total, token)
+
+        # End of the process
+        if metrics_dump_file_fd is not None:
+            log.info(f'Closing {metrics_dump_file} and process is ending.')
+            metrics_dump_file_fd.close()
 
     def metadata_enabled(self):
         """See bg_accessor.Accessor."""
