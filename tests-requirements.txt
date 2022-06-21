@@ -13,6 +13,7 @@ pylama
 
 # Cassandra
 testing.cassandra3
+pyyaml<6.0
 
 # Elasticsearch
 testing.elasticsearch6
