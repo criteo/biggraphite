@@ -361,6 +361,10 @@ OPTIONS = {
     "updated_on_ttl_sec": int,
     "read_on_sampling_rate": float,
     "use_lucene": bool,
+    # allowed compaction strategies: DateTieredCompactionStrategy or TimeWindowCompactionStrategy
+    # None is legacy behaviour, using cassandra version
+    "compaction_strategy": lambda k: k if k in ["DateTieredCompactionStrategy", "TimeWindowCompactionStrategy"]
+    else None,
 }
 
 
@@ -583,6 +587,12 @@ def add_argparse_arguments(parser):
         "--cassandra_use_lucene",
         help="Use the Stratio Lucene Index.",
         default=DEFAULT_USE_LUCENE,
+    )
+    parser.add_argument(
+        "--cassandra_compaction_strategy",
+        help="Cassandra compaction strategy",
+        type=str,
+        default=None,
     )
 
 
@@ -888,6 +898,7 @@ class _LazyPreparedStatements(object):
         bulkimport,
         data_write_consistency,
         data_read_consistency,
+        compaction_strategy=None
     ):
         self._keyspace = keyspace
         self._session = session
@@ -898,12 +909,14 @@ class _LazyPreparedStatements(object):
         self._shard = shard
         self._data_write_consistency = data_write_consistency
         self._data_read_consistency = data_read_consistency
+        self._COMPACTION_STRATEGY = compaction_strategy
+        if not compaction_strategy:
+            release_version = list(session.get_pools())[0].host.release_version
+            if version.LooseVersion(release_version) >= version.LooseVersion("3.9"):
+                self._COMPACTION_STRATEGY = "TimeWindowCompactionStrategy"
+            else:
+                self._COMPACTION_STRATEGY = _COMPACTION_STRATEGY
 
-        release_version = list(session.get_pools())[0].host.release_version
-        if version.LooseVersion(release_version) >= version.LooseVersion("3.9"):
-            self._COMPACTION_STRATEGY = "TimeWindowCompactionStrategy"
-        else:
-            self._COMPACTION_STRATEGY = _COMPACTION_STRATEGY
 
     def __bulkimport_filename(self, filename):
         current = multiprocessing.current_process()
@@ -1197,6 +1210,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         read_on_sampling_rate=DEFAULT_READ_ON_SAMPLING_RATE,
         use_lucene=DEFAULT_USE_LUCENE,
         enable_metadata=True,
+        compaction_strategy=None
     ):
         """Record parameters needed to connect.
 
@@ -1247,6 +1261,8 @@ class _CassandraAccessor(bg_accessor.Accessor):
           read_on_sampling_rate: int, Read_on update frequency (per call)
           updated_on_ttl_sec: int, Updated_on update frequency (per seconds)
           use_lucene: bool, Use the Stratio Lucene Index
+          compaction_strategy: string or None, compaction strategy to use, if not, it will use a default depending
+                               on cassandra version.
         """
         backend_name = "cassandra:" + keyspace
         super(_CassandraAccessor, self).__init__(backend_name)
@@ -1323,6 +1339,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
         ]
         self._data_write_consistency = consistency_name_to_value[data_write_consistency]
         self._data_read_consistency = consistency_name_to_value[data_read_consistency]
+        self.__compaction_strategy = compaction_strategy
         if writer is None:
             # TODO: Currently a random shard is good enough.
             # We should use a counter stored in cassandra instead.
@@ -1546,6 +1563,7 @@ class _CassandraAccessor(bg_accessor.Accessor):
             self.__bulkimport,
             self._meta_write_consistency,
             self._data_read_consistency,
+            self.__compaction_strategy
         )
         if self.__enable_metrics:
             self.__metrics["data"] = expose_metrics(self.__cluster_data.metrics, "data")
