@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: [ '3.x', 'pypy-3.6' ]
+        python-version: [ '3.9', 'pypy-3.6' ]
 
     env:
       JAVA: false # Default
